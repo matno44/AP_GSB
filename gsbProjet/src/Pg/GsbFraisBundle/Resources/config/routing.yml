@@ -1,0 +1,27 @@
+pg_gsb_frais_accueil:
+    path:     /
+    defaults: { _controller: FrameworkBundle:Redirect:redirect, route: pg_gsb_frais_home, permanent: false }
+pg_gsb_frais_home:
+    path:     /accueil
+    defaults: { _controller: PgGsbFraisBundle:Home:index }
+pg_gsb_frais_validerconnexion:
+    path:     /validerconnexion
+    defaults: { _controller: PgGsbFraisBundle:Home:validerconnexion }
+    methods:  [POST]
+pg_gsb_frais_deconnexion:
+    path:     /deconnexion
+    defaults: { _controller: PgGsbFraisBundle:Home:deconnexion }
+pg_gsb_frais_listefrais:
+    path:     /listefrais
+    defaults: { _controller: PgGsbFraisBundle:ListeFrais:index }
+pg_gsb_frais_saisirfrais:
+    path:     /saisirfrais
+    defaults: { _controller: PgGsbFraisBundle:SaisirFrais:index }
+pg_gsb_frais_validerfraishorsforfais:
+    path:     /validerfraishorsforfait
+    defaults: { _controller: PgGsbFraisBundle:SaisirFrais:validerfraishorsforfait }
+    methods:  [POST]
+pg_gsb_frais_supprimerfraishorsforfait:
+    path:     /supprimerfraishorsforfait/{id}
+    defaults: { _controller: PgGsbFraisBundle:SaisirFrais:supprimerfraishorsforfait }
+    requirements: { id: '\d+' }

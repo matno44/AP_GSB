@@ -1,0 +1,3 @@
+pg_gsb_frais:
+    resource: "@PgGsbFraisBundle/Resources/config/routing.yml"
+    prefix: ""

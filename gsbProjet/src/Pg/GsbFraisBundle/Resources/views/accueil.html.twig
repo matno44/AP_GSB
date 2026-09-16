@@ -1,0 +1,37 @@
+{% extends "PgGsbFraisBundle::layout.html.twig" %}
+{% block menu %}
+<div id="menuGauche">
+     <div id="infosUtil">
+         <h3>
+            {% if app.session.get('nom') %}
+                Visiteur : bonjour {{ app.session.get('prenom') }} {{ app.session.get('nom') }}
+            {% endif %}
+        </h3>
+     </div>
+        <ul id="menuList">
+	   <li class="smenu">
+              <a href="{{path('pg_gsb_frais_saisirfrais')}}" title="Saisie fiche de frais ">Saisie fiche de frais</a>
+           </li>
+           <li class="smenu">
+              <a href="{{path('pg_gsb_frais_listefrais')}}" title="Consultation de mes fiches de frais">Mes fiches de frais</a>
+           </li>
+           <li class="smenu">
+              <a href="{{path('pg_gsb_frais_deconnexion')}}" title="Se déconnecter">Déconnexion</a>
+           </li>
+         </ul>
+     </div>
+{% endblock%}
+
+{# Contenu par défaut de la page d'accueil. Les vues qui héritent de ce
+   template (listemois, saisirtouslesfrais…) redéfinissent le bloc body. #}
+{% block body %}
+    {% block bloc1 %}
+        <div id="contenu">
+            <h2>Bienvenue sur l'intranet GSB</h2>
+            <p>
+                Utilisez le menu pour saisir votre fiche de frais du mois en cours
+                ou pour consulter vos fiches précédentes.
+            </p>
+        </div>
+    {% endblock %}
+{% endblock %}

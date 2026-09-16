@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(brew services *)",
+      "Bash(php *)",
+      "Bash(/opt/homebrew/opt/mysql/bin/mysql -u root --socket=/tmp/mysql.sock -e \"select version\\(\\); show databases;\")"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+<h3>Fiche de frais du mois {{nummois}}-{{numannee}} : 
+    </h3>
+    <div class="encadre">
+    <p>
+        Etat : {{libetat}} depuis le {{datemodif}} <br> Montant validé : {{montantvalide}}
+   </p>
+  	<table class="listeLegere">
+  	   <caption>Eléments forfaitisés </caption>
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+          {%   set libelle = unfrais.libelle %}
+		<th> {{libelle}}</th>
+    {% endfor %}  
+	</tr>
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+	  {%   set quantite = unfrais.quantite %}
+	       <td class="qteForfait">{{quantite}} </td>
+    {% endfor %}  
+	</tr>
+    </table>
+   </div>
+ 

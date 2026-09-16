@@ -1,0 +1,31 @@
+{% extends "PgGsbFraisBundle::layout.html.twig" %}
+{% block body %}
+ {% block bloc1 %} 
+ <div id="contenu">
+      <h2>Identification utilisateur</h2>
+      {% if message is defined %}
+            <div class="erreur">
+            <ul><li>{{ message }}</li></ul></div>
+      {% endif %}
+<form method="POST" action="{{path('pg_gsb_frais_validerconnexion')}}">
+      <div class="corpsForm">
+        <p>
+          <label for="login">Login*</label>
+           <input id="login" type="text" name="login"  size="30" maxlength="45">
+        </p>
+	<p>
+            <label for="mdp">Mot de passe*</label>
+            <input id="mdp"  type="password"  name="mdp" size="30" maxlength="45">
+        </p>
+      </div>
+      <div class="piedForm">
+        <p>
+         <input type="submit" value="Valider" name="valider">
+         <input type="reset" value="Annuler" name="annuler">
+        </p>
+      </div>
+</form>
+</div>
+    {% endblock %}    
+    {% endblock%}
+     

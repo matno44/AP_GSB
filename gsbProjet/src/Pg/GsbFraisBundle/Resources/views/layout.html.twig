@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intranet du Laboratoire Galaxy-Swiss Bourdin</title>
+    <link href="{{ asset('bundles/pggsbfrais/styles/styles.css') }}" rel="stylesheet" type="text/css" />
+    <link rel="shortcut icon" type="image/x-icon" href="{{ asset('favicon.ico') }}" />
+  </head>
+  <body>
+    <div id="page">
+      <div id="entete">
+        <img src="{{ asset('bundles/pggsbfrais/images/logo.svg') }}" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" title="Laboratoire Galaxy-Swiss Bourdin" />
+        <h1>Suivi du remboursement des frais</h1>
+      </div>
+    </div>
+    {% block menu %}{% endblock %}
+    {% block body %}
+      {% block bloc1 %}{% endblock %}
+    {% endblock %}
+  </body>
+</html>
