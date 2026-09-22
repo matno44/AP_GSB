@@ -22,9 +22,13 @@ pg_gsb_frais_validerfraishorsforfais:
     defaults: { _controller: PgGsbFraisBundle:SaisirFrais:validerfraishorsforfait }
     methods:  [POST]
 pg_gsb_frais_supprimerfraishorsforfait:
+    # POST uniquement (correction du défaut B10) : une action destructrice ne
+    # doit pas être déclenchable par un simple GET, qu'une balise <img> d'un
+    # autre site suffirait à provoquer.
     path:     /supprimerfraishorsforfait/{id}
     defaults: { _controller: PgGsbFraisBundle:SaisirFrais:supprimerfraishorsforfait }
     requirements: { id: '\d+' }
+    methods:  [POST]
 pg_gsb_frais_monvehicule:
     path:     /monvehicule
     defaults: { _controller: PgGsbFraisBundle:Vehicule:index }

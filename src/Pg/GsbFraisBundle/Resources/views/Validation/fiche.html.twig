@@ -24,6 +24,7 @@
        Les montants unitaires, eux, ne le sont jamais : ils ont été figés à la
        saisie et les modifier réécrirait le passé (phase 1). #}
     <form method="post" action="{{ path('pg_gsb_frais_validationcorriger', {'idVisiteur': levisiteur.id, 'mois': lemois}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('validation_corriger') }}" />
         <table class="listeLegere">
             <caption>Frais forfaitisés</caption>
             <tr>
@@ -91,6 +92,7 @@
                        chargement de page pourrait déclencher. #}
                     <form method="post" action="{{ path('pg_gsb_frais_validationrefuser', {'idVisiteur': levisiteur.id, 'mois': lemois, 'id': unFrais.id}) }}"
                           onsubmit="return confirm('Refuser ce frais le supprimera définitivement, sans conserver de motif. Continuer ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('validation_refuser') }}" />
                         <input type="submit" class="boutonRefus" value="Refuser" />
                     </form>
                 </td>
@@ -120,6 +122,7 @@
                 <form method="post" action="{{ path('pg_gsb_frais_validationvalider', {'idVisiteur': levisiteur.id, 'mois': lemois}) }}"
                       onsubmit="return confirm('Valider cette fiche ? Elle ne sera plus modifiable.');"
                       style="display:inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('validation_valider') }}" />
                     <input type="submit" value="Valider la fiche" />
                 </form>
             {% endif %}

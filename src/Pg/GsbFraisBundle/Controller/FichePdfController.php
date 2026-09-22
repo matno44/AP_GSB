@@ -3,7 +3,6 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
@@ -12,7 +11,7 @@ use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 /**
  * Impression des fiches de frais au format de l'annexe 1.
  */
-class FichePdfController extends Controller
+class FichePdfController extends ControleurGsb
 {
     /**
      * Imprime une fiche de frais.

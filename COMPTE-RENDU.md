@@ -11,6 +11,7 @@ définie au § 11 (glossaire).
 | 3 | Génération PDF des fiches | **terminée** |
 | 4 | Maquette HTML partie comptable | **validée par le client** |
 | 5 | Cas d'utilisation « Valider fiche de frais » | **terminée** |
+| 6 | Protection CSRF *(hors programme initial)* | **terminée** |
 
 ---
 
@@ -139,6 +140,19 @@ et sans base de données.
 | Mise en paiement | `Command/MettreEnPaiementCommand.php` *(créé)* | `gsb:mettre-en-paiement` — VA → MP |
 | Remboursement | `Command/RembourserFichesCommand.php` *(créé)* | `gsb:rembourser-fiches` — MP → RB |
 | Correction d'un bug de la phase 3 | `Controller/FichePdfController.php` *(modifié)* | fichier temporaire de l'archive ZIP (voir § 7.18) |
+
+### Phase 6 (hors programme) — Protection CSRF
+
+Demandée après la livraison des cinq phases, pour traiter la limite L28, qui
+était la dette technique la plus importante du projet.
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Socle de vérification | `Controller/ControleurGsb.php` *(créé)* | `verifierJeton()`, écrite une seule fois |
+| Héritage | les 7 contrôleurs *(modifiés)* | `extends Controller` → `extends ControleurGsb` |
+| Vérifications | `Home`, `SaisirFrais`, `Vehicule`, `Justificatif`, `Validation` *(modifiés)* | 9 appels à `verifierJeton()`, un par action d'écriture |
+| Jetons dans les formulaires | 5 gabarits *(modifiés)* | `<input type="hidden" name="_token" …>` |
+| Correction du défaut B10 | `Resources/config/routing.yml`, `saisirfraishorsforfait.html.twig` *(modifiés)* | la suppression d'un frais passe de GET à **POST** |
 
 ---
 
@@ -1273,6 +1287,100 @@ derniers mois), et non tirée des fiches existantes.
   un an : au-delà, il n'y a plus rien à traiter.
 - C'est la réponse à la question posée au client sur l'écran 02 de la maquette.
 
+### Phase 6 — Protection CSRF
+
+### Décision 6.1 — Utiliser le gestionnaire de jetons de Symfony, pas un mécanisme maison
+
+- **Première chose faite :** vérifier ce que le framework offre déjà. Trois
+  briques étaient présentes et actives, sans rien installer :
+  le service `security.csrf.token_manager`, la fonction Twig
+  `csrf_token(intention)`, et la méthode `isCsrfTokenValid()` du contrôleur de
+  base (présente dès la 2.8, ce que j'ai vérifié dans `vendor/` avant de m'en
+  servir).
+- **Pourquoi c'est important :** l'application n'utilise pas le composant Form
+  (décision 0.4), et il aurait été tentant d'en conclure qu'il fallait écrire
+  la génération et le stockage des jetons à la main. C'est faux : le composant
+  Form *consomme* ce gestionnaire, il ne le contient pas. **Un mécanisme
+  maison aurait été du code de sécurité non éprouvé, à défendre devant un
+  jury.**
+- Le tout fonctionne parce que `app/config/config.yml` contient déjà
+  `csrf_protection: ~` — activé depuis l'origine, mais jusqu'ici inutilisé.
+
+### Décision 6.2 — Une classe de base plutôt qu'une copie dans chaque contrôleur
+
+- **Problème :** neuf actions à protéger, réparties dans cinq contrôleurs.
+- **Retenu :** `ControleurGsb`, classe abstraite portant `verifierJeton()`.
+  Chaque contrôleur change d'une ligne (`extends Controller` →
+  `extends ControleurGsb`).
+- **Écarté — recopier la vérification :** neuf copies qui peuvent diverger, et
+  neuf endroits à corriger le jour où la règle change.
+- **Écarté — un service :** la vérification a besoin de la requête et doit
+  **interrompre** l'action en cours. C'est le rôle naturel d'une méthode de
+  contrôleur, pas d'un service.
+- **Bénéfice de relecture :** une action d'écriture qui n'appelle pas
+  `verifierJeton()` se repère d'un coup d'œil. J'ai d'ailleurs écrit un petit
+  script qui croise les routes POST et les contrôleurs pour le vérifier
+  mécaniquement (§ 9.28).
+
+### Décision 6.3 — Une intention différente par formulaire
+
+Chaque formulaire a son propre identifiant de jeton : `connexion`,
+`saisie_forfait`, `frais_hors_forfait`, `suppression_frais`, `vehicule`,
+`justificatif`, `validation_corriger`, `validation_refuser`,
+`validation_valider`.
+
+- **Pourquoi pas une intention unique :** un jeton obtenu sur le formulaire le
+  plus anodin — celui du véhicule, par exemple — ouvrirait alors **toutes** les
+  autres actions, y compris la validation d'une fiche par le comptable.
+  Cloisonner limite les dégâts d'une fuite.
+- **Vérifié :** envoyer le jeton du formulaire « véhicule » à `/saisirfrais`
+  donne 403.
+
+### Décision 6.4 — Protéger aussi le formulaire de connexion
+
+Moins évident, et pourtant réel : sans jeton, un site malveillant peut
+**connecter la victime sur le compte de l'attaquant**. La victime croit être
+chez elle, saisit ses frais… dans le compte de l'attaquant, qui les lira. Le
+coût de la protection étant d'une ligne, il n'y a pas de raison de s'en priver.
+
+### Décision 6.5 — La suppression d'un frais passe de GET à POST
+
+- **C'est une modification du comportement existant**, et je la signale comme
+  telle. Le lien « Supprimer ce frais » du visiteur devient un bouton dans un
+  formulaire POST.
+- **Pourquoi c'était indispensable :** un jeton sur une action accessible en
+  GET ne protège rien de plus qu'avant si l'URL reste appelable directement, et
+  surtout **une balise `<img src="…/supprimerfraishorsforfait/7">` sur
+  n'importe quel site suffisait** à supprimer un frais du visiteur connecté.
+  Le navigateur charge l'image, envoie le cookie, l'action s'exécute.
+- **Pourquoi ne pas simplement mettre le jeton dans l'URL :** les adresses
+  fuient — historique du navigateur, en-tête `Referer`, journaux des serveurs
+  mandataires. Un jeton dans une URL n'est plus un secret.
+- C'est la correction du défaut **B10**, relevé dès l'audit de la phase 0.
+- **Protection partielle = fausse sécurité.** Poser des jetons partout en
+  laissant une porte ouverte aurait été pire que de ne rien faire : on aurait
+  cru le problème réglé.
+
+### Décision 6.6 — Trois POST volontairement non protégés
+
+| Route | Pourquoi |
+|-------|----------|
+| `/listefrais` | sélection d'un mois : **aucune écriture**, la page ne fait qu'afficher |
+| `/validation` | sélection visiteur/mois : redirige vers le détail, n'écrit rien |
+| `/deconnexion` | vide la session. Le pire qu'un attaquant puisse provoquer est une déconnexion forcée : aucune donnée touchée, aucun gain pour lui |
+
+**La règle que j'applique : tout ce qui écrit en base ou sur le disque porte un
+jeton.** Elle est simple à énoncer, donc simple à vérifier — et c'est ce qui
+compte pour que la protection ne se dégrade pas avec le temps.
+
+### Décision 6.7 — `AccessDeniedHttpException` et non `AccessDeniedException`
+
+Leçon tirée du § 7.15 : la seconde est interceptée par le composant Security,
+qui — faute de pare-feu configuré — la transforme en **401 « identifiez-vous »**.
+Or le problème n'est pas l'identité de l'utilisateur, qui est parfaitement
+connu : c'est l'origine de sa requête. `AccessDeniedHttpException` produit un
+**403** franc. Vérifié sur les neuf actions.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -1849,6 +1957,32 @@ sélecteur. Aucun N+1 : les totaux sont calculés en mémoire sur des tableaux
 déjà chargés (§ 6.18), et les justificatifs sont des colonnes des lignes hors
 forfait, déjà ramenées par le `select *` d'origine.
 
+### Phase 6
+
+**Aucune boucle écrite.** La protection CSRF n'est pas un algorithme : c'est un
+contrôle à l'entrée de chaque action d'écriture, en trois lignes. Le seul
+« parcours » est celui des `{% for %}` des gabarits, qui émettent un jeton par
+ligne de frais — et c'est un détail qui mérite une explication.
+
+### 6.20 Pourquoi un jeton par ligne de frais, et pas un seul pour tout le tableau
+
+*Fichier :* `saisirfraishorsforfait.html.twig` et `Validation/fiche.html.twig`
+
+Dans le tableau des frais hors forfait, chaque ligne porte **son propre**
+formulaire — dépôt de justificatif, suppression, refus — donc son propre champ
+`_token`. Sur une fiche de trois lignes, la page contient sept jetons.
+
+- **Ce n'est pas un gaspillage :** pour une même intention et une même session,
+  `csrf_token('suppression_frais')` renvoie **la même valeur** à chaque appel.
+  Le jeton est calculé une fois et mis en cache par le gestionnaire ; les
+  occurrences suivantes ne coûtent rien.
+- **Pourquoi un formulaire par ligne plutôt qu'un seul avec des cases à
+  cocher :** l'action porte sur **une** ligne et doit être confirmée
+  individuellement. Un formulaire global obligerait à gérer un tableau
+  d'identifiants et rendrait le message de confirmation imprécis.
+- **Cas limite :** aucune ligne hors forfait → la boucle n'émet rien, et le
+  formulaire de création garde le sien.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -2258,6 +2392,30 @@ Je préfère l'écrire que de meubler cette section.
   prennent une minute : `git status`, `php -l` sur tous les fichiers, et l'état
   réel de la base.
 
+### Phase 6
+
+### 7.20 Mon propre test de non-régression était faux : le mauvais jeton
+- **Symptôme :** après avoir posé les jetons, mon test « ajout d'un frais hors
+  forfait » échouait — la ligne n'était pas créée. J'ai cru un instant avoir
+  cassé la fonctionnalité.
+- **Cause réelle :** la page `/saisirfrais` contient **quatre formulaires**
+  (saisie des forfaits, dépôt de justificatif, suppression, création d'un frais
+  hors forfait), donc quatre champs `_token` **différents**. J'extrayais le
+  jeton avec un `grep … | sed -n 3p` — c'est-à-dire « le troisième que je
+  trouve », au hasard. J'envoyais donc le jeton de la suppression au formulaire
+  de création : refusé, à juste titre.
+- **Ce que ça prouve accessoirement :** le cloisonnement par intention
+  (décision 6.3) fonctionne. Mon test s'est comporté exactement comme un
+  attaquant qui rejouerait un jeton pris ailleurs.
+- **Correction :** un petit extracteur en Python qui découpe la page sur les
+  balises `<form>` et associe **chaque action à son jeton**. Tous les tests
+  repassent.
+- **Pour ne pas le refaire :** quand une page contient plusieurs formulaires,
+  un jeton ne se cherche pas « quelque part dans le HTML » — il se cherche
+  **dans le formulaire auquel on l'envoie**. C'est la même leçon que les § 7.5,
+  7.14 et 7.18, encore une fois : ne pas tester du HTML avec des expressions
+  régulières approximatives.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -2523,13 +2681,9 @@ faille. Pour tout uniformiser : ajouter une migration qui remplace chaque
 `getInfosComptable()`. Les logins de démonstration continueraient de
 fonctionner ; seul le `README` cesserait de pouvoir afficher les mots de passe.
 
-#### 🟡 L28 — Toujours aucune protection CSRF
-Défaut B9, présent depuis l'origine, et désormais sur des actions plus
-sensibles : refuser un frais et valider une fiche. Un site malveillant pourrait
-théoriquement faire valider une fiche par un comptable connecté. Le composant
-Form de Symfony poserait le jeton automatiquement — mais l'application ne
-l'utilise pas (décision 0.4). **C'est la dette technique la plus importante du
-projet.**
+#### ✅ L28 / B9 / B10 — LEVÉS (voir les limites de la phase 6 plus bas)
+Les neuf actions d'écriture portent désormais un jeton anti-CSRF, et la
+suppression d'un frais est passée de GET à POST.
 
 #### 🟡 L29 — Le compteur de validation n'est pas un tableau de bord
 Le comptable choisit un visiteur et un mois, comme le décrit le cas
@@ -2541,6 +2695,41 @@ Les logins sont uniques **dans chaque table**, pas entre les deux. Un doublon
 ferait gagner le comptable (décision 5.3). MySQL ne sait pas exprimer
 simplement une unicité inter-tables ; il faudrait une table de comptes unifiée,
 donc restructurer `visiteur`.
+
+### Limites propres à la phase 6
+
+#### 🟠 L31 — Un jeton expiré donne une page d'erreur brute
+Si le visiteur laisse un formulaire ouvert et que sa session expire, l'envoi
+donne un **403** avec le message « Jeton de sécurité absent ou invalide.
+Revenez à la page précédente et recommencez. » C'est correct sur le fond, mais
+brutal sur la forme : il perd sa saisie. Un vrai traitement afficherait de
+nouveau le formulaire, pré-rempli, avec un message explicatif. **Non fait** —
+cela demanderait de réafficher chaque formulaire depuis son action, soit neuf
+cas particuliers.
+
+#### 🟠 L32 — La session n'est pas régénérée à la connexion
+Découvert en travaillant sur l'authentification, **ce n'est pas du CSRF mais
+c'est voisin** : `connecterAvecRole()` n'appelle pas `$session->migrate()`.
+Un attaquant capable d'imposer un identifiant de session à la victime **avant**
+qu'elle se connecte conserverait ensuite l'accès à sa session — c'est la
+fixation de session. La correction tient en une ligne
+(`$session->migrate(true)` au moment de la connexion), mais elle touche le
+parcours d'authentification que je viens de tester, et elle sort du périmètre
+demandé. **Je la signale plutôt que de l'ajouter en catimini.**
+
+#### 🟡 L33 — Le jeton est lié à la session, donc perdu à la déconnexion
+`deconnecter()` fait `$session->clear()`, ce qui efface aussi le stock de
+jetons. C'est le comportement voulu, mais il faut le savoir : un formulaire
+ouvert dans un autre onglet avant la déconnexion ne sera plus acceptable.
+
+#### 🟡 L34 — Pas de `SameSite` sur le cookie de session
+Les navigateurs récents refusent par défaut d'envoyer un cookie
+`SameSite=Lax` lors d'une requête POST venue d'un autre site — c'est une
+seconde barrière contre le CSRF, indépendante des jetons. L'application ne
+configure rien (`framework.session.cookie_samesite` absent de `config.yml`), et
+Symfony 2.8 est antérieur à cette option. **Les jetons restent donc la seule
+protection**, ce qui est suffisant, mais une défense en profondeur serait
+préférable sur un déploiement réel.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -3068,6 +3257,81 @@ rien ne casse, et le message le dit. C'est le filtre sur l'état de départ
 | P3 | Impression de la fiche d'autrui | 404 ✔ |
 | — | Syntaxe des 22 fichiers PHP du bundle | OK ✔ |
 
+### 9.27 Phase 6 — vérifier que la protection mord
+
+Aucune installation : ni migration, ni dépendance. Vider le cache suffit.
+
+**Le test le plus parlant, à faire au navigateur.** Enregistrer ce fichier
+sous `/tmp/attaque.html` et l'ouvrir **dans l'onglet voisin** de celui où l'on
+est connecté en tant que `dandre` :
+
+```html
+<!-- Simulation d'un site malveillant. AVANT la phase 6, la simple
+     ouverture de cette page supprimait le frais n° 7 du visiteur. -->
+<h1>Photos de vacances</h1>
+<img src="http://127.0.0.1:8000/supprimerfraishorsforfait/7" width="1" />
+<form id="f" method="post" action="http://127.0.0.1:8000/validermonvehicule">
+  <input type="hidden" name="idTypeVehicule" value="D4" />
+</form>
+<script>document.getElementById('f').submit();</script>
+```
+
+| Avant la phase 6 | Après |
+|------------------|-------|
+| le frais est supprimé sans un clic | l'image ne charge pas : **405**, la route n'accepte plus que POST |
+| le véhicule passe en 4 CV Diesel | **403** : « Jeton de sécurité absent ou invalide » |
+
+Vérifier ensuite en base que rien n'a changé.
+
+### 9.28 Phase 6 — contrôles en ligne de commande
+
+| # | Action (sans jeton) | Attendu | Obtenu |
+|---|---------------------|---------|--------|
+| C1 | `POST /saisirfrais` | 403 | ✔ |
+| C2 | `POST /validerfraishorsforfait` | 403 | ✔ |
+| C3 | `POST /supprimerfraishorsforfait/4` | 403 | ✔ |
+| C4 | **`GET` /supprimerfraishorsforfait/4** | **405** — la route n'accepte plus le GET | ✔ |
+| C5 | `POST /validermonvehicule` | 403 | ✔ |
+| C6 | `POST /joindrejustificatif/7` | 403 | ✔ |
+| C7 | `POST /validerconnexion` | 403 | ✔ |
+| C8 | **Jeton du formulaire « véhicule » envoyé à `/saisirfrais`** | **403** — le cloisonnement par intention fonctionne | ✔ |
+
+Après ces huit tentatives, contrôle en base : véhicule inchangé, nombre de
+frais inchangé, quantités inchangées. **Rien n'a bougé.**
+
+**Vérification mécanique de la couverture.** Un script croise les routes
+d'écriture du fichier de routage et le corps des actions correspondantes, et
+signale toute action qui n'appelle pas `verifierJeton()`. Résultat : 8 routes
+`[POST]` couvertes, plus `/saisirfrais` — qui accepte GET et POST, et dont la
+vérification est à l'intérieur du `if ($request->isMethod('POST'))`. Soit
+**9 actions d'écriture, 9 vérifications**.
+
+### 9.29 Phase 6 — non-régression complète (vérifiée)
+
+Tous les parcours rejoués **avec** des jetons valides, en extrayant pour chaque
+formulaire le jeton qui lui appartient.
+
+| Parcours visiteur | Résultat |
+|-------------------|----------|
+| Connexion | ✔ |
+| Saisie des quantités forfaitisées (REP = 13) | enregistrée et réaffichée ✔ |
+| Ajout d'un frais hors forfait avec justificatif | ligne créée, `f.pdf` enregistré ✔ |
+| Dépôt d'un justificatif sur une ligne existante | 302 ✔ |
+| Suppression d'un frais (POST + jeton) | 302, ligne disparue ✔ |
+| Changement de véhicule | E56 en base ✔ |
+
+| Parcours comptable | Résultat |
+|--------------------|----------|
+| Connexion | ✔ |
+| Étape 4 — détail de la fiche | ✔ |
+| Étapes 5-6 — correction (KM = 500) | 500 en base ✔ |
+| Étape 7 — refus d'un frais | ligne supprimée, compteur à 0, **fichier effacé du disque** ✔ |
+| Étapes 8-9 — validation | état `VA`, montant `795.00` ✔ |
+| Exception 4-a | message affiché ✔ |
+| Justificatif / fiche PDF / archive ZIP | 200, 200, 200 ✔ |
+
+Syntaxe des 23 fichiers PHP du bundle : OK.
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -3576,6 +3840,77 @@ PDF **sans qu'une ligne de ces contrôleurs ait été modifiée**. C'est le prin
 la rajouter après coup — c'est en retouchant du code de sécurité déjà testé
 qu'on introduit des failles.
 
+### Questions sur la protection CSRF
+
+**Q61. Qu'est-ce qu'une attaque CSRF, concrètement ?**
+Le navigateur d'un utilisateur connecté envoie **automatiquement** son cookie de
+session à chaque requête vers l'application — y compris quand la requête est
+déclenchée par un autre site. Un site malveillant peut donc faire exécuter une
+action au nom de la victime, à son insu. Exemple réel sur ce projet avant la
+correction : une simple balise
+`<img src="http://…/supprimerfraishorsforfait/7">` sur n'importe quelle page
+suffisait à supprimer un frais du visiteur connecté. Il n'avait rien à cliquer.
+
+**Q62. Pourquoi un jeton empêche-t-il cela ?**
+Parce que le site malveillant peut faire **envoyer** le cookie, mais ne peut pas
+**lire** le contenu de nos pages : la politique de même origine du navigateur
+l'en empêche. Il ne connaît donc pas le jeton, et sans jeton valide l'action est
+refusée. Le cookie prouve « qui vous êtes » ; le jeton prouve « la demande vient
+bien de nos pages ».
+
+**Q63. Tu n'utilises pas le composant Form de Symfony : comment fais-tu ?**
+J'utilise quand même les outils du framework. Le composant Form *consomme* le
+gestionnaire de jetons, il ne le contient pas : `security.csrf.token_manager`,
+la fonction Twig `csrf_token()` et `isCsrfTokenValid()` sont disponibles
+indépendamment, et `csrf_protection` était déjà activé dans `config.yml`.
+Écrire mon propre mécanisme aurait été du code de sécurité non éprouvé.
+
+**Q64. Pourquoi une intention différente par formulaire ?**
+Pour cloisonner. Avec une intention unique, un jeton obtenu sur le formulaire le
+plus anodin — celui du véhicule — ouvrirait **toutes** les actions, y compris la
+validation d'une fiche par le comptable. Testé : envoyer le jeton « véhicule » à
+`/saisirfrais` donne 403.
+
+**Q65. Pourquoi avoir changé la suppression d'un frais de GET en POST ?**
+Parce qu'un jeton ne suffisait pas là. Tant que l'action reste accessible en
+GET, une balise `<img>` d'un autre site la déclenche. Et mettre le jeton dans
+l'URL ne vaut rien : les adresses fuient par l'historique, l'en-tête `Referer`
+et les journaux des serveurs mandataires. **Une protection partielle est pire
+que pas de protection : on croit le problème réglé.**
+
+**Q66. Le formulaire de connexion a un jeton ; à quoi sert-il, puisque
+l'utilisateur n'est pas encore connecté ?**
+À empêcher qu'un site malveillant connecte la victime sur le compte de
+**l'attaquant**. La victime croit être chez elle, saisit ses frais… dans un
+compte que l'attaquant lira. C'est le CSRF de connexion, moins connu mais réel.
+
+**Q67. Y a-t-il des actions POST que tu n'as pas protégées ?**
+Trois, volontairement : la sélection du mois en consultation, la sélection
+visiteur/mois côté comptable — ni l'une ni l'autre n'écrit quoi que ce soit — et
+la déconnexion, dont le pire effet possible est une déconnexion forcée. **La
+règle que j'applique est simple : tout ce qui écrit en base ou sur le disque
+porte un jeton.** Une règle simple à énoncer est une règle qu'on peut vérifier.
+
+**Q68. Comment as-tu vérifié que tu n'en avais oublié aucune ?**
+Pas à l'œil : par un script qui croise les routes d'écriture du fichier de
+routage avec le corps des actions correspondantes et signale celles qui
+n'appellent pas `verifierJeton()`. Neuf actions d'écriture, neuf vérifications.
+
+**Q69. Pourquoi `AccessDeniedHttpException` et pas `AccessDeniedException` ?**
+Parce que la seconde est interceptée par le composant Security, qui — faute de
+pare-feu configuré dans ce projet — la transforme en **401 « identifiez-vous »**.
+Or le problème n'est pas l'identité de l'utilisateur, parfaitement connue :
+c'est l'origine de sa requête. Je m'étais déjà fait prendre en phase 3
+(§ 7.15).
+
+**Q70. Reste-t-il des failles du même genre ?**
+Deux, que je signale plutôt que de les taire. La **session n'est pas régénérée à
+la connexion** : un attaquant capable d'imposer un identifiant de session à la
+victime avant qu'elle se connecte garderait l'accès (fixation de session ; la
+correction tient en une ligne). Et le cookie n'a **pas d'attribut `SameSite`**,
+qui serait une seconde barrière indépendante des jetons — Symfony 2.8 est
+antérieur à cette option.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -3623,6 +3958,12 @@ qu'on introduit des failles.
 | **Idempotent** | Se dit d'un traitement qu'on peut relancer sans changer le résultat. Les trois commandes du cycle d'état le sont, grâce au filtre sur l'état de départ. |
 | **Classe abstraite** | Classe qui ne s'instancie pas et sert de socle commun : elle écrit le traitement une fois, ses classes filles n'en fixent que les paramètres. Ici `CycleEtatCommand` et ses trois commandes. |
 | **Portée (Twig)** | Zone du gabarit où une variable existe. Une variable créée par `{% set %}` dans une boucle **n'existe plus après elle** — source d'un total silencieusement nul (§ 7.16). |
+| **CSRF** | *Cross-Site Request Forgery*, falsification de requête inter-site : faire exécuter une action à un utilisateur connecté, depuis un autre site, en profitant de l'envoi automatique de son cookie. |
+| **Jeton anti-CSRF** | Valeur aléatoire propre à la session et au formulaire, que le site attaquant ne peut pas lire. Sans lui, l'action est refusée. |
+| **Intention (jeton)** | Identifiant du formulaire auquel un jeton se rapporte. Cloisonne les jetons pour qu'un jeton volé sur un formulaire n'ouvre pas les autres. |
+| **Politique de même origine** | Règle du navigateur qui empêche un site de lire le contenu des pages d'un autre site. C'est elle qui rend le jeton inaccessible à l'attaquant. |
+| **Fixation de session** | Attaque consistant à imposer à la victime un identifiant de session connu de l'attaquant, avant qu'elle se connecte. Se contre en régénérant la session à la connexion. |
+| **SameSite** | Attribut de cookie demandant au navigateur de ne pas l'envoyer lors d'une requête venue d'un autre site. Seconde barrière contre le CSRF, indépendante des jetons. |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |

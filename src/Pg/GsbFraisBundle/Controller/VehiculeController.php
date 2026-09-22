@@ -3,7 +3,6 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 
 /**
@@ -12,7 +11,7 @@ use Symfony\Component\HttpFoundation\Request;
  * Le tarif de remboursement kilométrique dépend de la puissance fiscale et du
  * carburant du véhicule ; le barème est stocké dans la table typevehicule.
  */
-class VehiculeController extends Controller
+class VehiculeController extends ControleurGsb
 {
     public function indexAction(Request $request)
     {
@@ -30,6 +29,7 @@ class VehiculeController extends Controller
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        $this->verifierJeton($request, 'vehicule');
         $idVisiteur = $session->get('id');
         $idTypeVehicule = $request->request->get('idTypeVehicule');
         $pdo = $this->get('pg_gsb_frais.pdo');

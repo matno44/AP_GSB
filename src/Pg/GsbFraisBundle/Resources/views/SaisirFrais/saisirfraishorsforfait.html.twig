@@ -31,12 +31,22 @@
                     {% endif %}
                     <form class="formJustificatif" method="post" enctype="multipart/form-data"
                           action="{{path('pg_gsb_frais_joindrejustificatif',{'id' : idfrais})}}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('justificatif') }}" />
                         <input type="file" name="justificatif" accept=".pdf,.jpg,.jpeg,.png" required />
                         <input type="submit" value="{% if unfrais.nomFichier %}Remplacer{% else %}Envoyer{% endif %}" />
                     </form>
                 </td>
-                <td><a href="{{path('pg_gsb_frais_supprimerfraishorsforfait',{'id' : idfrais})}}" 
-				onclick="return confirm('Voulez-vous vraiment supprimer ce frais?');">Supprimer ce frais</a></td>
+                {# Un formulaire POST, et non plus un lien : une suppression ne
+                   doit jamais être déclenchable par un simple chargement
+                   d'adresse — une balise <img> suffirait. Le jeton complète
+                   la protection. #}
+                <td>
+                    <form method="post" action="{{path('pg_gsb_frais_supprimerfraishorsforfait',{'id' : idfrais})}}"
+                          onsubmit="return confirm('Voulez-vous vraiment supprimer ce frais ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('suppression_frais') }}" />
+                        <input type="submit" class="boutonRefus" value="Supprimer ce frais" />
+                    </form>
+                </td>
              </tr>
 	{%endfor%}  
                                           
@@ -44,6 +54,7 @@
       {# enctype indispensable : sans lui le navigateur n'envoie que le NOM du
          fichier, pas son contenu, et $request->files reste vide. #}
       <form action="{{path('pg_gsb_frais_validerfraishorsforfais')}}" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="_token" value="{{ csrf_token('frais_hors_forfait') }}" />
       <div class="corpsForm">
          
           <fieldset>

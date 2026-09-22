@@ -3,10 +3,9 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 
-class HomeController extends Controller
+class HomeController extends ControleurGsb
 {
     public function indexAction(Request $request)
     {
@@ -44,6 +43,10 @@ class HomeController extends Controller
 
     public function validerconnexionAction(Request $request)
     {
+        // Même un formulaire de connexion mérite un jeton : sans lui, un site
+        // malveillant peut connecter la victime sur SON compte à lui, et
+        // récolter ensuite tout ce qu'elle y saisit.
+        $this->verifierJeton($request, 'connexion');
         $session = $request->getSession();
         $login = $request->request->get('login');
         $mdp = $request->request->get('mdp');

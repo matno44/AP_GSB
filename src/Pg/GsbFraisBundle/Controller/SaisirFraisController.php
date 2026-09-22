@@ -3,10 +3,9 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 
-class SaisirFraisController extends Controller
+class SaisirFraisController extends ControleurGsb
 {
     public function indexAction(Request $request)
     {
@@ -23,6 +22,7 @@ class SaisirFraisController extends Controller
 
         $lesErreursForfaits = array();
         if ($request->isMethod('POST')) {
+            $this->verifierJeton($request, 'saisie_forfait');
             $lesFrais = $request->request->get('lesFrais');
             if (lesQteFraisValides($lesFrais)) {
                 $pdo->majFraisForfait($idVisiteur, $mois, $lesFrais);
@@ -40,6 +40,7 @@ class SaisirFraisController extends Controller
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        $this->verifierJeton($request, 'frais_hors_forfait');
         $idVisiteur = $session->get('id');
         $mois = getMois(date("d/m/Y"));
         $pdo = $this->get('pg_gsb_frais.pdo');
@@ -77,6 +78,7 @@ class SaisirFraisController extends Controller
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        $this->verifierJeton($request, 'suppression_frais');
         $idVisiteur = $session->get('id');
         $mois = getMois(date("d/m/Y"));
         $pdo = $this->get('pg_gsb_frais.pdo');

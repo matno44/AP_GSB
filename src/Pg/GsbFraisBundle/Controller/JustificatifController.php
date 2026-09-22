@@ -3,7 +3,6 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
@@ -15,7 +14,7 @@ use Symfony\Component\HttpFoundation\ResponseHeaderBag;
  * directement par le serveur web. Toute lecture passe par consulterAction(),
  * qui vérifie d'abord que le demandeur a le droit de voir le fichier.
  */
-class JustificatifController extends Controller
+class JustificatifController extends ControleurGsb
 {
     /**
      * Rattache un justificatif à une ligne de frais hors forfait existante.
@@ -26,6 +25,7 @@ class JustificatifController extends Controller
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        $this->verifierJeton($request, 'justificatif');
         $pdo = $this->get('pg_gsb_frais.pdo');
         $laLigne = $pdo->getLigneFraisHorsForfait($id);
 

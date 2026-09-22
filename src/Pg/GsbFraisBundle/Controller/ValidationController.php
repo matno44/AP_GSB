@@ -3,7 +3,6 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -13,7 +12,7 @@ use Symfony\Component\HttpFoundation\Response;
  * Acteur : le comptable. Chaque action correspond à une ou plusieurs étapes du
  * scénario nominal, rappelées dans les commentaires.
  */
-class ValidationController extends Controller
+class ValidationController extends ControleurGsb
 {
     /**
      * Garde commune à toutes les actions de ce contrôleur.
@@ -89,6 +88,7 @@ class ValidationController extends Controller
         if ($refus !== null) {
             return $refus;
         }
+        $this->verifierJeton($request, 'validation_corriger');
         $pdo = $this->get('pg_gsb_frais.pdo');
         $laFiche = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
         // On ne corrige que ce qui est encore corrigeable : une fiche déjà
@@ -125,6 +125,7 @@ class ValidationController extends Controller
         if ($refus !== null) {
             return $refus;
         }
+        $this->verifierJeton($request, 'validation_refuser');
         $pdo = $this->get('pg_gsb_frais.pdo');
         $laFiche = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
         if (!is_array($laFiche) || $laFiche['idEtat'] !== 'CL') {
@@ -163,6 +164,7 @@ class ValidationController extends Controller
         if ($refus !== null) {
             return $refus;
         }
+        $this->verifierJeton($request, 'validation_valider');
         $pdo = $this->get('pg_gsb_frais.pdo');
         // validerFicheFrais() ne modifie que les fiches à l'état 'CL' et
         // renvoie faux sinon : le contrôle est dans la requête, il tient donc

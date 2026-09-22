@@ -3,10 +3,9 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 
-class ListeFraisController extends Controller
+class ListeFraisController extends ControleurGsb
 {
     public function indexAction(Request $request)
     {

@@ -8,6 +8,10 @@
             <ul><li>{{ message }}</li></ul></div>
       {% endif %}
 <form method="POST" action="{{path('pg_gsb_frais_validerconnexion')}}">
+      {# Jeton anti-CSRF : sans lui, un autre site pourrait déclencher cette
+         action au nom du visiteur connecté, son navigateur envoyant le cookie
+         de session automatiquement. Il ne peut pas lire ce jeton. #}
+      <input type="hidden" name="_token" value="{{ csrf_token('connexion') }}" />
       <div class="corpsForm">
         <p>
           <label for="login">Login*</label>

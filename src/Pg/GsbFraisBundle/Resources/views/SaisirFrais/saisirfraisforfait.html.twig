@@ -1,6 +1,7 @@
 <div id="contenu">
       <h2>Renseigner ma fiche de frais du mois {{nummois}}-{{numannee}}</h2>
       <form action="{{path('pg_gsb_frais_saisirfrais')}}" method="POST">
+          <input type="hidden" name="_token" value="{{ csrf_token('saisie_forfait') }}" />
           <div class="corpsForm">
               <fieldset>
                 <legend>Eléments forfaitisés</legend>

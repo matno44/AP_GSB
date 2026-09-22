@@ -213,6 +213,26 @@ Les fiches sont produites **une par une** et écrites au fil de l'eau dans
 l'archive : la mémoire ne contient jamais plus d'un PDF. Mesuré sur ce poste :
 1 fiche → 30 Mo, 202 fiches → 38 Mo.
 
+### Sécurité des formulaires
+
+Toute action qui écrit en base ou sur le disque exige un **jeton anti-CSRF**
+(`security.csrf.token_manager` de Symfony), avec une intention distincte par
+formulaire. Neuf actions sont concernées : connexion, saisie des forfaits,
+création / suppression d'un frais hors forfait, dépôt d'un justificatif,
+déclaration du véhicule, et les trois actions du comptable.
+
+La vérification est portée par `Controller/ControleurGsb.php`, dont héritent
+tous les contrôleurs : une action d'écriture sans `verifierJeton()` se repère
+immédiatement à la relecture.
+
+La suppression d'un frais hors forfait se fait en **POST** et non plus en GET :
+une balise `<img src="…/supprimerfraishorsforfait/7">` sur un site tiers
+suffisait auparavant à supprimer un frais du visiteur connecté.
+
+Trois POST ne portent pas de jeton, volontairement, parce qu'ils n'écrivent
+rien : la sélection du mois en consultation, la sélection visiteur/mois côté
+comptable, et la déconnexion.
+
 ### Partie comptable
 
 Le comptable se connecte par le **même formulaire** que les visiteurs ; c'est
