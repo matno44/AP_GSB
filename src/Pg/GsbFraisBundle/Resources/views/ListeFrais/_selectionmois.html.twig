@@ -1,0 +1,33 @@
+{# Fragment réutilisé par listemois.html.twig et listetouslesfrais.html.twig.
+   Il n'hérite volontairement d'aucun layout : un template inclus qui fait
+   « extends » réémet la page entière et casse la structure HTML. #}
+<div id="contenu">
+      <h2>Mes fiches de frais</h2>
+      {% if lesmois is empty %}
+            <p>Aucune fiche de frais n'est encore enregistrée à votre nom.</p>
+      {% else %}
+      <h3>Mois à sélectionner : </h3>
+      <form method="post" action="{{ path('pg_gsb_frais_listefrais') }}">
+      <div class="corpsForm">
+      <p>
+	<label for="lstMois" accesskey="n">Mois : </label>
+        <select id="lstMois" name="lstMois">
+             {% for unMois in  lesmois %}
+                  {% if unMois.mois == lemois %}
+                        <option selected value="{{ unMois.mois }}">{{ unMois.numMois }}/{{ unMois.numAnnee }}</option>
+                  {% else %}
+                        <option value="{{ unMois.mois }}">{{ unMois.numMois }}/{{ unMois.numAnnee }}</option>
+                  {% endif %}
+            {% endfor %}
+       </select>
+      </p>
+      </div>
+      <div class="piedForm">
+      <p>
+            <input id="ok" type="submit" value="Valider" size="20" />
+            <input id="annuler" type="reset" value="Effacer" size="20" />
+      </p>
+      </div>
+        </form>
+      {% endif %}
+</div>

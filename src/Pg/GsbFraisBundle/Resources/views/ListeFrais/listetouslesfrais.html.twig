@@ -1,0 +1,10 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+{% include 'PgGsbFraisBundle:ListeFrais:_selectionmois.html.twig' %}
+<div id="contenu">
+{% include 'PgGsbFraisBundle:ListeFrais:listefraisforfait.html.twig' %}
+{% include 'PgGsbFraisBundle:ListeFrais:listefraishorsforfait.html.twig' %}
+</div>
+{% endblock %}
+{% endblock %}

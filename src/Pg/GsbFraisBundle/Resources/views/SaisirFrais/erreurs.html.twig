@@ -1,0 +1,11 @@
+{# N'émet rien quand il n'y a pas d'erreur : le conteneur était auparavant
+   toujours rendu, ce qui affichait un bandeau rouge vide. #}
+{% if leserreurs is not empty %}
+<div class="erreur">
+<ul>
+ {% for erreur in leserreurs %}
+      <li>{{ erreur }}</li>
+ {% endfor %}
+</ul>
+</div>
+{% endif %}
