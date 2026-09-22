@@ -10,6 +10,9 @@ parameters:
     # 2 Mo. Ne pas dépasser upload_max_filesize de php.ini (2M par défaut),
     # sinon PHP écarte le fichier avant que l'application le voie.
     justificatifs.taille_max: 2097152
+    # Logo imprimé en tête des fiches PDF. Chemin sur le disque et non URL :
+    # dompdf tourne côté serveur, sans accès réseau (isRemoteEnabled à false).
+    fiche_pdf.logo: "%kernel.root_dir%/../src/Pg/GsbFraisBundle/Resources/public/images/logo.svg"
 services:
     pg_gsb_frais.pdo:
         class: Pg\GsbFraisBundle\services\PdoGsb
@@ -17,3 +20,6 @@ services:
     pg_gsb_frais.justificatifs:
         class: Pg\GsbFraisBundle\services\StockageJustificatifs
         arguments: [%justificatifs.dossier%,%justificatifs.taille_max%]
+    pg_gsb_frais.fiche_pdf:
+        class: Pg\GsbFraisBundle\services\GenerateurFichePdf
+        arguments: ['@pg_gsb_frais.pdo', '@templating', %fiche_pdf.logo%]

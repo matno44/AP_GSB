@@ -12,6 +12,16 @@ Prérequis
 | PHP       | **7.4**          | imposé par `.php-version` et `config.platform.php` |
 | MySQL     | 8 ou 9           | voir la note « collation » plus bas |
 | Composer  | 2.x              | les dépendances sont déjà dans `vendor/` |
+| dompdf    | 2.0.8            | génération des fiches PDF |
+
+> **Note sur `composer install` / `composer require`.** Le script
+> post-installation de `sensio/distribution-bundle` échoue avec
+> `Process::__construct() must be of the type array, string given` : ce paquet
+> de 2016 est incompatible avec le Symfony Process 5 qu'embarque le Composer
+> actuel. **C'est sans conséquence** — seule la régénération de
+> `app/bootstrap.php.cache` est concernée, et ce fichier reste valide. Lancer
+> ensuite à la main `php app/console cache:clear --env=dev` et
+> `php app/console assets:install web`.
 
 > **Ne pas utiliser PHP 5.6.** Le projet y était épinglé à l'origine, mais
 > PHP 5.6 ne sait ni négocier la collation ni l'authentification
@@ -123,6 +133,8 @@ Fonctionnalités
 | `pg_gsb_frais_validermonvehicule` | `/validermonvehicule` | enregistrement du véhicule (POST) |
 | `pg_gsb_frais_joindrejustificatif` | `/joindrejustificatif/{id}` | dépôt d'un justificatif sur une ligne hors forfait (POST) |
 | `pg_gsb_frais_consulterjustificatif` | `/justificatif/{id}` | consultation d'un justificatif |
+| `pg_gsb_frais_fichepdf` | `/fichepdf/{idVisiteur}/{mois}` | impression d'une fiche au format de l'annexe 1 |
+| `pg_gsb_frais_fichespdfmois` | `/fichespdf/{mois}` | archive ZIP des fiches clôturées d'un mois (comptable) |
 
 > Le nom `pg_gsb_frais_validerfraishorsforfais` comporte une faute de frappe
 > d'origine (`…forfai**s**`). Elle est conservée telle quelle : les templates
@@ -154,6 +166,36 @@ phase 5). Ce dossier n'est pas versionné et **n'est pas inclus dans un
 Pour accepter des fichiers plus volumineux, modifier `upload_max_filesize` et
 `post_max_size` dans `php.ini`, **puis** `justificatifs.taille_max` dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml`.
+
+### Impression des fiches
+
+Chaque fiche s'imprime au format de l'annexe 1 du cahier des charges (en-tête
+GSB, identité, frais forfaitisés avec montant unitaire, autres frais, total,
+« Vu l'agent comptable »). Le **montant unitaire imprimé est celui historisé sur
+la ligne** : réimprimer une fiche ancienne restitue le tarif de l'époque.
+
+Commandes console :
+
+```bash
+# archive ZIP des fiches clôturées du mois précédent (une fiche = un PDF)
+php app/console gsb:imprimer-fiches
+php app/console gsb:imprimer-fiches 202608 --etat=CL --sortie=/tmp/fiches.zip
+
+# jeu de données de test, pour les essais de volumétrie
+php app/console gsb:generer-donnees --visiteurs=200 --mois=202608 --etat=CL
+```
+
+Les visiteurs de test portent un identifiant préfixé par `z`. Pour les retirer,
+**dans cet ordre** (`fichefrais` référence `visiteur` sans `ON DELETE CASCADE`) :
+
+```sql
+DELETE FROM fichefrais WHERE idVisiteur LIKE 'z%';
+DELETE FROM visiteur   WHERE id LIKE 'z%';
+```
+
+Les fiches sont produites **une par une** et écrites au fil de l'eau dans
+l'archive : la mémoire ne contient jamais plus d'un PDF. Mesuré sur ce poste :
+1 fiche → 30 Mo, 202 fiches → 38 Mo.
 
 La fiche du mois en cours est créée automatiquement à la première visite de
 `/saisirfrais`, et la fiche du mois précédent passe alors de l'état `CR`

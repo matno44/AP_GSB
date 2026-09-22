@@ -48,6 +48,56 @@ function estComptable($session){
     return $session->get('role') === 'comptable';
 }
 /**
+ * Traduit un mois au format aaaamm en libellé français
+
+ * Exemple : "202609" devient "Septembre 2026".
+ * Un tableau plutôt que la classe IntlDateFormatter : le résultat ne dépend
+ * alors ni de l'extension intl, ni de la locale configurée sur le serveur,
+ * et il est lisible tel quel par un correcteur.
+
+ * @param $mois au format aaaamm
+ * @return le libellé, ou le mois inchangé si le format est inattendu
+ */
+function moisEnLettres($mois){
+    $lesMois = array('01'=>'Janvier', '02'=>'Février', '03'=>'Mars',
+                     '04'=>'Avril',   '05'=>'Mai',     '06'=>'Juin',
+                     '07'=>'Juillet', '08'=>'Août',    '09'=>'Septembre',
+                     '10'=>'Octobre', '11'=>'Novembre','12'=>'Décembre');
+    // Contrôle strict : "202abc" a bien 6 caractères mais n'est pas un mois.
+    // Sans ce test, le transtypage en entier produirait des valeurs absurdes.
+    if(!preg_match('/^[0-9]{6}$/', $mois)){
+        return $mois;
+    }
+    $numAnnee = substr($mois, 0, 4);
+    $numMois = substr($mois, 4, 2);
+    if(!isset($lesMois[$numMois])){
+        return $mois;
+    }
+    return $lesMois[$numMois].' '.$numAnnee;
+}
+/**
+ * Retourne le mois précédant celui passé en argument
+
+ * Exemple : "202601" devient "202512". Le passage de janvier à décembre de
+ * l'année précédente est le cas limite que ce calcul doit gérer.
+
+ * @param $mois au format aaaamm
+ * @return le mois précédent au format aaaamm
+ */
+function moisPrecedent($mois){
+    if(!preg_match('/^[0-9]{6}$/', $mois)){
+        return $mois;
+    }
+    $numAnnee = (int) substr($mois, 0, 4);
+    $numMois = (int) substr($mois, 4, 2);
+    $numMois--;
+    if($numMois == 0){
+        $numMois = 12;
+        $numAnnee--;
+    }
+    return $numAnnee.str_pad($numMois, 2, '0', STR_PAD_LEFT);
+}
+/**
  * Détruit la session active
  */
 function deconnecter($session){

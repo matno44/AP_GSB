@@ -41,3 +41,11 @@ pg_gsb_frais_consulterjustificatif:
     path:     /justificatif/{id}
     defaults: { _controller: PgGsbFraisBundle:Justificatif:consulter }
     requirements: { id: '\d+' }
+pg_gsb_frais_fichepdf:
+    path:     /fichepdf/{idVisiteur}/{mois}
+    defaults: { _controller: PgGsbFraisBundle:FichePdf:imprimer }
+    requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}' }
+pg_gsb_frais_fichespdfmois:
+    path:     /fichespdf/{mois}
+    defaults: { _controller: PgGsbFraisBundle:FichePdf:imprimerMois }
+    requirements: { mois: '\d{6}' }

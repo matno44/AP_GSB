@@ -1,0 +1,81 @@
+<?php
+namespace Pg\GsbFraisBundle\Command;
+
+require_once __DIR__.'/../Controller/include/fct.inc.php';
+
+use Symfony\Bundle\FrameworkBundle\Command\ContainerAwareCommand;
+use Symfony\Component\Console\Input\InputArgument;
+use Symfony\Component\Console\Input\InputOption;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+/**
+ * Génère l'archive des fiches clôturées d'un mois.
+ *
+ * Cette commande rend le traitement de masse utilisable dès maintenant, alors
+ * que l'écran comptable qui l'appellera n'existera qu'en phase 5. Elle appelle
+ * exactement le même service que le contrôleur : il n'y a donc pas deux
+ * implémentations à maintenir, et ce qui est vérifié ici vaut pour l'écran.
+ *
+ * C'est aussi la forme la plus adaptée à un gros volume : une commande console
+ * n'est pas soumise au délai d'expiration d'une requête HTTP.
+ */
+class ImprimerFichesCommand extends ContainerAwareCommand
+{
+    protected function configure()
+    {
+        $this
+            ->setName('gsb:imprimer-fiches')
+            ->setDescription('Génère une archive ZIP des fiches de frais d\'un mois')
+            ->addArgument('mois', InputArgument::OPTIONAL,
+                'Mois au format aaaamm. Par défaut : le mois précédent.')
+            ->addOption('etat', null, InputOption::VALUE_REQUIRED,
+                'État des fiches à imprimer', 'CL')
+            ->addOption('sortie', null, InputOption::VALUE_REQUIRED,
+                'Chemin du fichier ZIP à produire');
+    }
+
+    protected function execute(InputInterface $input, OutputInterface $output)
+    {
+        $mois = $input->getArgument('mois');
+        if ($mois === null) {
+            // Le cahier des charges parle des fiches « du mois précédent ».
+            $mois = moisPrecedent(getMois(date('d/m/Y')));
+        }
+        if (!preg_match('/^[0-9]{6}$/', $mois)) {
+            $output->writeln('<error>Mois invalide : attendu aaaamm</error>');
+
+            return 1;
+        }
+        $etat = $input->getOption('etat');
+        $cheminZip = $input->getOption('sortie');
+        if ($cheminZip === null) {
+            $cheminZip = getcwd().'/fiches_'.$mois.'.zip';
+        }
+
+        $output->writeln(sprintf(
+            'Fiches du mois <info>%s</info> (%s) à l\'état <info>%s</info>',
+            $mois, moisEnLettres($mois), $etat));
+
+        $debut = microtime(true);
+        $nbFiches = $this->getContainer()->get('pg_gsb_frais.fiche_pdf')
+            ->genererArchiveMois($mois, $etat, $cheminZip);
+
+        if ($nbFiches == 0) {
+            $output->writeln('<comment>Aucune fiche à imprimer pour ce mois.</comment>');
+
+            return 0;
+        }
+        $output->writeln(sprintf(
+            '<info>%d fiche(s)</info> écrites dans %s (%s Ko) en %.1f s',
+            $nbFiches, $cheminZip, number_format(filesize($cheminZip) / 1024, 1),
+            microtime(true) - $debut));
+        // memory_get_peak_usage donne le maximum atteint depuis le début du
+        // script : c'est le chiffre qui prouve que la mémoire ne croît pas
+        // avec le nombre de fiches.
+        $output->writeln(sprintf('Pic de mémoire : %.1f Mo',
+            memory_get_peak_usage(true) / (1024 * 1024)));
+
+        return 0;
+    }
+}

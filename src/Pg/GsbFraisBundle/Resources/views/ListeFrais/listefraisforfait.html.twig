@@ -34,5 +34,12 @@
     <p class="legendeTableau">
         Lignes du tableau : libellé, quantité, montant unitaire appliqué, total.
     </p>
+    {# Impression au format de l'annexe 1 du cahier des charges. Le contrôleur
+       vérifie que le visiteur demande bien SA fiche (ou qu'il est comptable) :
+       passer un autre identifiant dans l'URL donne une 404. #}
+    <p>
+        <a href="{{ path('pg_gsb_frais_fichepdf', {'idVisiteur': app.session.get('id'), 'mois': lemois}) }}"
+           target="_blank">Imprimer cette fiche (PDF)</a>
+    </p>
    </div>
  

@@ -8,7 +8,7 @@ définie au § 11 (glossaire).
 | 0 | Audit du code existant | **terminée** |
 | 1 | Puissance fiscale du véhicule | **terminée** |
 | 2 | Upload des justificatifs | **terminée** |
-| 3 | Génération PDF des fiches | à faire |
+| 3 | Génération PDF des fiches | **terminée** |
 | 4 | Maquette HTML partie comptable | à faire |
 | 5 | Cas d'utilisation « Valider fiche de frais » | à faire |
 
@@ -84,6 +84,22 @@ définie au § 11 (glossaire).
 | Routes | `Resources/config/routing.yml` *(modifié)* | `pg_gsb_frais_joindrejustificatif` (POST), `pg_gsb_frais_consulterjustificatif` |
 | Vues | `views/SaisirFrais/saisirfraishorsforfait.html.twig`, `views/ListeFrais/listefraishorsforfait.html.twig` *(modifiées)* | colonne « Justificatif », formulaire d'envoi par ligne, compteur dans la légende |
 | Style | `Resources/public/styles/styles.css` *(modifié)* | mise en forme des formulaires d'envoi |
+
+### Phase 3 — Génération PDF des fiches de frais
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Dépendance | `composer.json`, `composer.lock` *(modifiés)* | `dompdf/dompdf` v2.0.8 + 4 dépendances |
+| Gabarit de la fiche | `Resources/views/FichePdf/fiche.html.twig` *(créé)* | reproduction de l'annexe 1 en HTML/CSS |
+| Générateur | `services/GenerateurFichePdf.php` *(créé)* | `genererFiche()` (une fiche), `genererArchiveMois()` (le ZIP du mois), `calculerTotal()` |
+| Déclaration du service | `Resources/config/services.yml` *(modifié)* | `pg_gsb_frais.fiche_pdf` + paramètre `fiche_pdf.logo` |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | `getVisiteur`, `getLesFichesDuMois`, `getLesTypesFraisForfait`, `genererVisiteursDeTest` |
+| Fonctions de date | `Controller/include/fct.inc.php` *(modifié)* | `moisEnLettres()`, `moisPrecedent()` |
+| Impression web | `Controller/FichePdfController.php` *(créé)* | fiche individuelle (visiteur ou comptable), archive du mois (comptable) |
+| Routes | `Resources/config/routing.yml` *(modifié)* | `pg_gsb_frais_fichepdf`, `pg_gsb_frais_fichespdfmois` |
+| Impression de masse en console | `Command/ImprimerFichesCommand.php` *(créé)* | `gsb:imprimer-fiches`, utilisable sans compte comptable |
+| Jeu de données de test | `Command/GenererDonneesCommand.php` *(créé)* | `gsb:generer-donnees` — comble le point B7 |
+| Lien d'impression | `views/ListeFrais/listefraisforfait.html.twig` *(modifié)* | « Imprimer cette fiche (PDF) » |
 
 ---
 
@@ -881,6 +897,98 @@ joint ou remplacé plus tard.
 - **Vérifié en test (T13) :** après suppression du frais, le fichier a disparu
   du disque et le compteur est passé de 2 à 1.
 
+### Phase 3
+
+### Décision 3.1 — dompdf plutôt que TCPDF ou un générateur maison
+
+*Décision validée par le client.*
+
+- **Retenu :** `composer require dompdf/dompdf:^2.0` → dompdf v2.0.8 et
+  4 dépendances (`masterminds/html5`, `phenx/php-font-lib`,
+  `phenx/php-svg-lib`, `sabberworm/php-css-parser`). Compatibles PHP 7.4,
+  aucune extension système supplémentaire.
+- **Pourquoi :** on décrit la fiche en **HTML et CSS, dans un gabarit Twig** —
+  exactement la technique déjà employée partout ailleurs dans le projet. Un
+  ajustement de maquette est une modification de CSS, pas un calcul de
+  coordonnées.
+- **Écarté — TCPDF :** son interface est impérative, on positionne chaque
+  cellule en millimètres (`SetXY`, `Cell`, `MultiCell`). Le tableau de
+  l'annexe 1 aurait demandé une centaine de lignes de positionnement, et toute
+  retouche se serait faite à la calculette.
+- **Écarté — écrire le PDF à la main :** c'est précisément la « magie »
+  que le sujet demande d'éviter. Polices, encodage et table des objets à gérer
+  soi-même, pour un code indéfendable à l'oral.
+- **Sécurité :** les 47 alertes signalées par `composer audit` **ne concernent
+  pas dompdf** ; elles portent sur Symfony 2.8 (31), Twig (14) et Swiftmailer
+  (1) — des paquets déjà présents, en fin de vie, imposés par le sujet. Voir
+  limite L16.
+
+### Décision 3.2 — Une archive ZIP de PDF individuels, pas un PDF multi-pages
+
+*Décision validée par le client.*
+
+- **Retenu :** un fichier PDF par fiche, ajoutés un par un dans une archive ZIP.
+- **Pourquoi c'est la bonne réponse à la question de volumétrie du sujet :**
+  dompdf construit **tout le document en mémoire** avant de l'écrire. Un PDF
+  multi-pages de 500 fiches serait donc intégralement en mémoire à la fin. Avec
+  des fichiers séparés, la mémoire ne contient jamais qu'**une** fiche.
+- **Et c'est aussi le bon choix métier :** le cahier des charges décrit un
+  classement « par ordre chronologique dans une pochette nominative pour chaque
+  visiteur ». Une fiche par fichier se classe directement ; un document unique
+  demanderait un découpage manuel.
+- **Le compromis assumé :** l'impression papier demande d'ouvrir chaque PDF.
+  Pour un archivage papier en une seule commande d'impression, le document
+  unique serait plus pratique.
+
+### Décision 3.3 — Imprimer l'identifiant du visiteur en guise de matricule
+
+*Décision validée par le client.*
+
+L'annexe 1 affiche `NRD/125-01`. La base ne connaît que `a17`. Le cahier des
+charges **ne définit nulle part** la règle de construction de ce matricule :
+ajouter une colonne `visiteur.matricule` reviendrait à inventer des valeurs,
+donc à livrer des données fausses, et à construire un écran pour les saisir.
+La fiche imprime donc `a17`. À l'oral : « l'identifiant du visiteur tient ce
+rôle, faute de spécification du matricule ».
+
+### Décision 3.4 — Le traitement de masse existe aussi en commande console
+
+- **Problème :** la génération « en un clic » est une fonction du comptable, et
+  le comptable n'existe pas avant la phase 5. Livrer uniquement la route web
+  reviendrait à livrer le cœur de la phase 3 sans pouvoir le démontrer.
+- **Retenu :** la logique vit dans le **service**
+  `GenerateurFichePdf::genererArchiveMois()`. Le contrôleur web (réservé au
+  comptable) **et** la commande `gsb:imprimer-fiches` l'appellent tous les deux.
+- **Bénéfices :** une seule implémentation à maintenir ; ce qui est vérifié en
+  console vaut pour l'écran ; et une commande console **n'est pas soumise au
+  délai d'expiration d'une requête HTTP** — ce qui compte pour 500 fiches
+  (49 secondes pour 202 fiches sur ce poste).
+
+### Décision 3.5 — Écrire le générateur de données de test manquant
+
+Le cahier des charges présente ce script comme livré par le prédécesseur ; il
+est absent de l'archive (point B7). Sans lui, l'affirmation « la mémoire ne
+croît pas avec le nombre de fiches » resterait une opinion. `gsb:generer-donnees`
+crée des visiteurs dont l'identifiant est **préfixé par `z`** : on peut les
+retrouver et les retirer sans jamais toucher aux 9 visiteurs d'origine.
+
+### Décision 3.6 — 403 pour l'export de masse, 404 pour une fiche
+
+Les justificatifs et les fiches individuelles répondent **404** à un accès
+interdit, pour ne pas révéler l'existence du document (décision 2.5). L'export
+mensuel, lui, répond **403** : l'existence d'un export du mois n'a rien de
+confidentiel, et l'utilisateur est bien authentifié — il lui manque seulement
+le rôle. 403 est alors le code juste.
+
+### Décision 3.7 — Couper l'accès réseau de dompdf
+
+`$options->set('isRemoteEnabled', false)` et un `chroot` limité au dossier du
+logo. Sans cela, une balise `<img src="http://…">` glissée dans un **libellé de
+frais** — donc saisie par un visiteur — ferait émettre une requête HTTP **par le
+serveur**. C'est une faille connue (SSRF) : le serveur devient un relais pour
+atteindre des adresses internes. Le gabarit n'a besoin d'aucune ressource
+distante, la coupure ne retire donc rien.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -1209,6 +1317,139 @@ L'ordre des quatre étapes n'est pas indifférent :
 - La lecture/écriture en base est enveloppée dans une **transaction** :
   la ligne de frais et le compteur de la fiche changent ensemble ou pas du tout.
 
+### Phase 3
+
+### 6.12 La boucle de génération de masse — le cœur de la volumétrie
+
+*Fichier :* `GenerateurFichePdf::genererArchiveMois()`
+
+Pseudo-code :
+
+```
+lesFiches ← identifiants et identités des fiches du mois à l'état voulu   (1 requête)
+ouvrir l'archive ZIP
+POUR CHAQUE fiche DANS lesFiches
+    pdf ← générer le PDF de cette fiche                    (3 requêtes)
+    SI pdf est vide, passer à la suivante
+    écrire pdf dans un fichier temporaire
+    LIBÉRER pdf de la mémoire
+    déclarer le fichier temporaire dans l'archive
+fermer l'archive        ← c'est seulement ici que les fichiers sont lus
+effacer les fichiers temporaires
+```
+
+- **Ce que la boucle parcourt :** la liste des fiches du mois. **Ce qu'elle
+  produit :** un fichier PDF par fiche, rassemblés dans une archive.
+- **Invariant — et c'est tout l'enjeu :** *à la fin de chaque tour, la mémoire
+  ne contient aucun PDF.* Le `unset($pdf)` juste après l'écriture n'est pas
+  décoratif : sans lui, la variable resterait occupée jusqu'au tour suivant et
+  deux PDF cohabiteraient.
+- **Pourquoi la requête de tête ne ramène que les identités :** si
+  `getLesFichesDuMois()` renvoyait le détail des frais, tout le mois serait en
+  mémoire avant même d'avoir commencé. Le détail est lu fiche par fiche.
+- **Pourquoi `foreach` :** parcours simple d'un tableau, sans indice.
+  Pourquoi pas `array_map` : on provoque des effets de bord (écriture de
+  fichiers), on ne construit pas un tableau.
+- **Cas limites gérés :** aucune fiche pour ce mois → la méthode retourne 0
+  sans créer d'archive vide ; une fiche sans ligne forfaitisée (donc
+  inexistante) → `genererFiche()` renvoie `null` et la fiche est sautée sans
+  interrompre le lot.
+- **Coût :** 1 + 3 × N requêtes pour N fiches. **C'est bien un motif N+1**, et
+  je le signale : pour 202 fiches, 607 requêtes. Je l'ai conservé parce que
+  chaque fiche est un document indépendant qu'il faut de toute façon composer
+  séparément, et parce que la solution — une requête unique ramenant toutes les
+  lignes de toutes les fiches — **ramènerait en mémoire ce que je cherche
+  justement à ne pas y mettre**. Ici, économiser des requêtes coûterait de la
+  mémoire : c'est un arbitrage, pas un oubli.
+
+### 6.13 La preuve chiffrée de la volumétrie
+
+C'est le point que le sujet demande d'expliquer. Mesures réelles sur ce poste,
+avec `memory_get_peak_usage(true)` :
+
+| Nombre de fiches | Pic de mémoire | Durée | Taille de l'archive |
+|------------------|----------------|-------|---------------------|
+| 1 | **30,0 Mo** | 1,3 s | 25,6 Ko |
+| 202 | **38,0 Mo** | 49,0 s | 5 152 Ko (6,3 Mo décompressés) |
+
+**202 fois plus de fiches pour 8 Mo de mémoire en plus.** Si les PDF
+s'accumulaient en mémoire, 202 fiches à ~31 Ko auraient ajouté 6,3 Mo de
+contenu — mais surtout, la courbe serait **proportionnelle** : 2 000 fiches
+feraient 63 Mo, 20 000 en feraient 630 et le script s'arrêterait sur
+`Allowed memory size exhausted`.
+
+- Les **30 Mo de départ** sont le coût fixe de dompdf : il charge et met en
+  cache les polices DejaVu (normale, grasse, italique, grasse italique) à la
+  première fiche. Ce coût ne se répète pas.
+- Les **8 Mo de croissance** ne sont pas les PDF : ce sont les entrées que
+  `ZipArchive` conserve en mémoire jusqu'au `close()`, soit environ 40 Ko par
+  fichier déclaré. C'est la seule part qui croît, et c'est la limite L15.
+- **La durée, elle, croît bien proportionnellement** (~0,24 s par fiche). C'est
+  normal et inévitable : il faut composer chaque document. C'est pour cela que
+  le traitement de masse est aussi offert en **commande console**, qui n'est pas
+  soumise au délai d'expiration d'une requête HTTP.
+
+### 6.14 Le calcul du total général — deux parcours, zéro requête
+
+*Fichier :* `GenerateurFichePdf::calculerTotal()`
+
+```
+total ← 0
+POUR CHAQUE ligne forfaitisée : total ← total + ligne.montant
+POUR CHAQUE ligne hors forfait : total ← total + ligne.montant
+```
+
+- **Invariant :** après le i-ᵉ tour, `total` contient la somme des i premières
+  lignes parcourues.
+- **Pourquoi en PHP et non en SQL :** les deux tableaux sont **déjà en
+  mémoire**, chargés pour être affichés. Les faire additionner par le serveur
+  SQL coûterait deux requêtes d'agrégation supplémentaires **par fiche** — soit
+  404 requêtes de plus sur un lot de 202 — pour additionner une quinzaine de
+  nombres déjà présents. C'est l'exemple inverse du § 6.8 : là-bas, SQL évitait
+  un aller-retour ; ici, il en ajouterait un.
+- **Pourquoi `foreach` et pas `array_sum` :** `array_sum` exigerait d'extraire
+  d'abord la colonne (`array_column`), donc de construire un tableau
+  intermédiaire, pour le même résultat.
+- **Cas limites gérés :** aucune ligne hors forfait → la seconde boucle ne
+  s'exécute pas, le total vaut celui des forfaits ; le transtypage `(float)` est
+  explicite parce que PDO renvoie les `DECIMAL` sous forme de **chaînes** —
+  sans lui, `+` fonctionnerait quand même par conversion implicite, mais le
+  code ne dirait pas ce qu'il fait.
+- **Coût :** aucune requête, 4 + n itérations.
+
+### 6.15 L'insertion des données de test — préparer une fois, exécuter N fois
+
+*Fichier :* `PdoGsb::genererVisiteursDeTest()`
+
+```
+préparer les 4 requêtes d'insertion          ← UNE SEULE FOIS
+lire les référentiels (véhicules, frais)     ← UNE SEULE FOIS
+DÉBUT DE TRANSACTION
+POUR i DE 1 À nbVisiteurs
+    exécuter l'insertion du visiteur
+    exécuter l'insertion de sa fiche
+    exécuter l'insertion de ses 4 lignes forfait   ← une requête, 4 jeux de valeurs
+    POUR j DE 0 À (0 à 3 tirés au sort)
+        exécuter l'insertion d'un frais hors forfait
+VALIDER    (ou TOUT ANNULER)
+```
+
+- **Pourquoi `for` et non `foreach` :** on compte des tours, on ne parcourt pas
+  une collection existante. `for` exprime exactement cela.
+- **Le point de performance :** `prepare()` est appelé **avant** la boucle,
+  `execute()` à l'intérieur. Préparer une requête fait analyser son texte par le
+  serveur ; préparer dans la boucle multiplierait ce coût par 200. De même, les
+  référentiels (`typevehicule`, `fraisforfait`) sont lus une fois et gardés dans
+  des tableaux — les relire à chaque tour serait le cas d'école du N+1.
+- **Les 4 lignes forfaitisées en une requête** (`VALUES (…),(…),(…),(…)`) au
+  lieu de quatre : c'est justement ce que `creeNouvellesLignesFrais()` ne fait
+  pas, et que je n'ai pas modifié là-bas par respect du code du prédécesseur
+  (§ 6.4). Ici, le code est neuf : rien ne m'oblige à reproduire le motif.
+- **Cas limites gérés :** `id` est un `CHAR(4)`, donc préfixe + 3 chiffres →
+  le nombre est plafonné à 999 ; une erreur en cours de route annule tout le
+  lot par `rollBack()`, plutôt que de laisser un demi-jeu de test.
+- **Coût mesuré :** 200 visiteurs et leurs fiches en **0,8 seconde**.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -1428,6 +1669,76 @@ produit un défaut silencieux :
   `$this->get('request_stack')->getCurrentRequest()`. Sur un projet en 2.8, il
   faut se méfier des exemples écrits pour les versions 2.0 à 2.3.
 
+### Phase 3
+
+### 7.12 L'installation de dompdf casse un script de Composer
+- **Message exact :**
+  `[TypeError] Argument 1 passed to Symfony\Component\Process\Process::__construct()`
+  `must be of the type array, string given`, dans
+  `sensio/distribution-bundle/.../Composer/ScriptHandler.php:342`.
+- **Ce que je faisais :** `composer require dompdf/dompdf:^2.0`.
+- **Cause réelle — et elle n'a rien à voir avec dompdf.** Le paquet
+  `sensio/distribution-bundle` (2016) contient un script exécuté après chaque
+  installation, qui écrit `new Process('php ...')` avec une **chaîne**. Le
+  Composer installé aujourd'hui embarque Symfony Process 5, où le constructeur
+  exige un **tableau**. N'importe quel `composer require` sur ce projet
+  déclenche la même erreur.
+- **Portée réelle :** seul `buildBootstrap` échoue — la régénération de
+  `app/bootstrap.php.cache`. Ce fichier existe déjà et reste valide puisque la
+  version de Symfony n'a pas bougé. Les scripts suivants (`clearCache`,
+  `installAssets`) n'ont pas été exécutés, d'où leur lancement à la main.
+- **Vérifications faites avant de conclure :** dompdf bien présent dans
+  `vendor/`, classe `Dompdf\Dompdf` instanciable, `php app/console --version`
+  répond, cache vidé et assets réinstallés sans erreur, application testée.
+- **Pour ne pas s'y tromper :** un script post-installation en échec n'est pas
+  forcément une installation en échec. Il faut lire **quel** script échoue et
+  ce qu'il produit, au lieu de conclure que le paquet est cassé.
+
+### 7.13 `--dry-run` de Composer modifie quand même `composer.json`
+- **Ce que je faisais :** `composer require --dry-run dompdf/dompdf:^2.0`, pour
+  voir ce qui serait installé **sans rien installer**, avant de te demander ton
+  accord.
+- **Symptôme :** la première ligne de sortie est
+  `./composer.json has been updated`.
+- **Cause réelle :** `require --dry-run` écrit la dépendance dans
+  `composer.json` pour pouvoir résoudre le graphe, puis restaure le fichier à
+  la fin. La simulation ne porte que sur l'installation dans `vendor/`.
+- **Vérification :** `git status` était propre après coup, et `vendor/dompdf`
+  absent — la restauration avait bien eu lieu.
+- **Ce que j'en retiens :** avoir un dépôt Git a permis de **prouver en une
+  commande** que rien n'avait été laissé derrière. Sans historique, il aurait
+  fallu me fier au message de l'outil.
+
+### 7.14 Deux `grep` faux, pour la deuxième fois
+- **Symptôme :** mes tests W1 et T7 semblaient échouer alors que le code était
+  correct. Pour W1, je cherchais
+  `<a href="/fichepdf/…" …>…</a>` **sur une seule ligne**, alors que
+  l'attribut `target="_blank"` est sur la ligne suivante du gabarit.
+- **Cause réelle :** `grep` travaille ligne par ligne ; le HTML, non.
+- **Correction :** compter la présence du **texte du lien**
+  (`grep -c 'Imprimer cette fiche'`) plutôt que de reconstituer une balise.
+- **C'est la deuxième fois** (voir § 7.5, l'apostrophe échappée par Twig). La
+  règle que j'aurais dû appliquer plus tôt : **ne jamais tester du HTML avec
+  une expression régulière qui suppose une mise en forme.** Chercher un texte
+  visible ou une classe CSS.
+
+### 7.15 `createAccessDeniedException()` renvoie 401 et non 403
+- **Symptôme :** un visiteur non comptable demandant `/fichespdf/202608`
+  recevait **HTTP 401**, alors que j'attendais 403.
+- **Cause réelle :** `createAccessDeniedException()` lève une
+  `AccessDeniedException` que le composant **Security** de Symfony intercepte.
+  Son comportement normal est de déclencher le point d'entrée
+  d'authentification — « identifiez-vous », donc 401. Or ce projet n'utilise
+  pas le composant Security (décision 0.4) : il n'y a pas de pare-feu
+  configuré, et surtout **l'utilisateur est déjà authentifié**. Il ne lui
+  manque qu'un rôle.
+- **Correction :** construire la réponse à la main,
+  `new Response($message, Response::HTTP_FORBIDDEN)`. Vérifié : HTTP 403.
+- **Ce que ça illustre :** les raccourcis du contrôleur Symfony supposent que
+  l'on utilise tout le cadre. Dès qu'on n'en utilise qu'une partie — ici
+  l'authentification faite main — certains d'entre eux se comportent de façon
+  inattendue. C'est le prix, connu et assumé, de la décision 0.4.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -1545,6 +1856,75 @@ cela ajouterait une dépendance système.
 sauvegarde sans le dossier laisserait des lignes référençant des fichiers
 absents (le contrôleur répond alors 404 avec un message explicite). Toute
 procédure de sauvegarde doit donc emporter **les deux**.
+
+### ✅ B7 — LEVÉ en phase 3
+Le générateur de données aléatoires annoncé par le cahier des charges et absent
+de l'archive existe désormais : `php app/console gsb:generer-donnees`.
+
+### ✅ B15 — TRANCHÉ en phase 3
+La fiche imprime l'identifiant du visiteur (`a17`) faute de spécification du
+matricule. Décision 3.3, validée par le client.
+
+### Limites propres à la phase 3
+
+#### 🔴 L13 — Le comptable ne peut pas encore lancer la génération de masse
+Comme en phases 1 et 2 : la route `/fichespdf/{mois}` existe, elle est réservée
+au comptable, et `estComptable()` renvoie faux tant qu'aucun compte comptable
+n'existe. **En attendant, la fonctionnalité est pleinement utilisable par la
+commande `gsb:imprimer-fiches`**, qui appelle exactement le même service — ce
+n'est donc pas une fonctionnalité manquante, mais une fonctionnalité sans
+bouton. Le bouton arrivera avec l'écran comptable, en phase 5.
+
+#### 🟠 L14 — La génération de masse est un N+1 assumé
+3 requêtes par fiche, soit 607 requêtes pour 202 fiches. Une requête unique
+ramenant toutes les lignes de toutes les fiches réduirait ce nombre — mais
+remettrait en mémoire exactement ce que la conception cherche à éviter
+(§ 6.12). **Arbitrage entre nombre de requêtes et empreinte mémoire, tranché en
+faveur de la mémoire**, parce que c'est la contrainte que le sujet met en avant.
+
+#### 🟠 L15 — La mémoire n'est pas parfaitement constante
+Elle croît d'environ **40 Ko par fiche**, non pas à cause des PDF (libérés à
+chaque tour) mais des entrées que `ZipArchive` conserve jusqu'au `close()`.
+Pour 202 fiches, cela représente 8 Mo. Extrapolé à 5 000 fiches, environ
+200 Mo : toujours gérable, mais **ce n'est pas illimité**. Si le besoin
+apparaissait, il faudrait produire une archive par lots de quelques centaines.
+`ZipArchive` n'ouvre les fichiers temporaires qu'au `close()`, ce qui pose par
+ailleurs la question du nombre de descripteurs de fichiers ouverts sur de très
+gros volumes. *Je préfère donner ce chiffre plutôt que d'affirmer « la mémoire
+est constante », ce qui serait faux.*
+
+#### 🟠 L16 — 47 alertes de sécurité sur les dépendances existantes
+`composer audit` signale 31 avis pour `symfony/symfony` 2.8, 14 pour `twig/twig`
+et 1 pour `swiftmailer`. **Aucune ne concerne dompdf.** Symfony 2.8 n'est plus
+maintenu depuis 2018 ; le sujet impose cette version. Rien à corriger dans le
+cadre de l'AP, mais **c'est à connaître pour l'oral** : un jury peut demander
+si le projet est à jour. La réponse honnête est non, et pourquoi.
+
+#### 🟡 L17 — Durée de la génération de masse
+49 secondes pour 202 fiches (~0,24 s par fiche), soit environ 4 minutes pour
+1 000 fiches. Par le web, cela dépasserait le délai d'expiration habituel d'un
+serveur — d'où l'intérêt de la commande console. Le futur bouton comptable
+devra soit se limiter à des volumes raisonnables, soit déclencher un traitement
+en arrière-plan.
+
+#### 🟡 L18 — Le PDF n'est pas mis en cache
+Chaque demande regénère le document. Pour une fiche clôturée — dont le contenu
+ne changera plus — on pourrait conserver le PDF produit. Non demandé, et cela
+introduirait la question de l'invalidation du cache.
+
+#### 🟡 L19 — Données de test laissées en base
+`gsb:generer-donnees` a créé **200 visiteurs `z001` à `z200`** avec une fiche
+clôturée en 202608, pour la mesure de volumétrie. Ils sont toujours là. Pour
+les retirer, **dans cet ordre** (`fichefrais` référence `visiteur` sans
+`ON DELETE CASCADE`) :
+
+```sql
+DELETE FROM fichefrais WHERE idVisiteur LIKE 'z%';  -- les lignes suivent
+DELETE FROM visiteur   WHERE id LIKE 'z%';
+```
+
+Je ne les supprime pas de moi-même : ce sont des `DELETE`, et la règle est de
+ne rien détruire sans ton accord. Une seule commande les recrée si besoin.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -1855,6 +2235,90 @@ sert que `web/`.
 | P1 | Tarif kilométrique du véhicule déclaré | 0.67 € affiché en saisie ✔ |
 | P1 | Fiche clôturée 202608 | Toujours à 0.62 € — **l'historisation de la phase 1 tient** ✔ |
 
+### 9.14 Phase 3 — installation
+
+```bash
+cd "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet"
+composer install          # dompdf est déjà dans composer.lock
+php app/console cache:clear --env=dev
+```
+
+> Le script post-installation de Composer s'arrête sur une erreur
+> `Process::__construct() must be of the type array` : **c'est normal et sans
+> conséquence sur ce projet** (voir § 7.12). Lancer ensuite à la main
+> `php app/console cache:clear --env=dev` et `php app/console assets:install web`.
+
+Aucune migration de base en phase 3 : l'impression ne fait que lire.
+
+### 9.15 Phase 3 — impression d'une fiche
+
+Se connecter avec `dandre` / `oppg5`, menu « Mes fiches de frais ».
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| I1 | Choisir 08/2026, cliquer « Imprimer cette fiche (PDF) » | Un PDF s'ouvre dans un nouvel onglet, nommé `fiche_a17_202608.pdf` |
+| I2 | Vérifier l'en-tête | Logo GSB, titre « REMBOURSEMENT DE FRAIS ENGAGES », « Visiteur a17 David Andre », « Mois Août 2026 » |
+| I3 | Vérifier le tableau forfaitisé | 4 colonnes : Frais Forfaitaires, Quantité, Montant unitaire, Total |
+| **I4** | **Regarder la ligne « Frais Kilométrique »** | **0.62 — le tarif historisé de la fiche clôturée, alors que le véhicule déclaré vaut aujourd'hui 0.67. C'est la phase 1 prouvée sur le document imprimé.** |
+| I5 | Vérifier le tableau « Autres Frais » | Date, Libellé, Montant pour chaque frais hors forfait |
+| I6 | Vérifier le total | 110,00 + 139,50 + 240,00 + 225,00 + 24,00 + 57,90 = **796,40** |
+| I7 | Vérifier le pied | « Fait à Paris, le <date du jour> » et « Vu l'agent comptable » |
+| I8 | Choisir un mois sans frais hors forfait | Le tableau « Autres Frais » affiche « Aucun frais hors forfait ce mois. » et le PDF reste correct |
+
+### 9.16 Phase 3 — contrôle d'accès à l'impression
+
+| # | Action | Attendu | Obtenu |
+|---|--------|---------|--------|
+| I9 | `curl -b ck_cbedos.txt http://127.0.0.1:8000/fichepdf/a17/202608` | **404** — on n'imprime pas la fiche d'un autre | ✔ |
+| I10 | `curl -b ck_dandre.txt http://127.0.0.1:8000/fichepdf/a17/201001` | 404 — mois sans fiche | ✔ |
+| I11 | `curl http://127.0.0.1:8000/fichepdf/a17/202608` (sans session) | 302 vers `/accueil` | ✔ |
+| I12 | `curl -b ck_dandre.txt http://127.0.0.1:8000/fichespdf/202608` | **403** — réservé au comptable | ✔ |
+
+### 9.17 Phase 3 — génération de masse et volumétrie
+
+```bash
+# 1) créer un gros jeu de données (200 visiteurs, fiches clôturées d'août)
+php app/console gsb:generer-donnees --visiteurs=200 --mois=202608 --etat=CL
+
+# 2) générer l'archive du mois
+php app/console gsb:imprimer-fiches 202608 --etat=CL --sortie=/tmp/fiches.zip
+
+# 3) comparer avec une seule fiche
+php app/console gsb:imprimer-fiches 202606 --etat=RB --sortie=/tmp/une.zip
+
+# 4) vérifier le contenu
+unzip -l /tmp/fiches.zip
+```
+
+Résultats obtenus sur ce poste :
+
+| Commande | Fiches | Pic de mémoire | Durée | Archive |
+|----------|--------|----------------|-------|---------|
+| `gsb:imprimer-fiches 202606 --etat=RB` | 1 | 30,0 Mo | 1,3 s | 25,6 Ko |
+| `gsb:imprimer-fiches 202608 --etat=CL` | **202** | **38,0 Mo** | 49,0 s | 5 152 Ko |
+
+➡️ **C'est le test à montrer au jury** : 202 fois plus de fiches, 8 Mo de
+mémoire en plus. Si les PDF s'accumulaient, la mémoire serait proportionnelle.
+
+Sans argument, la commande traite **le mois précédent** à l'état `CL`, ce qui
+correspond exactement au besoin du cahier des charges :
+
+```bash
+php app/console gsb:imprimer-fiches
+```
+
+### 9.18 Phase 3 — non-régression (vérifiée)
+
+| # | Vérification | Résultat |
+|---|--------------|----------|
+| R1 | Mauvais mot de passe | Message d'erreur ✔ |
+| R3 | Quantité non numérique | Message d'erreur ✔ |
+| R5 | Frais de plus d'un an | Message d'erreur ✔ |
+| P1 | Tarif du véhicule en saisie | 0.67 € ✔ |
+| P2 | Compteur de justificatifs | « 1 justificatif(s) pris en compte » ✔ |
+| P2 | Lien de consultation du justificatif | présent ✔ |
+| P2 | Accès croisé à un justificatif | 404 ✔ |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -2132,6 +2596,86 @@ J'ai écrit la règle dès maintenant pour ne pas avoir à retoucher en phase 5 
 code de sécurité déjà testé : c'est exactement là qu'on introduit des failles.
 **Ce point du sujet est donc partiellement livré**, et je le présente comme tel.
 
+### Questions sur la phase 3
+
+**Q31. Pourquoi dompdf et pas une autre bibliothèque ?**
+Parce qu'elle prend en entrée du **HTML et du CSS**. La fiche est donc décrite
+dans un gabarit Twig, comme toutes les autres pages du projet : une seule
+technique à connaître, et un ajustement de maquette se fait en CSS. TCPDF,
+l'autre choix courant, demande de positionner chaque cellule en millimètres —
+le tableau de l'annexe 1 aurait représenté une centaine de lignes de calculs de
+coordonnées.
+
+**Q32. Comment évites-tu de saturer la mémoire si le mois compte 500 fiches ?**
+En traitant les fiches **une par une** : je produis le PDF, je l'écris aussitôt
+dans un fichier temporaire, je libère la mémoire avec `unset()`, puis je passe
+à la suivante. À aucun moment la mémoire ne contient plus d'un PDF. La requête
+qui liste les fiches ne ramène d'ailleurs que les identités, pas le détail des
+frais — sinon tout le mois serait en mémoire avant même de commencer. Mesuré :
+1 fiche = 30 Mo, 202 fiches = 38 Mo.
+
+**Q33. Pourquoi un ZIP de PDF séparés plutôt qu'un seul PDF de 200 pages ?**
+Pour deux raisons. Technique : dompdf assemble **tout le document en mémoire**
+avant de l'écrire, donc un PDF de 200 pages serait intégralement en mémoire —
+exactement ce que je cherche à éviter. Métier : le cahier des charges décrit un
+classement « par ordre chronologique dans une pochette nominative pour chaque
+visiteur » ; une fiche par fichier se classe directement.
+
+**Q34. Les 30 Mo de départ, ce n'est pas beaucoup pour une seule fiche ?**
+C'est le coût fixe de dompdf, qui charge et met en cache les quatre variantes de
+la police DejaVu (normale, grasse, italique, grasse italique) à la première
+fiche. Ce coût ne se répète pas : c'est pour cela que la 202ᵉ fiche ne coûte
+presque rien de plus que la première.
+
+**Q35. Ta génération de masse fait 3 requêtes par fiche : n'est-ce pas un
+N+1 ?**
+Si, et je l'assume. La solution habituelle — une requête unique ramenant toutes
+les lignes de toutes les fiches — **remettrait en mémoire exactement ce que la
+conception cherche à ne pas y mettre**. C'est un arbitrage entre nombre de
+requêtes et empreinte mémoire, tranché en faveur de la mémoire parce que c'est
+la contrainte que le cahier des charges met en avant. Ce n'est pas un oubli.
+
+**Q36. Pourquoi une commande console alors que le sujet parle d'« un seul
+clic » ?**
+Le bouton existe : c'est la route `/fichespdf/{mois}`, réservée au comptable.
+Mais le comptable n'existe qu'en phase 5. La commande console permet d'utiliser
+et de démontrer la fonctionnalité dès maintenant — et elle appelle **exactement
+le même service**, il n'y a donc pas deux versions à maintenir. Avantage
+supplémentaire : une commande console n'est pas soumise au délai d'expiration
+d'une requête HTTP, ce qui compte pour 200 fiches et 49 secondes.
+
+**Q37. Pourquoi avoir coupé l'accès réseau de dompdf ?**
+Parce que dompdf suit les balises `<img src="http://…">` en allant chercher la
+ressource **depuis le serveur**. Or les libellés de frais sont saisis par les
+visiteurs. Sans `isRemoteEnabled: false`, quelqu'un pourrait faire émettre à
+notre serveur des requêtes vers des adresses internes — c'est une faille connue
+sous le nom de SSRF. Le gabarit n'a besoin d'aucune ressource distante.
+
+**Q38. Le total imprimé, qui le calcule ?**
+PHP, dans `calculerTotal()`, par deux parcours des tableaux **déjà chargés** en
+mémoire pour l'affichage. Le faire calculer par SQL ajouterait deux requêtes
+d'agrégation **par fiche** — 404 requêtes de plus sur un lot de 202 — pour
+additionner une quinzaine de nombres déjà présents. C'est l'inverse du choix
+fait pour le compteur de justificatifs : là-bas, SQL évitait un aller-retour ;
+ici, il en ajouterait un. **La bonne règle n'est pas « toujours SQL » ou
+« toujours PHP », mais « où la donnée se trouve-t-elle déjà ? »**
+
+**Q39. Pourquoi 403 ici et 404 pour les justificatifs ?**
+Un 404 sert à ne pas révéler l'existence d'un document confidentiel : le
+justificatif d'un collègue. L'existence d'un export mensuel n'a rien de secret,
+et l'utilisateur est bien authentifié — il lui manque seulement le rôle. 403
+« interdit » est alors le code juste. J'ai dû le construire à la main, car le
+raccourci `createAccessDeniedException()` de Symfony produit un 401 en
+l'absence de pare-feu configuré.
+
+**Q40. La fiche imprimée affiche « a17 » alors que l'annexe montre
+« NRD/125-01 ». Pourquoi ?**
+Parce que ce matricule n'existe pas dans la base et que le cahier des charges ne
+définit nulle part sa règle de construction. Ajouter une colonne reviendrait à
+inventer des valeurs, donc à livrer des données fausses. L'identifiant du
+visiteur tient ce rôle. C'est une décision prise en connaissance de cause, pas
+un oubli.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -2164,6 +2708,10 @@ code de sécurité déjà testé : c'est exactement là qu'on introduit des fail
 | **Défense en profondeur** | Superposition volontaire de plusieurs protections, pour qu'une seule faille ne suffise pas. |
 | **Fichier orphelin** | Fichier resté sur le disque alors que plus aucune donnée ne le référence. Invisible, mais il occupe de l'espace et peut contenir des données personnelles. |
 | **Flash bag** (complément) | Le message survit à une **redirection**, ce qui est indispensable quand l'action qui produit l'erreur n'est pas celle qui affiche la page. |
+| **SSRF** | *Server-Side Request Forgery* : amener le serveur à émettre lui-même une requête vers une adresse choisie par l'attaquant, souvent pour atteindre des machines internes inaccessibles de l'extérieur. |
+| **Pic de mémoire** | Maximum de mémoire occupée depuis le début d'un script (`memory_get_peak_usage`). C'est le chiffre qui compte pour savoir si un traitement tiendra : une moyenne masquerait le pic qui fait échouer. |
+| **`unset()`** | Libère explicitement une variable. Utile dans une boucle qui manipule de gros contenus : sans lui, la valeur reste occupée jusqu'à sa réaffectation au tour suivant. |
+| **Commande console** | Point d'entrée de l'application lancé en ligne de commande (`php app/console …`) plutôt que par le navigateur. Adaptée aux traitements longs : pas de délai d'expiration HTTP. |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |

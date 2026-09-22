@@ -681,4 +681,178 @@ class PdoGsb{
                 $stmt->bindParam(':mois', $mois);
                 $stmt->execute();
         }
+
+/* =========================================================================
+ * Impression des fiches de frais (phase 3)
+ * ========================================================================= */
+
+/**
+ * Retourne l'identité d'un visiteur à partir de son identifiant
+ *
+ * getInfosVisiteur() exige login et mot de passe : elle sert à authentifier.
+ * Ici on a besoin de l'identité d'un visiteur QUELCONQUE, pour imprimer sa
+ * fiche - le comptable imprime celles des autres.
+ *
+ * @param $idVisiteur
+ * @return id, nom, prenom, ou false si l'identifiant est inconnu
+*/
+        public function getVisiteur($idVisiteur){
+                $req = "select visiteur.id as id, visiteur.nom as nom,
+                visiteur.prenom as prenom from visiteur where visiteur.id = :idVisiteur";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                return $stmt->fetch();
+        }
+/**
+ * Retourne les fiches d'un mois donné se trouvant dans un état donné
+ *
+ * Sert à la génération de masse : le comptable imprime en un clic toutes les
+ * fiches CLÔTURÉES du mois précédent.
+ *
+ * La requête ne renvoie QUE les identifiants et l'identité, pas le détail
+ * des frais. C'est volontaire : le détail de chaque fiche est lu au moment
+ * où on la traite, de sorte que la mémoire ne contienne jamais toutes les
+ * fiches à la fois - voir COMPTE-RENDU.md, volumétrie de la phase 3.
+ *
+ * @param $mois sous la forme aaaamm
+ * @param $etat l'identifiant d'état, par exemple 'CL'
+ * @return un tableau associatif : idVisiteur, nom, prenom
+*/
+        public function getLesFichesDuMois($mois, $etat){
+                $req = "select fichefrais.idVisiteur as idVisiteur,
+                visiteur.nom as nom, visiteur.prenom as prenom
+                from fichefrais inner join visiteur on visiteur.id = fichefrais.idVisiteur
+                where fichefrais.mois = :mois and fichefrais.idEtat = :etat
+                order by visiteur.nom, visiteur.prenom";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->bindParam(':etat', $etat);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+
+/* =========================================================================
+ * Génération de données de test (phase 3)
+ * ========================================================================= */
+
+/**
+ * Crée des visiteurs de test et leur fiche de frais pour un mois donné
+ *
+ * Sert uniquement aux essais de volumétrie. Les visiteurs créés portent un
+ * identifiant préfixé, ce qui permet de les retrouver et de les retirer sans
+ * risque de toucher aux données réelles.
+ *
+ * PERFORMANCE : les quatre requêtes sont préparées UNE SEULE FOIS, avant la
+ * boucle, puis exécutées à chaque tour. Préparer une requête coûte une
+ * analyse syntaxique côté serveur ; la préparer dans la boucle multiplierait
+ * ce coût par le nombre de visiteurs.
+ *
+ * Les lignes de frais forfaitisé sont insérées par une requête à quatre
+ * jeux de valeurs, et non par quatre requêtes.
+ *
+ * Le tout est encadré par une transaction : en cas d'échec au milieu, la
+ * base ne conserve pas la moitié d'un jeu de test.
+ *
+ * @param $prefixe préfixe des identifiants créés, par exemple 'z'
+ * @param $nbVisiteurs nombre de visiteurs à créer
+ * @param $mois sous la forme aaaamm
+ * @param $etat état des fiches créées
+ * @param $lesNoms, $lesPrenoms, $lesLibelles vocabulaire de tirage
+ * @return le nombre de visiteurs réellement créés
+*/
+        public function genererVisiteursDeTest($prefixe, $nbVisiteurs, $mois, $etat,
+                                               $lesNoms, $lesPrenoms, $lesLibelles){
+                // id est un CHAR(4) : préfixe + 3 chiffres, donc 999 au maximum.
+                if($nbVisiteurs > 999){
+                        $nbVisiteurs = 999;
+                }
+                $reqVisiteur = PdoGsb::$monPdo->prepare(
+                        "insert into visiteur(id,nom,prenom,login,mdp,dateEmbauche,idTypeVehicule)
+                         values(:id,:nom,:prenom,:login,:mdp,:dateEmbauche,:idTypeVehicule)");
+                $reqFiche = PdoGsb::$monPdo->prepare(
+                        "insert into fichefrais(idVisiteur,mois,nbJustificatifs,montantValide,dateModif,idEtat)
+                         values(:id,:mois,0,0,now(),:etat)");
+                $reqLignes = PdoGsb::$monPdo->prepare(
+                        "insert into lignefraisforfait(idVisiteur,mois,idFraisForfait,quantite,montantUnitaire)
+                         values(:id,:mois,'ETP',:qEtp,:mEtp),
+                                (:id,:mois,'KM',:qKm,:mKm),
+                                (:id,:mois,'NUI',:qNui,:mNui),
+                                (:id,:mois,'REP',:qRep,:mRep)");
+                $reqHorsForfait = PdoGsb::$monPdo->prepare(
+                        "insert into lignefraishorsforfait(idVisiteur,mois,libelle,date,montant)
+                         values(:id,:mois,:libelle,:date,:montant)");
+
+                // Référentiels lus une fois : les relire à chaque tour serait
+                // le cas d'école du N+1.
+                $lesTypesVehicule = $this->getLesTypesVehicule();
+                $lesMontantsForfait = array();
+                foreach($this->getLesTypesFraisForfait() as $unFrais){
+                        $lesMontantsForfait[$unFrais['id']] = $unFrais['montant'];
+                }
+
+                $nbCrees = 0;
+                PdoGsb::$monPdo->beginTransaction();
+                try{
+                        for($i = 1; $i <= $nbVisiteurs; $i++){
+                                $id = $prefixe.str_pad($i, 3, '0', STR_PAD_LEFT);
+                                $nom = $lesNoms[array_rand($lesNoms)];
+                                $prenom = $lesPrenoms[array_rand($lesPrenoms)];
+                                $vehicule = $lesTypesVehicule[array_rand($lesTypesVehicule)];
+                                $reqVisiteur->execute(array(
+                                        ':id' => $id,
+                                        ':nom' => $nom,
+                                        ':prenom' => $prenom,
+                                        ':login' => 'test'.$id,
+                                        ':mdp' => 'test'.$id,
+                                        ':dateEmbauche' => '2020-01-01',
+                                        ':idTypeVehicule' => $vehicule['id'],
+                                ));
+                                $reqFiche->execute(array(
+                                        ':id' => $id, ':mois' => $mois, ':etat' => $etat));
+                                // Le tarif kilométrique historisé est celui du
+                                // véhicule tiré au sort : les données de test
+                                // exercent donc bien le mécanisme de la phase 1.
+                                $reqLignes->execute(array(
+                                        ':id' => $id, ':mois' => $mois,
+                                        ':qEtp' => rand(0, 5),   ':mEtp' => $lesMontantsForfait['ETP'],
+                                        ':qKm'  => rand(50, 900),':mKm'  => $vehicule['montant'],
+                                        ':qNui' => rand(0, 8),   ':mNui' => $lesMontantsForfait['NUI'],
+                                        ':qRep' => rand(0, 20),  ':mRep' => $lesMontantsForfait['REP'],
+                                ));
+                                $nbHorsForfait = rand(0, 3);
+                                for($j = 0; $j < $nbHorsForfait; $j++){
+                                        $jour = str_pad(rand(1, 28), 2, '0', STR_PAD_LEFT);
+                                        $reqHorsForfait->execute(array(
+                                                ':id' => $id, ':mois' => $mois,
+                                                ':libelle' => $lesLibelles[array_rand($lesLibelles)],
+                                                ':date' => substr($mois,0,4).'-'.substr($mois,4,2).'-'.$jour,
+                                                ':montant' => rand(500, 20000) / 100,
+                                        ));
+                                }
+                                $nbCrees++;
+                        }
+                        PdoGsb::$monPdo->commit();
+                }
+                catch(\Exception $e){
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
+                return $nbCrees;
+        }
+/**
+ * Retourne le référentiel des frais forfaitisés
+ *
+ * getLesIdFrais() ne renvoie que les identifiants ; ici on a besoin des
+ * montants du référentiel pour alimenter des données de test.
+ *
+ * @return un tableau associatif : id, libelle, montant
+*/
+        public function getLesTypesFraisForfait(){
+                $req = "select fraisforfait.id as id, fraisforfait.libelle as libelle,
+                fraisforfait.montant as montant from fraisforfait order by fraisforfait.id";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
 }
