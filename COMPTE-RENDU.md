@@ -9,8 +9,8 @@ définie au § 11 (glossaire).
 | 1 | Puissance fiscale du véhicule | **terminée** |
 | 2 | Upload des justificatifs | **terminée** |
 | 3 | Génération PDF des fiches | **terminée** |
-| 4 | Maquette HTML partie comptable | **livrée — en attente de validation client** |
-| 5 | Cas d'utilisation « Valider fiche de frais » | à faire |
+| 4 | Maquette HTML partie comptable | **validée par le client** |
+| 5 | Cas d'utilisation « Valider fiche de frais » | **terminée** |
 
 ---
 
@@ -119,6 +119,26 @@ définie au § 11 (glossaire).
 **Aucun fichier de l'application n'a été touché en phase 4.** Le dossier
 `maquette/` est autonome : il s'ouvre dans un navigateur sans serveur, sans PHP
 et sans base de données.
+
+### Phase 5 — Partie comptable : « Valider fiche de frais »
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration du schéma | `sql/003_comptable_et_etats.sql` *(créé)* | table `comptable`, 5ᵉ état `MP`, re-libellé de `VA` |
+| Synchronisation | `sql/bd_gsb.sql` *(modifié)* | table `comptable`, cinq états, compte de démonstration |
+| Rôles en session | `Controller/include/fct.inc.php` *(modifié)* | `connecterAvecRole()`, `totalDesLignes()` ; `connecter()` conserve sa signature |
+| Authentification | `Controller/HomeController.php` *(modifié)* | `authentifier()` : comptables puis visiteurs, un seul formulaire |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | `getInfosComptable`, `getLesVisiteurs`, `majEtatFichesDuMois`, `validerFicheFrais`, `cloturerFichesDuMois` |
+| Cas d'utilisation | `Controller/ValidationController.php` *(créé)* | les 9 étapes du scénario nominal + exception 4-a |
+| Vues | `views/Validation/{choix,fiche,_message}.html.twig` *(créés)* | reprise de la maquette validée |
+| Routes | `Resources/config/routing.yml` *(modifié)* | 5 routes de validation ; `mois` rendu facultatif sur l'archive ZIP |
+| Menu par rôle | `views/accueil.html.twig` *(modifié)* | menu comptable ou menu visiteur |
+| Styles | `Resources/public/styles/styles.css` *(modifié)* | reprise de `maquette/maquette.css` |
+| Cycle d'état | `Command/CycleEtatCommand.php` *(créé)* | socle commun aux trois traitements par lot |
+| Clôture | `Command/CloturerFichesCommand.php` *(créé)* | `gsb:cloturer-fiches` — CR → CL |
+| Mise en paiement | `Command/MettreEnPaiementCommand.php` *(créé)* | `gsb:mettre-en-paiement` — VA → MP |
+| Remboursement | `Command/RembourserFichesCommand.php` *(créé)* | `gsb:rembourser-fiches` — MP → RB |
+| Correction d'un bug de la phase 3 | `Controller/FichePdfController.php` *(modifié)* | fichier temporaire de l'archive ZIP (voir § 7.18) |
 
 ---
 
@@ -428,6 +448,32 @@ supprimer l'une rendrait l'autre illisible.
 facture par dépense hors forfait : la relation est de 1 pour 1, les colonnes
 vont donc sur la ligne de frais. Une table séparée n'aurait de sens que pour
 plusieurs pièces par frais, ce qui n'est pas demandé (voir limite L9).
+
+### 3.6 Évolution du schéma en phase 5
+
+```
+        comptable  (NOUVELLE TABLE)
+      ┌─────────────────────────────┐
+      │ id     CHAR(4)       PK     │  c01
+      │ nom, prenom                 │  Valette, Marie
+      │ login  VARCHAR(20) UNIQUE   │  mvalette
+      │ mdp    VARCHAR(255)         │  EMPREINTE password_hash(), 60 car.
+      └─────────────────────────────┘
+      Aucune clé étrangère vers fichefrais : un comptable n'a pas de fiche.
+
+        etat  (5 lignes au lieu de 4)
+      ┌────┬──────────────────────────────┐
+      │ CR │ Fiche créée, saisie en cours │
+      │ CL │ Saisie clôturée              │
+      │ VA │ Validée          ← re-libellé (était « Validée et mise en paiement »)
+      │ MP │ Mise en paiement ← NOUVEL ÉTAT
+      │ RB │ Remboursée                   │
+      └────┴──────────────────────────────┘
+```
+
+**L'identifiant `VA` n'a pas changé**, seul son libellé : aucune fiche n'a
+perdu son état, aucune clé étrangère n'a été cassée. C'est la réponse au
+point B4, ouvert depuis l'audit.
 
 ---
 
@@ -1084,6 +1130,149 @@ un clic de retour supplémentaire pour rien. Le message reprend le style
 d'erreur déjà utilisé côté visiteur, plutôt que d'introduire une troisième
 présentation.
 
+### Phase 5
+
+### Décision 5.1 — Le comptable dans sa propre table
+
+- **Problème :** où loger l'acteur « comptable » ?
+- **Options :**
+
+| Option | Verdict |
+|--------|---------|
+| **Table `comptable` distincte** | ✅ **retenue** |
+| Colonne `role` dans `visiteur` | ❌ un comptable n'a ni fiche de frais, ni véhicule, ni date d'embauche. Surtout, la clé étrangère `fichefrais.idVisiteur` accepterait alors d'associer une fiche de frais à un comptable — la base cesserait d'interdire un état absurde |
+| Table `utilisateur` unifiée avec un rôle | ❌ le modèle « propre », mais il faudrait restructurer `visiteur` et toutes les clés étrangères qui la référencent. La règle du sujet interdit de réécrire l'existant |
+
+- **Conséquence :** deux tables d'authentification, donc deux requêtes à la
+  connexion. C'est le prix, et il est faible : les deux tables sont petites et
+  indexées sur `login`.
+
+### Décision 5.2 — Mot de passe du comptable haché, mots de passe visiteurs inchangés
+
+- **Retenu :** `password_hash()` / `password_verify()` pour le compte
+  comptable. La colonne est en `VARCHAR(255)`, longueur recommandée par la
+  documentation PHP pour rester compatible avec les algorithmes futurs.
+- **Pourquoi ne pas avoir haché aussi les visiteurs :** leur table et leur
+  jeu de données viennent du sujet d'origine, et la règle est de ne pas
+  réécrire l'existant. Surtout, les mots de passe en clair du `README`
+  (`dandre`/`oppg5`…) servent à la démonstration.
+- **J'assume l'asymétrie et je la signale** (limite L27) : une application où
+  la moitié des comptes est en clair reste vulnérable. Mais **introduire
+  sciemment un nouveau mot de passe en clair parce que les anciens le sont**
+  serait une faute. Le jour où tu voudras tout hacher, la voie est ouverte :
+  la table `comptable` montre déjà comment faire.
+- **Conséquence technique visible dans le code :** `getInfosComptable()` ne
+  compare **pas** le mot de passe en SQL, contrairement à
+  `getInfosVisiteur()`. Deux empreintes du même mot de passe sont différentes,
+  chacune portant son propre grain de sel : un `WHERE mdp = :mdp` ne
+  correspondrait jamais. On récupère donc la ligne par le seul login, puis
+  `password_verify()` compare.
+
+### Décision 5.3 — Un seul formulaire de connexion, les comptables d'abord
+
+- **Retenu :** le formulaire existant sert aux deux rôles.
+  `HomeController::authentifier()` essaie d'abord la table `comptable`, puis la
+  table `visiteur`.
+- **Pourquoi :** l'utilisateur n'a pas à savoir quelle porte prendre, et le
+  système ne révèle pas qui est comptable. C'est le choix soumis au client dans
+  la maquette (écran 01) et validé.
+- **Pourquoi l'ordre est sans importance fonctionnelle :** les logins sont
+  uniques dans chacune des deux tables. Si un même login existait des deux
+  côtés, le comptable gagnerait — c'est un cas que le jeu de données n'a pas,
+  et que j'ai choisi de ne pas interdire par une contrainte inter-tables
+  (MySQL ne sait pas le faire simplement).
+- **Le message d'erreur reste identique** que le login soit inconnu ou que le
+  mot de passe soit faux : les distinguer indiquerait à un curieux quels
+  comptes existent.
+
+### Décision 5.4 — La règle d'accès était déjà écrite depuis la phase 2
+
+`estComptable()` a été écrite en phase 2, alors qu'aucun compte comptable
+n'existait. Résultat en phase 5 : **le comptable accède aux justificatifs et
+aux impressions PDF sans qu'une seule ligne de `JustificatifController` ni de
+`FichePdfController` ait été modifiée.** Vérifié en test (§ 9.24).
+
+C'est l'illustration d'un principe qu'un jury peut demander à défendre :
+*écrire la règle de sécurité au moment où l'on conçoit la fonctionnalité*, et
+non la rajouter après coup — c'est en retouchant du code de sécurité déjà testé
+que l'on introduit des failles.
+
+### Décision 5.5 — Le contrôle d'état est dans la requête SQL, pas dans un `if`
+
+`validerFicheFrais()` se termine par `and fichefrais.idEtat = 'CL'`, et renvoie
+`rowCount() == 1`. De même, `majEtatFichesDuMois()` filtre sur l'état de départ.
+
+- **Pourquoi pas un `if` en PHP :** entre le moment où PHP lit l'état et celui
+  où il écrit le nouveau, une autre requête peut passer. Deux comptables
+  validant la même fiche au même instant la valideraient deux fois. Avec le
+  filtre dans la requête, **c'est la base qui arbitre** : la seconde
+  instruction touche 0 ligne et l'application le voit.
+- **Bénéfice secondaire :** relancer un script de clôture ou de mise en
+  paiement ne fait jamais reculer une fiche dans le cycle. Vérifié : la
+  deuxième exécution annonce « Aucune fiche à l'état CR ».
+
+### Décision 5.6 — Le montant validé est calculé par la base, dans la requête
+
+`validerFicheFrais()` renseigne `montantValide` au moyen de deux sous-requêtes
+d'agrégation, **à l'intérieur de l'`UPDATE`**. Le lire d'abord en PHP pour le
+réécrire ensuite laisserait un intervalle pendant lequel une modification
+pourrait survenir, et l'on enregistrerait un montant périmé. La colonne
+`montantValide` existait depuis l'origine sans que rien ne l'alimente ; elle a
+enfin un sens.
+
+### Décision 5.7 — Trois commandes nommées, un seul traitement
+
+Les trois transitions par lot (clôture, mise en paiement, remboursement) ne
+diffèrent que par leur état de départ et leur état d'arrivée. Le traitement est
+écrit **une seule fois**, dans la classe abstraite `CycleEtatCommand` ; chaque
+commande fille ne déclare que son nom et ses deux états.
+
+- **Pourquoi trois noms plutôt qu'une commande générique
+  `gsb:changer-etat --de=VA --vers=MP` :** chaque commande porte le nom de
+  l'événement de gestion du cahier des charges. On ne peut pas se tromper de
+  transition en tapant la commande, et une commande générique permettrait de
+  faire reculer une fiche dans le cycle.
+- **Pourquoi des commandes et non des boutons :** ces trois événements sont
+  déclenchés par une **date** ou par un fait extérieur (« au 20 du mois »,
+  « paiement effectué »), pas par un clic sur une fiche. Le cahier des charges
+  parle lui-même d'« un script ».
+
+### Décision 5.8 — Refuser un frais réutilise exactement le chemin de la phase 2
+
+Le refus par le comptable fait la même chose que la suppression par le
+visiteur : lire la ligne, la supprimer, effacer le justificatif du disque,
+recalculer le compteur. Le même enchaînement, avec les mêmes précautions
+(§ 6.11). **Un frais refusé dont on oublierait le justificatif laisserait une
+facture orpheline sur le disque.**
+
+Différence notable : le refus passe par un **formulaire POST**, alors que la
+suppression côté visiteur est un lien GET (défaut B10 de l'audit). Je n'ai pas
+corrigé l'existant, mais je n'ai pas reproduit le défaut dans le code neuf.
+
+### Décision 5.9 — Les totaux sont calculés dans le contrôleur, pas dans le gabarit
+
+Contraint et forcé, et c'est instructif : **en Twig, une variable affectée par
+`{% set %}` à l'intérieur d'une boucle n'existe plus après la boucle.** Ma
+première version additionnait les lignes dans le gabarit et affichait
+silencieusement 0. Voir § 7.16.
+
+La somme est faite par `totalDesLignes()`, placée dans `fct.inc.php` et
+**partagée avec le générateur PDF** : un seul endroit où la règle d'addition
+est écrite, donc aucun risque que l'écran et le PDF divergent.
+
+### Décision 5.10 — Douze mois proposés, calculés et non lus en base
+
+La liste des mois de l'écran de choix est construite par calcul (les douze
+derniers mois), et non tirée des fiches existantes.
+
+- **Pourquoi :** le comptable doit pouvoir sélectionner un mois où un visiteur
+  n'a **rien** saisi. C'est ce qui rend l'exception 4-a atteignable — et cette
+  exception est utile : elle fait apparaître une absence de saisie. Des listes
+  filtrées rendraient le cas impossible, donc invisible.
+- **Douze mois** parce que le cahier des charges autorise des frais remontant à
+  un an : au-delà, il n'y a plus rien à traiter.
+- C'est la réponse à la question posée au client sur l'écran 02 de la maquette.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -1566,6 +1755,100 @@ Le seul « calcul » de la phase 4 a été fait à la main, et vérifié :
 Ce n'est pas anecdotique : un client qui repère une addition fausse dans une
 maquette cesse de faire confiance au reste.
 
+### Phase 5
+
+> **Trois boucles seulement**, toutes courtes, et aucune ne déclenche de
+> requête. Les traitements de masse de cette phase — clôturer, mettre en
+> paiement, rembourser — n'ont **aucune boucle** : ce sont des `UPDATE` uniques.
+> C'est le point à retenir de cette phase.
+
+### 6.16 Les transitions d'état — un `UPDATE`, zéro boucle
+
+*Fichier :* `PdoGsb::majEtatFichesDuMois()`
+
+L'intention :
+
+```
+POUR CHAQUE fiche du mois dont l'état vaut etatDepart
+    fiche.idEtat    ← etatArrivee
+    fiche.dateModif ← aujourd'hui
+```
+
+Le code :
+
+```sql
+update fichefrais set idEtat = :etatArrivee, dateModif = now()
+ where fichefrais.mois = :mois and fichefrais.idEtat = :etatDepart
+```
+
+- **Pourquoi pas de boucle :** une boucle PHP exigerait de lire d'abord la
+  liste des fiches (1 requête), puis un `UPDATE` par fiche — le motif **N+1**.
+  Sur le jeu de test, clôturer 202608 aurait fait 202 requêtes au lieu d'**une**.
+- **Le filtre sur l'état de départ est la clé de voûte.** Sans lui, relancer
+  `gsb:rembourser-fiches` ferait passer en « Remboursée » des fiches encore en
+  saisie. Avec lui, la deuxième exécution touche 0 ligne — comportement vérifié.
+- **`rowCount()`** donne le nombre de lignes réellement modifiées : la commande
+  annonce un résultat exact au lieu d'un « traitement terminé » sans contenu.
+- **Cas limites gérés :** aucune fiche dans l'état de départ → 0, traité comme
+  un cas normal et non comme une erreur ; mois inexistant → idem.
+- **Coût :** **1 requête**, quel que soit le nombre de fiches.
+
+### 6.17 La liste des douze mois — une boucle de calcul, sans base
+
+*Fichier :* `ValidationController::construireListeMois()`
+
+```
+lesMois ← tableau vide
+mois    ← mois courant
+POUR i DE 0 À 11
+    lesMois[mois] ← libellé français de mois
+    mois          ← mois précédent
+```
+
+- **Invariant :** après le i-ᵉ tour, `lesMois` contient les i+1 mois les plus
+  récents, du plus récent au plus ancien, indexés par `aaaamm`.
+- **Pourquoi `for` et non `while` :** le nombre de tours est connu d'avance.
+- **Pourquoi pas une requête `SELECT DISTINCT mois FROM fichefrais` :** parce
+  qu'il faut pouvoir choisir un mois **sans fiche**, sinon l'exception 4-a
+  devient inatteignable (décision 5.10).
+- **Cas limite :** le passage de janvier à décembre de l'année précédente, géré
+  par `moisPrecedent()` — testé : `202601` → `202512`.
+- **Coût :** 12 itérations, **aucune requête**.
+
+### 6.18 La somme d'une colonne — une fonction, deux appelants
+
+*Fichier :* `fct.inc.php`, fonction `totalDesLignes()`
+
+```
+total ← 0
+POUR CHAQUE ligne
+    total ← total + (nombre) ligne[cle]
+```
+
+- **Invariant :** après le i-ᵉ tour, `total` contient la somme des i premières
+  lignes.
+- **Pourquoi le transtypage explicite `(float)` :** PDO restitue les colonnes
+  `DECIMAL` sous forme de **chaînes**. L'addition fonctionnerait quand même par
+  conversion implicite, mais le code ne dirait pas ce qu'il fait.
+- **Pourquoi une fonction partagée :** l'écran de validation et le générateur
+  PDF affichent le même total. Deux implémentations pourraient diverger — et
+  un écart entre l'écran du comptable et la fiche imprimée serait le pire des
+  défauts sur une application de remboursement.
+- **Pourquoi pas `array_sum` :** il faudrait extraire d'abord la colonne avec
+  `array_column`, donc construire un tableau intermédiaire pour rien.
+- **Cas limite :** tableau vide → la boucle ne tourne pas, le total vaut 0 (et
+  non `NULL`).
+- **Coût :** aucune requête.
+
+### 6.19 Bilan des requêtes de l'écran de validation
+
+Pour afficher le détail d'une fiche : **5 requêtes**, quel que soit le nombre
+de lignes de frais — identité du visiteur, entête de fiche, lignes
+forfaitisées, lignes hors forfait, et la liste des visiteurs pour le
+sélecteur. Aucun N+1 : les totaux sont calculés en mémoire sur des tableaux
+déjà chargés (§ 6.18), et les justificatifs sont des colonnes des lignes hors
+forfait, déjà ramenées par le `select *` d'origine.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -1870,6 +2153,111 @@ exécuter. Les seules vérifications possibles sont structurelles, et elles ont
 
 Je préfère l'écrire que de meubler cette section.
 
+### Phase 5
+
+### 7.16 Des totaux à zéro : `{% set %}` ne survit pas à une boucle Twig
+- **Ce que j'avais écrit :** dans `fiche.html.twig`, j'additionnais les lignes
+  au fil de la boucle d'affichage :
+  `{% set totalforfait = totalforfait + unFrais.montant %}` à l'intérieur du
+  `{% for %}`, puis `{{ totalforfait }}` après.
+- **Symptôme attendu :** tous les totaux à **0,00 €**, sans aucune erreur.
+- **Cause réelle :** en Twig, **la portée d'une variable affectée par
+  `{% set %}` à l'intérieur d'une boucle est limitée à cette boucle**. La
+  documentation le dit explicitement : « you cannot set variables inside a
+  block and have them show up outside of it. This also applies to loops. » À la
+  sortie du `for`, la variable retrouve sa valeur d'avant — zéro. Ce n'est pas
+  un bogue de Twig : c'est une conséquence du fait que le moteur compile chaque
+  boucle dans sa propre portée.
+- **Pourquoi c'est dangereux :** **aucun message, aucune exception.** La page
+  s'affiche, et le total est faux. Sur une application de remboursement, un
+  total silencieusement faux est le pire des défauts.
+- **Comment je m'en suis aperçu :** avant même d'exécuter, en relisant le
+  gabarit. Le réflexe qui a servi : se demander, pour chaque variable lue hors
+  d'une boucle, où elle a été affectée.
+- **Correction :** calculer les totaux dans le contrôleur et les passer au
+  gabarit (décision 5.9), au moyen de `totalDesLignes()` partagée avec le
+  générateur PDF.
+- **Pour ne pas le refaire :** un gabarit affiche, il ne calcule pas. Dès qu'on
+  a besoin d'accumuler une valeur dans une vue, c'est le signe que le calcul
+  appartient au contrôleur ou au modèle.
+
+### 7.17 `tempnam()` crée le fichier — bug réel de la phase 3, trouvé en phase 5
+- **Message exact :**
+  `Warning: unlink(/private/var/folders/…/T/gsb_fiches_rLOcTE.zip): No such file or directory`
+  → **HTTP 500**.
+- **Ce que je faisais :** premier test de la route `/fichespdf/{mois}` par un
+  comptable — impossible jusqu'ici, faute de compte comptable (limite L13 de la
+  phase 3). Le bug dormait depuis la phase 3.
+- **Cause réelle :** j'avais écrit
+  `tempnam(sys_get_temp_dir(), 'gsb_fiches_').'.zip'`. Or **`tempnam()` ne
+  renvoie pas seulement un nom : il crée le fichier** et renvoie son chemin.
+  En lui accolant `.zip`, je désignais un chemin **différent**, qui n'existait
+  pas. Deux conséquences : (a) le fichier réellement créé par `tempnam` restait
+  orphelin dans `/tmp` à chaque appel ; (b) quand aucune fiche n'était à
+  imprimer, `unlink($cheminZip)` portait sur un fichier inexistant, d'où
+  l'avertissement — que Symfony transforme en exception en environnement de
+  développement, donc en 500 au lieu du 404 attendu.
+- **Preuve du second effet :** cinq fichiers `gsb_fiches_XXXXXX` de **0 octet**
+  traînaient dans `/tmp`, un par appel. Ils ont été supprimés.
+- **Correction :** conserver le chemin rendu par `tempnam()` tel quel —
+  l'extension vue par l'utilisateur vient de l'en-tête `Content-Disposition`,
+  pas du nom sur le disque — et protéger le `unlink` par un `is_file()`.
+  Vérifié : 404 sur un mois sans fiche clôturée, 200 et archive correcte sinon,
+  **zéro orphelin** après plusieurs appels.
+- **Ce que ça m'apprend :** une fonctionnalité qu'on ne peut pas exécuter n'est
+  pas une fonctionnalité testée. J'avais écrit en phase 3 que la route était
+  « livrée, sans bouton » ; elle était en réalité **livrée et cassée**. La
+  commande console, elle, fonctionnait — elle reçoit son chemin de sortie en
+  argument et ne passe pas par `tempnam`.
+
+### 7.18 Trois `grep` faussés par l'échappement HTML, pour la troisième fois
+- **Symptôme :** les tests « double validation refusée » et « correction d'une
+  fiche validée refusée » ne renvoyaient rien, alors que la base montrait que
+  les garde-fous avaient bien fonctionné (la quantité n'avait pas bougé).
+- **Cause réelle :** toujours la même — Twig échappe l'apostrophe. Je cherchais
+  `Cette fiche n'a pas pu être validée`, la page contient
+  `Cette fiche n&#039;a pas pu être validée`. Idem pour
+  `Comptable : bonjour …`, réparti sur deux lignes du gabarit.
+- **Correction :** chercher le conteneur (`class="erreur"`) et afficher les
+  lignes suivantes, plutôt que de reconstituer un texte.
+- **Troisième occurrence** après les § 7.5 et 7.14. La leçon n'avait pas été
+  appliquée. **Règle définitive : pour vérifier une page HTML, chercher une
+  classe CSS ou une balise, jamais un texte contenant `'`, `"`, `<`, `>`, `&`,
+  ni un texte susceptible d'être réparti sur plusieurs lignes.**
+
+### 7.19 Coupure de connexion en plein milieu de la phase 5
+- **Ce qui était en cours :** je venais de créer les quatre fichiers de
+  commandes du cycle d'état (`CycleEtatCommand` et ses trois filles) et de
+  vérifier leur enregistrement ; j'allais lancer le test complet du scénario
+  nominal. La connexion a été coupée à ce moment précis.
+- **Ce qui a été perdu : rien du travail écrit sur le disque.** Vérifié au
+  redémarrage : `git status` montrait les 8 fichiers modifiés et les 6 créations
+  attendues ; les 22 fichiers PHP du bundle passaient tous `php -l` ; les trois
+  gabarits Twig étaient complets ; la migration 003 était bien appliquée en base
+  (5 états, comptable `mvalette`) ; les cinq commandes `gsb:` étaient
+  enregistrées.
+- **Ce qui manquait réellement — et je ne l'aurais pas deviné sans vérifier :**
+  `sql/bd_gsb.sql` **n'avait pas été synchronisé** avec la migration 003. Il ne
+  contenait ni la table `comptable`, ni l'état `MP`, et son en-tête n'annonçait
+  que les migrations 001 et 002. Je l'avais fait pour les deux migrations
+  précédentes ; la coupure est survenue avant. **Conséquence si je ne l'avais
+  pas vu : une base créée de zéro n'aurait eu aucun comptable, et la phase 5
+  aurait été inutilisable pour quiconque installe le projet à partir du script.**
+- **Ce qui a été refait :** la synchronisation de `sql/bd_gsb.sql` (table
+  `comptable`, cinq états, compte de démonstration), puis la vérification
+  habituelle par reconstruction d'une base jetable et comparaison de schéma —
+  schémas identiques. Puis l'intégralité des tests, qui n'avaient jamais été
+  lancés.
+- **Ce que ça confirme :** l'intérêt du commit à chaque fin de phase. Tout le
+  travail non committé était en cours de phase 5, donc identifiable d'un coup
+  d'œil par `git status` — et le dernier commit (phase 4) constituait un point
+  de reprise sûr. Sans dépôt Git, il aurait fallu comparer à la main des
+  dizaines de fichiers pour savoir où j'en étais.
+- **Pour la prochaine fois :** après une interruption, ne jamais se fier à sa
+  mémoire de ce qu'on croit avoir fait. Trois contrôles mécaniques suffisent et
+  prennent une minute : `git status`, `php -l` sur tous les fichiers, et l'état
+  réel de la base.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -2094,6 +2482,65 @@ tu veux que l'écran correspondant soit lui aussi maquetté, dis-le-moi.
 Les écrans sont pensés pour un poste de bureau, comme l'application existante
 (menu de 230 px flottant à gauche). Le service comptable travaille sur poste
 fixe ; ce n'est pas un besoin exprimé.
+
+### ✅ B3, B4, B13, L7, L13, L20 — LEVÉS en phase 5
+- **B3** (aucun comptable, aucun rôle) : table `comptable`, rôle en session,
+  menu et contrôles d'accès par rôle.
+- **B4** (cycle d'état incomplet) : cinq états, « Validée » et « Mise en
+  paiement » séparés, `VA` re-libellé sans changer d'identifiant.
+- **L7** (le comptable ne peut pas consulter les justificatifs) : il le peut,
+  sans qu'une ligne de `JustificatifController` ait été modifiée.
+- **L13** (pas de bouton pour la génération de masse) : le menu comptable
+  propose « Imprimer les fiches du mois » — et le bug qui s'y cachait depuis
+  la phase 3 a été trouvé et corrigé (§ 7.17).
+- **L20** (maquette non validée) : validée par le client.
+
+### Limites propres à la phase 5
+
+#### 🟠 L25 — Le comptable ne peut pas modifier le véhicule d'un visiteur
+Reporté depuis la phase 1 (limite L2). Le cahier des charges dit « le visiteur
+**(ou le comptable)** ». Le rôle existe désormais, l'écran non : ajouter
+« Véhicule d'un visiteur » au menu comptable serait une demi-journée de
+travail, sur le modèle de `VehiculeController`. **Non fait, et je ne le
+présente pas autrement.** Dis-moi si tu le veux.
+
+#### 🟠 L26 — Aucune trace des corrections ni des refus
+C'est la règle du cahier des charges, appliquée telle quelle, et **je maintiens
+qu'elle est discutable** : un visiteur dont le remboursement baisse de 27,90 €
+ne dispose d'aucun moyen de savoir pourquoi, et l'entreprise n'a rien à opposer
+en cas de litige. Le cahier des charges prévoit un contournement hors système
+(« le visiteur doit être tenu informé », « les documents annotés sont conservés
+par le service comptable ») : la traçabilité existe, mais sur papier.
+L'application affiche un rappel après chaque refus, c'est tout ce qu'elle peut
+faire sans contredire la spécification.
+
+#### 🟠 L27 — Mots de passe visiteurs toujours en clair
+Seul le compte comptable est haché (décision 5.2). Les nouveaux comptes sont
+donc protégés, les anciens non — une asymétrie que j'assume mais qui reste une
+faille. Pour tout uniformiser : ajouter une migration qui remplace chaque
+`visiteur.mdp` par `password_hash(mdp, PASSWORD_DEFAULT)`, élargir la colonne à
+`VARCHAR(255)`, et faire passer `getInfosVisiteur()` au même schéma que
+`getInfosComptable()`. Les logins de démonstration continueraient de
+fonctionner ; seul le `README` cesserait de pouvoir afficher les mots de passe.
+
+#### 🟡 L28 — Toujours aucune protection CSRF
+Défaut B9, présent depuis l'origine, et désormais sur des actions plus
+sensibles : refuser un frais et valider une fiche. Un site malveillant pourrait
+théoriquement faire valider une fiche par un comptable connecté. Le composant
+Form de Symfony poserait le jeton automatiquement — mais l'application ne
+l'utilise pas (décision 0.4). **C'est la dette technique la plus importante du
+projet.**
+
+#### 🟡 L29 — Le compteur de validation n'est pas un tableau de bord
+Le comptable choisit un visiteur et un mois, comme le décrit le cas
+d'utilisation. Il n'a pas de vue « fiches restant à valider ce mois ». Avec
+9 visiteurs c'est tenable ; au-delà, ce serait le premier écran à ajouter.
+
+#### 🟡 L30 — Un même login dans les deux tables n'est pas interdit
+Les logins sont uniques **dans chaque table**, pas entre les deux. Un doublon
+ferait gagner le comptable (décision 5.3). MySQL ne sait pas exprimer
+simplement une unicité inter-tables ; il faudrait une table de comptes unifiée,
+donc restructurer `visiteur`.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -2516,6 +2963,111 @@ transmis tel quel au client (les 10 fichiers sont autonomes).
 9 liens internes tous valides, 3 ressources (logo, 2 feuilles de style)
 présentes, aucune trace de PHP/Twig/JavaScript, 6 totaux vérifiés à la main.
 
+### 9.21 Phase 5 — installation
+
+```bash
+cd "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet"
+mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_003.sql
+mysql -u root bd_gsb < sql/003_comptable_et_etats.sql
+php app/console assets:install web
+php app/console cache:clear --env=dev
+```
+
+**Compte comptable de démonstration : `mvalette` / `comptable26`.**
+
+Sur une base créée de zéro, `sql/bd_gsb.sql` contient déjà tout.
+
+### 9.22 Phase 5 — le scénario nominal, étape par étape
+
+Se connecter avec `mvalette` / `comptable26`.
+
+| # | Étape du cahier des charges | Action | Résultat attendu |
+|---|------------------------------|--------|------------------|
+| V1 | *pré-condition* | Connexion | Menu « Valider les fiches de frais » et « Imprimer les fiches du mois ». **Pas** de menu de saisie |
+| V2 | 1 et 2 | Cliquer « Valider les fiches de frais » | Deux listes : visiteurs par nom, douze derniers mois |
+| V3 | 3 | Choisir un visiteur et un mois, Valider | Redirection vers `/validation/<visiteur>/<mois>` |
+| V4 | 4 | — | Entête (état, date, justificatifs, matricule), tableau forfaitisé avec quantités **modifiables** et montants unitaires **verrouillés**, tableau hors forfait avec justificatifs cliquables et bouton « Refuser », les trois totaux |
+| V5 | 5 et 6 | Changer une quantité, « Enregistrer les corrections » | Bandeau vert « Les frais forfaitisés ont été actualisés. », valeurs et totaux recalculés, **la fiche reste Clôturée** |
+| V6 | 7 | « Refuser » sur une ligne hors forfait | Demande de confirmation, puis la ligne disparaît, le total baisse, et un message rappelle de prévenir le visiteur |
+| V7 | 8 et 9 | « Valider la fiche » | Confirmation, état **Validée**, plus aucun champ modifiable, `montantValide` renseigné et `dateModif` à aujourd'hui |
+| V8 | **exception 4-a** | Choisir un visiteur sans fiche ce mois | « Pas de fiche de frais pour ce visiteur ce mois », sur l'écran de choix, **sélection conservée** |
+
+**Résultats obtenus** sur la fiche `a17` / août 2026 :
+
+| Étape | Mesure |
+|-------|--------|
+| V4 | forfait 714,50 € + hors forfait 81,90 € = **796,40 €** (identique au PDF de la phase 3) |
+| V5 | kilométrage 225 → 180 ; total **768,50 €** (796,40 − 45 × 0,62) |
+| V6 | refus de « Documentation pharmacologie » (57,90 €) ; total **710,60 €** |
+| V7 | état `VA`, `dateModif` = 22/09/2026, `montantValide` = **710,60 €** |
+
+### 9.23 Phase 5 — les garde-fous
+
+| # | Action | Attendu | Obtenu |
+|---|--------|---------|--------|
+| V9 | Quantité non numérique | « Les quantités doivent être des nombres entiers positifs. » | ✔ |
+| V10 | Valider deux fois la même fiche | « Cette fiche n'a pas pu être validée : elle doit être à l'état clôturé. » | ✔ |
+| V11 | Corriger une fiche déjà validée | « Cette fiche n'est plus modifiable. », quantité inchangée en base | ✔ |
+| V12 | Refuser un frais sur une fiche validée | Même message, ligne toujours présente | ✔ |
+| V13 | Refuser un frais d'une **autre** fiche (identifiant modifié) | 404 | ✔ |
+| V14 | Un **visiteur** sur `/validation` | 403 | ✔ |
+| V15 | Un visiteur sur `/validation/a17/202608` | 403 | ✔ |
+| V16 | Un visiteur sur les POST corriger / valider | 403 | ✔ |
+| V17 | Non connecté sur `/validation` | 302 vers `/accueil` | ✔ |
+| V18 | Mauvais mot de passe comptable | « Erreur de login ou de mot de passe » | ✔ |
+
+### 9.24 Phase 5 — le comptable hérite des phases 2 et 3
+
+**Sans qu'une ligne de ces contrôleurs ait été modifiée** (décision 5.4) :
+
+| # | Action | Comptable | Un autre visiteur |
+|---|--------|-----------|-------------------|
+| V19 | Justificatif d'un visiteur (`/justificatif/7`) | **200**, `Content-Type: image/png` | 404 |
+| V20 | Fiche PDF d'un visiteur | **200** | 404 |
+| V21 | Archive ZIP du mois (`/fichespdf/202609`) | **200**, `application/zip`, `fiches_202609.zip`, 2 PDF | 403 |
+| V22 | Archive d'un mois sans fiche clôturée | **404** (et non plus 500, voir § 7.17) | — |
+
+### 9.25 Phase 5 — le cycle d'état en ligne de commande
+
+```bash
+php app/console gsb:cloturer-fiches 202609      # CR -> CL
+php app/console gsb:mettre-en-paiement 202608   # VA -> MP  (le 20 du mois)
+php app/console gsb:rembourser-fiches 202608    # MP -> RB  (paiement confirmé)
+```
+
+Sans argument, chaque commande traite **le mois précédent**.
+
+Résultats obtenus :
+
+| Commande | Sortie |
+|----------|--------|
+| `gsb:cloturer-fiches 202609` | `2 fiche(s) du mois 202609 (Septembre 2026) : clôturée(s) (CR -> CL).` |
+| **relancée aussitôt** | `Aucune fiche à l'état CR pour le mois 202609 (Septembre 2026).` |
+| `gsb:mettre-en-paiement 202608` | `1 fiche(s) … : mise(s) en paiement (VA -> MP).` |
+| `gsb:rembourser-fiches 202608` | `1 fiche(s) … : remboursée(s) (MP -> RB).` |
+| **relancée aussitôt** | `Aucune fiche à l'état MP …` |
+
+➡️ **Le test à montrer** : relancer deux fois la même commande. Rien ne bouge,
+rien ne casse, et le message le dit. C'est le filtre sur l'état de départ
+(décision 5.5) qui l'assure.
+
+### 9.26 Phase 5 — non-régression (vérifiée)
+
+| # | Vérification | Résultat |
+|---|--------------|----------|
+| R1 | Mauvais mot de passe visiteur | Message d'erreur ✔ |
+| R2 | Saisie de quantités forfaitisées | Enregistrée et réaffichée ✔ |
+| R3 | Quantité non numérique | Message d'erreur ✔ |
+| R5 | Frais daté de plus d'un an | Message d'erreur ✔ |
+| R6 | `/listefrais` sans session | 302 ✔ |
+| P1 | Tarif du véhicule en saisie | 0,67 € ✔ |
+| P1 | Fiche remboursée d'août | **0,62 €/km** — l'historisation tient jusqu'au bout du cycle ✔ |
+| P2 | Compteur de justificatifs | affiché ✔ |
+| P2 | Justificatif d'autrui | 404 ✔ |
+| P3 | Impression de sa propre fiche | 200 ✔ |
+| P3 | Impression de la fiche d'autrui | 404 ✔ |
+| — | Syntaxe des 22 fichiers PHP du bundle | OK ✔ |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -2559,7 +3111,7 @@ présentes, aucune trace de PHP/Twig/JavaScript, 6 totaux vérifiés à la main.
 
 ---
 
-## 11. Préparation à l'oral — phase 0
+## 11. Préparation à l'oral
 
 **Q1. Pourquoi y a-t-il deux dossiers `GsbFraisBundle` ?**
 Parce qu'un *bundle* Symfony n'est pas une application. L'archive du professeur
@@ -2931,6 +3483,99 @@ est une contradiction entre le diagramme d'états du cahier des charges (5 état
 et la base livrée (4 états, dont un intitulé « Validée <em>et</em> mise en
 paiement »).
 
+### Questions sur la phase 5
+
+**Q49. Pourquoi une table `comptable` et pas une colonne `role` dans
+`visiteur` ?**
+Parce qu'un comptable n'est pas un visiteur : il n'a ni fiche de frais, ni
+véhicule, ni date d'embauche. Surtout, la clé étrangère `fichefrais.idVisiteur`
+pointe vers `visiteur` : y mettre un comptable permettrait à la base
+d'accepter une fiche de frais au nom du comptable. Une table séparée conserve
+cette impossibilité. Le modèle idéal serait une table `utilisateur` unifiée
+avec un rôle, mais cela obligerait à restructurer `visiteur` et toutes ses
+clés étrangères — ce que la consigne de reprise interdit.
+
+**Q50. Comment le mot de passe du comptable est-il protégé ?**
+Par `password_hash()` à la création et `password_verify()` à la connexion. La
+base ne contient **jamais** le mot de passe, seulement une empreinte de
+60 caractères. Conséquence directe dans le code : contrairement à
+`getInfosVisiteur()`, la requête ne compare pas le mot de passe en SQL. Deux
+empreintes du même mot de passe sont différentes — chacune porte son propre
+grain de sel — donc un `WHERE mdp = :mdp` ne correspondrait jamais. On
+récupère la ligne par le login, puis on compare en PHP.
+
+**Q51. Pourquoi les mots de passe des visiteurs sont-ils restés en clair ?**
+Parce que leur table et leur jeu de données viennent du sujet d'origine et que
+la consigne est de ne pas réécrire l'existant. J'assume l'asymétrie et je la
+signale comme une faille (limite L27). Mais introduire **un nouveau** mot de
+passe en clair sous prétexte que les anciens le sont aurait été une faute :
+là où j'avais le choix, j'ai fait le bon.
+
+**Q52. Comment empêches-tu un visiteur d'accéder aux écrans du comptable ?**
+Par un contrôle serveur au début de chaque action de `ValidationController` :
+connecté ? comptable ? sinon 403. Le menu masque les liens, mais **masquer un
+lien ne protège rien** — n'importe qui peut taper l'URL. Vérifié : un visiteur
+reçoit 403 sur `/validation`, sur le détail d'une fiche et sur les deux
+actions POST.
+
+**Q53. Que se passe-t-il si deux comptables valident la même fiche en même
+temps ?**
+Rien de fâcheux. La condition `and idEtat = 'CL'` est **dans la requête
+`UPDATE`**, pas dans un `if` PHP. La base arbitre : la première instruction
+touche 1 ligne, la seconde en touche 0, et `rowCount()` le signale —
+l'application affiche alors « Cette fiche n'a pas pu être validée ». Si le test
+était fait en PHP, entre la lecture et l'écriture, la fiche pourrait être
+validée deux fois.
+
+**Q54. Comment le montant validé est-il calculé ?**
+Par la base, à l'intérieur même de l'`UPDATE` de validation : deux sous-requêtes
+d'agrégation, l'une sur les lignes forfaitisées (`quantité × montantUnitaire`),
+l'autre sur les hors forfait. Le lire d'abord en PHP pour le réécrire ensuite
+laisserait un intervalle pendant lequel la fiche pourrait changer, et l'on
+enregistrerait un montant périmé.
+
+**Q55. Le cahier des charges parle d'un script de clôture. Où est-il ?**
+C'est `php app/console gsb:cloturer-fiches`. Il complète la clôture
+automatique déjà en place — celle qui se déclenche à la première saisie du mois
+suivant. Les deux sont nécessaires : un visiteur qui n'ouvre jamais sa saisie du
+mois suivant laisserait sa fiche indéfiniment à l'état « Créée », et elle ne
+serait jamais soumise au comptable.
+
+**Q56. Pourquoi trois commandes au lieu d'une seule, générique ?**
+Parce que chacune porte le nom de l'événement de gestion : clôturer, mettre en
+paiement, rembourser. On ne peut pas se tromper de transition en tapant la
+commande, alors qu'une commande générique `--de=X --vers=Y` permettrait de faire
+reculer une fiche dans le cycle. Le traitement, lui, n'est écrit qu'une fois :
+les trois commandes héritent d'une même classe abstraite et ne déclarent que
+leurs deux états.
+
+**Q57. Que se passe-t-il si on relance un de ces scripts par erreur ?**
+Rien. Chaque commande filtre sur l'état de départ : la deuxième exécution ne
+trouve aucune fiche et l'annonce. C'est vérifié dans la procédure de test — et
+c'est la propriété qui rend ces scripts sûrs à programmer automatiquement.
+
+**Q58. Pourquoi proposer douze mois, même ceux où le visiteur n'a rien saisi ?**
+Pour que l'exception 4-a reste atteignable. Si les listes ne proposaient que
+des couples visiteur/mois existants, le cas n'arriverait jamais — mais le
+comptable perdrait une information utile : constater qu'un visiteur **n'a rien
+saisi** ce mois-là. C'est le choix soumis au client dans la maquette.
+
+**Q59. Un frais refusé, où va-t-il ?**
+Nulle part : il est supprimé, et aucun motif n'est enregistré. C'est la règle du
+cahier des charges. Le justificatif éventuel est effacé du disque en même temps
+et le compteur de la fiche recalculé, exactement comme lors d'une suppression
+par le visiteur — sinon on laisserait une facture orpheline. L'application
+affiche un rappel : « Pensez à en informer le visiteur : le système ne le fait
+pas. » **Je maintiens que cette règle est discutable** (limite L26).
+
+**Q60. Qu'est-ce que la phase 2 t'a fait gagner en phase 5 ?**
+`estComptable()` avait été écrite en phase 2, alors qu'aucun compte comptable
+n'existait. Résultat : le comptable accède aux justificatifs et aux impressions
+PDF **sans qu'une ligne de ces contrôleurs ait été modifiée**. C'est le principe
+à retenir : écrire la règle de sécurité en concevant la fonctionnalité, et non
+la rajouter après coup — c'est en retouchant du code de sécurité déjà testé
+qu'on introduit des failles.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -2971,6 +3616,13 @@ paiement »).
 | **Scénario nominal** | Déroulement normal d'un cas d'utilisation, quand tout se passe bien. Les écarts sont décrits à part, en « exceptions » (ici l'exception 4-a). |
 | **Cas d'utilisation** | Description d'un service rendu par le système à un acteur, sous forme d'étapes numérotées. Ici « Valider fiche de frais », acteur « Comptable ». |
 | **Pré-condition** | Ce qui doit être vrai avant que le cas d'utilisation puisse commencer (ici : comptable authentifié, fiches du mois clôturées). |
+| **Hachage (`password_hash`)** | Transformation à sens unique d'un mot de passe en une empreinte. On peut vérifier qu'un mot de passe correspond à l'empreinte, jamais retrouver le mot de passe à partir d'elle. |
+| **Grain de sel** | Valeur aléatoire mêlée au mot de passe avant le hachage, différente à chaque fois. C'est pourquoi deux empreintes du même mot de passe diffèrent, et pourquoi on ne peut pas comparer une empreinte en SQL. |
+| **Rôle** | Étiquette portée par la session (`visiteur`, `comptable`) qui détermine ce que l'utilisateur a le droit de faire. Les contrôleurs regardent le rôle, jamais la table d'origine du compte. |
+| **`rowCount()`** | Nombre de lignes réellement modifiées par une requête. Permet de savoir si un `UPDATE` conditionnel a fait quelque chose — donc d'arbitrer sans relire la base. |
+| **Idempotent** | Se dit d'un traitement qu'on peut relancer sans changer le résultat. Les trois commandes du cycle d'état le sont, grâce au filtre sur l'état de départ. |
+| **Classe abstraite** | Classe qui ne s'instancie pas et sert de socle commun : elle écrit le traitement une fois, ses classes filles n'en fixent que les paramètres. Ici `CycleEtatCommand` et ses trois commandes. |
+| **Portée (Twig)** | Zone du gabarit où une variable existe. Une variable créée par `{% set %}` dans une boucle **n'existe plus après elle** — source d'un total silencieusement nul (§ 7.16). |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |

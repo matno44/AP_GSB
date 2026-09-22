@@ -1,0 +1,39 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Valider les fiches de frais</h2>
+
+    {% include 'PgGsbFraisBundle:Validation:_message.html.twig' %}
+
+    <p>Choisissez le visiteur et le mois à traiter.</p>
+
+    <form method="post" action="{{ path('pg_gsb_frais_validation') }}">
+        <div class="corpsForm">
+            <fieldset>
+                <legend>Fiche à valider</legend>
+                <p>
+                    <label for="lstVisiteur">Visiteur :</label>
+                    <select id="lstVisiteur" name="lstVisiteur">
+                        {% for unVisiteur in lesvisiteurs %}
+                            <option value="{{ unVisiteur.id }}"{% if unVisiteur.id == levisiteur %} selected{% endif %}>{{ unVisiteur.nom }} {{ unVisiteur.prenom }}</option>
+                        {% endfor %}
+                    </select>
+                </p>
+                <p>
+                    <label for="lstMois">Mois :</label>
+                    <select id="lstMois" name="lstMois">
+                        {% for unMois, unLibelle in lesmois %}
+                            <option value="{{ unMois }}"{% if unMois == lemois %} selected{% endif %}>{{ unLibelle }}</option>
+                        {% endfor %}
+                    </select>
+                </p>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+            <p><input type="submit" value="Valider" /></p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% endblock %}

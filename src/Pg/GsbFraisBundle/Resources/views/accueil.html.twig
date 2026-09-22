@@ -4,11 +4,23 @@
      <div id="infosUtil">
          <h3>
             {% if app.session.get('nom') %}
-                Visiteur : bonjour {{ app.session.get('prenom') }} {{ app.session.get('nom') }}
+                {% if app.session.get('role') == 'comptable' %}Comptable{% else %}Visiteur{% endif %} :
+                bonjour {{ app.session.get('prenom') }} {{ app.session.get('nom') }}
             {% endif %}
         </h3>
      </div>
+        {# Le menu dépend du rôle posé en session à la connexion. Masquer un
+           lien ne protège rien : chaque contrôleur refait le contrôle côté
+           serveur. Le menu ne fait qu'éviter de proposer l'inutile. #}
         <ul id="menuList">
+        {% if app.session.get('role') == 'comptable' %}
+	   <li class="smenu">
+              <a href="{{path('pg_gsb_frais_validation')}}" title="Valider les fiches de frais">Valider les fiches de frais</a>
+           </li>
+           <li class="smenu">
+              <a href="{{path('pg_gsb_frais_fichespdfmois')}}" title="Archive ZIP des fiches clôturées du mois précédent">Imprimer les fiches du mois</a>
+           </li>
+        {% else %}
 	   <li class="smenu">
               <a href="{{path('pg_gsb_frais_saisirfrais')}}" title="Saisie fiche de frais ">Saisie fiche de frais</a>
            </li>
@@ -18,6 +30,7 @@
            <li class="smenu">
               <a href="{{path('pg_gsb_frais_monvehicule')}}" title="Déclarer mon véhicule">Mon véhicule</a>
            </li>
+        {% endif %}
            <li class="smenu">
               <a href="{{path('pg_gsb_frais_deconnexion')}}" title="Se déconnecter">Déconnexion</a>
            </li>

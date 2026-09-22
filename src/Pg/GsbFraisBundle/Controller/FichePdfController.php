@@ -58,8 +58,12 @@ class FichePdfController extends Controller
      * accessible par la commande console gsb:imprimer-fiches, qui appelle
      * exactement le même service.
      */
-    public function imprimerMoisAction(Request $request, $mois)
+    public function imprimerMoisAction(Request $request, $mois = null)
     {
+        if ($mois === null) {
+            // « toutes les fiches de frais clôturées du mois précédent »
+            $mois = moisPrecedent(getMois(date('d/m/Y')));
+        }
         $session = $request->getSession();
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
@@ -80,11 +84,19 @@ class FichePdfController extends Controller
         // L'archive peut peser plusieurs dizaines de mégaoctets : on l'écrit
         // dans un fichier temporaire et on la sert en flux, plutôt que de la
         // charger entièrement en mémoire pour la renvoyer.
-        $cheminZip = tempnam(sys_get_temp_dir(), 'gsb_fiches_').'.zip';
+        // tempnam() CRÉE le fichier et renvoie son chemin. Lui accoler « .zip »
+        // désignerait un fichier qui n'existe pas : l'archive serait écrite là,
+        // le fichier créé par tempnam resterait orphelin dans /tmp, et le
+        // unlink() de la ligne d'échec porterait sur un chemin inexistant.
+        // On garde donc le chemin tel quel ; l'extension vue par l'utilisateur
+        // vient de l'en-tête Content-Disposition, plus bas.
+        $cheminZip = tempnam(sys_get_temp_dir(), 'gsb_fiches_');
         $nbFiches = $this->get('pg_gsb_frais.fiche_pdf')
             ->genererArchiveMois($mois, 'CL', $cheminZip);
         if ($nbFiches == 0) {
-            unlink($cheminZip);
+            if (is_file($cheminZip)) {
+                unlink($cheminZip);
+            }
             throw $this->createNotFoundException(
                 'Aucune fiche clôturée pour le mois '.$mois);
         }

@@ -28,19 +28,36 @@ function estConnecte($session){
  * @param $prenom
  */
 function connecter($session, $id,$nom,$prenom){
+    // Conserve la signature d'origine : tout le code existant qui appelle
+    // connecter() continue de fonctionner et ouvre une session de visiteur.
+    connecterAvecRole($session, $id, $nom, $prenom, 'visiteur');
+}
+/**
+ * Enregistre en session les infos d'un utilisateur et son rôle
+
+ * Le rôle vaut 'visiteur' ou 'comptable'. C'est lui, et lui seul, qui
+ * détermine ce que l'utilisateur a le droit de faire : les contrôleurs ne
+ * regardent jamais la table d'où vient le compte, seulement la session.
+
+ * @param $id
+ * @param $nom
+ * @param $prenom
+ * @param $role
+ */
+function connecterAvecRole($session, $id, $nom, $prenom, $role){
     $session->set('id',$id);
     $session->set('nom',$nom);
     $session->set('prenom',$prenom);
+    $session->set('role',$role);
 }
 /**
  * Indique si l'utilisateur connecté est un comptable
 
- * Le rôle est posé en session à la connexion. Aujourd'hui aucun compte
- * comptable n'existe -il sera créé en phase 5- : cette fonction renvoie donc
- * faux pour tout le monde. Elle est écrite dès maintenant parce que le
- * contrôle d'accès aux justificatifs en a besoin : le jour où le compte
- * comptable existera, la consultation des pièces jointes fonctionnera sans
- * qu'une ligne de JustificatifController soit modifiée.
+ * Le rôle est posé en session à la connexion par connecterAvecRole().
+ * Écrite en phase 2 alors qu'aucun compte comptable n'existait encore, cette
+ * fonction a permis de poser dès ce moment-là la règle d'accès aux
+ * justificatifs. La phase 5 n'a eu qu'à créer l'acteur : aucune ligne de
+ * JustificatifController ni de FichePdfController n'a eu à être modifiée.
 
  * @return vrai ou faux
  */
@@ -96,6 +113,25 @@ function moisPrecedent($mois){
         $numAnnee--;
     }
     return $numAnnee.str_pad($numMois, 2, '0', STR_PAD_LEFT);
+}
+/**
+ * Additionne une colonne d'un tableau de lignes
+
+ * Les montants viennent de PDO, qui restitue les colonnes DECIMAL sous forme
+ * de CHAÎNES : d'où le transtypage explicite. Sans lui l'addition
+ * fonctionnerait quand même par conversion implicite, mais le code ne dirait
+ * pas ce qu'il fait.
+
+ * @param $lesLignes tableau de tableaux associatifs
+ * @param $cle le nom de la colonne à additionner
+ * @return la somme, en nombre à virgule -0 si le tableau est vide
+ */
+function totalDesLignes($lesLignes, $cle){
+    $total = 0.0;
+    foreach($lesLignes as $uneLigne){
+        $total += (float) $uneLigne[$cle];
+    }
+    return $total;
 }
 /**
  * Détruit la session active

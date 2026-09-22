@@ -55,6 +55,7 @@ mysql -u root bd_gsb < sql/001_puissance_fiscale_vehicule.sql
 |-----------|-------|
 | `001_puissance_fiscale_vehicule.sql` | barème kilométrique par véhicule, rattachement du visiteur, historisation du montant unitaire |
 | `002_justificatifs.sql` | pièces jointes des frais hors forfait, remise à zéro du compteur `nbJustificatifs` |
+| `003_comptable_et_etats.sql` | table `comptable`, 5ᵉ état « Mise en paiement », re-libellé de « Validée » |
 
 Les paramètres de connexion sont dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml` :
@@ -112,9 +113,19 @@ Comptes de démonstration
 | `cclepkens`| `zuwa4`      | Christophe Clepkens|
 | `fdaburon` | `jaqu2`      | François Daburon   |
 
-Seul `dandre` possède des fiches de frais pré-remplies. Les mots de passe sont
-stockés en clair, conformément au sujet d'origine : ne pas réutiliser ce schéma
-en production.
+### Compte comptable
+
+| Login | Mot de passe | Comptable |
+|-------|--------------|-----------|
+| `mvalette` | `comptable26` | Marie Valette |
+
+Seul `dandre` possède des fiches de frais pré-remplies.
+
+**Mots de passe.** Ceux des visiteurs sont stockés **en clair**, conformément au
+sujet d'origine : ne pas réutiliser ce schéma en production. Celui du comptable
+est en revanche **haché** (`password_hash` / `password_verify`) : la base ne
+contient qu'une empreinte. Cette asymétrie est assumée et documentée dans
+`COMPTE-RENDU.md` (décision 5.2, limite L27).
 
 Fonctionnalités
 ---------------
@@ -134,7 +145,12 @@ Fonctionnalités
 | `pg_gsb_frais_joindrejustificatif` | `/joindrejustificatif/{id}` | dépôt d'un justificatif sur une ligne hors forfait (POST) |
 | `pg_gsb_frais_consulterjustificatif` | `/justificatif/{id}` | consultation d'un justificatif |
 | `pg_gsb_frais_fichepdf` | `/fichepdf/{idVisiteur}/{mois}` | impression d'une fiche au format de l'annexe 1 |
-| `pg_gsb_frais_fichespdfmois` | `/fichespdf/{mois}` | archive ZIP des fiches clôturées d'un mois (comptable) |
+| `pg_gsb_frais_fichespdfmois` | `/fichespdf/{mois}` | archive ZIP des fiches clôturées d'un mois (comptable ; sans argument : le mois précédent) |
+| `pg_gsb_frais_validation` | `/validation` | choix du visiteur et du mois à valider (comptable) |
+| `pg_gsb_frais_validationfiche` | `/validation/{idVisiteur}/{mois}` | détail de la fiche à valider |
+| `pg_gsb_frais_validationcorriger` | `/validation/{idVisiteur}/{mois}/corriger` | correction des frais forfaitisés (POST) |
+| `pg_gsb_frais_validationrefuser` | `/validation/{idVisiteur}/{mois}/refuser/{id}` | refus d'un frais hors forfait (POST) |
+| `pg_gsb_frais_validationvalider` | `/validation/{idVisiteur}/{mois}/valider` | validation de la fiche (POST) |
 
 > Le nom `pg_gsb_frais_validerfraishorsforfais` comporte une faute de frappe
 > d'origine (`…forfai**s**`). Elle est conservée telle quelle : les templates
@@ -196,6 +212,40 @@ DELETE FROM visiteur   WHERE id LIKE 'z%';
 Les fiches sont produites **une par une** et écrites au fil de l'eau dans
 l'archive : la mémoire ne contient jamais plus d'un PDF. Mesuré sur ce poste :
 1 fiche → 30 Mo, 202 fiches → 38 Mo.
+
+### Partie comptable
+
+Le comptable se connecte par le **même formulaire** que les visiteurs ; c'est
+son compte qui détermine son menu. Il choisit un visiteur et un mois, corrige
+les quantités forfaitisées, refuse les frais hors forfait non justifiés,
+consulte les factures jointes, puis valide la fiche — qui passe à l'état
+« Validée », avec sa date de modification et son montant validé.
+
+Les montants unitaires ne sont **jamais** modifiables : ils ont été figés à la
+saisie et les changer réécrirait le passé.
+
+#### Cycle de vie d'une fiche
+
+```
+Créée ──[fin de mois]──► Clôturée ──[validation comptable]──► Validée
+                                                                 │
+                                          [le 20 du mois] ───────┘
+                                                 ▼
+                                        Mise en paiement ──[paiement]──► Remboursée
+```
+
+Les trois transitions par lot sont des commandes console. Chacune ne traite que
+les fiches se trouvant dans l'état de départ attendu : **les relancer est sans
+effet et sans risque**.
+
+```bash
+php app/console gsb:cloturer-fiches       # Créée -> Clôturée
+php app/console gsb:mettre-en-paiement    # Validée -> Mise en paiement
+php app/console gsb:rembourser-fiches     # Mise en paiement -> Remboursée
+```
+
+Sans argument, chacune traite le mois précédent ; un mois `aaaamm` peut être
+passé en argument.
 
 La fiche du mois en cours est créée automatiquement à la première visite de
 `/saisirfrais`, et la fiche du mois précédent passe alors de l'état `CR`

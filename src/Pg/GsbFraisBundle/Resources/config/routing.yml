@@ -46,6 +46,31 @@ pg_gsb_frais_fichepdf:
     defaults: { _controller: PgGsbFraisBundle:FichePdf:imprimer }
     requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}' }
 pg_gsb_frais_fichespdfmois:
+    # mois facultatif : sans argument, le contrôleur prend le mois précédent,
+    # ce qui est exactement le besoin du cahier des charges. Cela évite de
+    # devoir fournir la valeur à tous les gabarits qui affichent le menu.
     path:     /fichespdf/{mois}
-    defaults: { _controller: PgGsbFraisBundle:FichePdf:imprimerMois }
+    defaults: { _controller: PgGsbFraisBundle:FichePdf:imprimerMois, mois: null }
     requirements: { mois: '\d{6}' }
+pg_gsb_frais_validation:
+    path:     /validation
+    defaults: { _controller: PgGsbFraisBundle:Validation:index }
+pg_gsb_frais_validationfiche:
+    path:     /validation/{idVisiteur}/{mois}
+    defaults: { _controller: PgGsbFraisBundle:Validation:fiche }
+    requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}' }
+pg_gsb_frais_validationcorriger:
+    path:     /validation/{idVisiteur}/{mois}/corriger
+    defaults: { _controller: PgGsbFraisBundle:Validation:corriger }
+    requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}' }
+    methods:  [POST]
+pg_gsb_frais_validationrefuser:
+    path:     /validation/{idVisiteur}/{mois}/refuser/{id}
+    defaults: { _controller: PgGsbFraisBundle:Validation:refuser }
+    requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}', id: '\d+' }
+    methods:  [POST]
+pg_gsb_frais_validationvalider:
+    path:     /validation/{idVisiteur}/{mois}/valider
+    defaults: { _controller: PgGsbFraisBundle:Validation:valider }
+    requirements: { idVisiteur: '[A-Za-z0-9]{1,4}', mois: '\d{6}' }
+    methods:  [POST]

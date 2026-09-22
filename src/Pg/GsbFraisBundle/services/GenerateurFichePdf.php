@@ -192,18 +192,13 @@ class GenerateurFichePdf
      */
     private function calculerTotal($lesFraisForfait, $lesFraisHorsForfait)
     {
-        $total = 0.0;
-        // Deux parcours simples sur des tableaux DÉJÀ chargés : aucune requête
-        // supplémentaire n'est déclenchée ici. Faire calculer ce total par SQL
-        // coûterait deux requêtes d'agrégation de plus par fiche, pour
-        // additionner une quinzaine de nombres déjà présents en mémoire.
-        foreach ($lesFraisForfait as $uneLigne) {
-            $total += (float) $uneLigne['montant'];
-        }
-        foreach ($lesFraisHorsForfait as $uneLigne) {
-            $total += (float) $uneLigne['montant'];
-        }
-
-        return $total;
+        // Aucune requête supplémentaire : les deux tableaux sont DÉJÀ chargés
+        // pour l'affichage. Faire calculer ce total par SQL coûterait deux
+        // requêtes d'agrégation de plus par fiche, pour additionner une
+        // quinzaine de nombres déjà présents en mémoire.
+        // totalDesLignes() est la même fonction que celle employée par
+        // l'écran de validation : un seul endroit où la somme est écrite.
+        return totalDesLignes($lesFraisForfait, 'montant')
+            + totalDesLignes($lesFraisHorsForfait, 'montant');
     }
 }

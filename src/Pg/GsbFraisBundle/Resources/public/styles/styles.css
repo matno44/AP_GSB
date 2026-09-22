@@ -213,3 +213,61 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     max-width: 11em;
     font-size: .8em;
 }
+
+/* ------------------------------------------- partie comptable (phase 5) */
+/* Ces règles proviennent de maquette/maquette.css, validée par le client. */
+
+.etat {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    border-radius: 999px;
+}
+
+.etatCloturee { color: #5c4310; background: #fdf3d8; }
+.etatValidee  { color: #14562c; background: #ddf3e4; }
+
+.confirmation {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #14562c;
+    background: #ddf3e4;
+    border: 1px solid #a8d9ba;
+    border-radius: 4px;
+}
+
+.boutonSecondaire {
+    display: inline-block;
+    padding: .5em 1.25em;
+    font-weight: 600;
+    color: #23303a;
+    text-decoration: none;
+    background: #dfe7ed;
+    border: 0;
+    border-radius: 4px;
+}
+.boutonSecondaire:hover { background: #ccd8e1; }
+
+input[type="submit"].boutonRefus {
+    padding: .3em .8em;
+    font-size: .9em;
+    font-weight: 600;
+    color: #8a1c1c;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+}
+input[type="submit"].boutonRefus:hover { background: #f8dcdc; }
+
+/* Le formulaire de refus tient dans une cellule de tableau. */
+.listeLegere td form { display: inline; margin: 0; }
+
+.listeLegere tfoot td {
+    font-weight: 700;
+    background: #f4f7f9;
+    border-top: 2px solid #0b5c8f;
+}
+
+.nombre { text-align: right; }
+
+.listeLegere td input[type="text"] { width: 5em; text-align: right; }

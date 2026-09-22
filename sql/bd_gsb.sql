@@ -10,7 +10,8 @@
 -- Ce fichier est tenu à jour avec les migrations du dossier sql/ : il doit
 -- toujours produire le MÊME schéma qu'une base créée à l'origine puis migrée.
 -- Migrations intégrées ici : 001 (puissance fiscale du véhicule),
---                            002 (justificatifs des frais hors forfait).
+--                            002 (justificatifs des frais hors forfait),
+--                            003 (comptable et cycle d'état complet).
 -- ---------------------------------------------------------------------------
 
 DROP DATABASE IF EXISTS bd_gsb;
@@ -60,6 +61,21 @@ CREATE TABLE visiteur (
     UNIQUE KEY uk_visiteur_login (login),
     KEY fk_visiteur_typevehicule (idTypeVehicule),
     CONSTRAINT fk_visiteur_typevehicule FOREIGN KEY (idTypeVehicule) REFERENCES typevehicule (id)
+) ENGINE=InnoDB;
+
+-- --------------------------------------------------------- comptable
+-- Le comptable a sa propre table (migration 003) : il n'a ni fiche de frais,
+-- ni véhicule, ni date d'embauche. L'ajouter à visiteur permettrait à la clé
+-- étrangère fichefrais.idVisiteur de lui associer une fiche de frais.
+-- mdp contient une EMPREINTE password_hash(), d'où VARCHAR(255).
+CREATE TABLE comptable (
+    id     CHAR(4)      NOT NULL,
+    nom    VARCHAR(30)  NOT NULL,
+    prenom VARCHAR(30)  NOT NULL,
+    login  VARCHAR(20)  NOT NULL,
+    mdp    VARCHAR(255) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_comptable_login (login)
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------- fichefrais
@@ -123,10 +139,14 @@ CREATE TABLE lignefraishorsforfait (
 -- Jeu de données
 -- ===========================================================================
 
+-- Cinq états (migration 003), conformes au diagramme du cahier des charges :
+-- « Validée » (le comptable a contrôlé) et « Mise en paiement » (le virement
+-- est lancé, le 20 du mois) sont deux étapes distinctes.
 INSERT INTO etat (id, libelle) VALUES
     ('CR', 'Fiche créée, saisie en cours'),
     ('CL', 'Saisie clôturée'),
-    ('VA', 'Validée et mise en paiement'),
+    ('VA', 'Validée'),
+    ('MP', 'Mise en paiement'),
     ('RB', 'Remboursée');
 
 INSERT INTO fraisforfait (id, libelle, montant) VALUES
@@ -134,6 +154,12 @@ INSERT INTO fraisforfait (id, libelle, montant) VALUES
     ('KM',  'Frais Kilométrique',    0.62),
     ('NUI', 'Nuitée Hôtel',         80.00),
     ('REP', 'Repas Restaurant',     25.00);
+
+-- Compte comptable de démonstration : login « mvalette », mot de passe
+-- « comptable26 ». La valeur stockée est l'empreinte produite par
+-- password_hash() : la lire ne permet pas de retrouver le mot de passe.
+INSERT INTO comptable (id, nom, prenom, login, mdp) VALUES
+    ('c01', 'Valette', 'Marie', 'mvalette', '$2y$10$TF7Ljwa95mygt.ProOl86OrlrWrk8TA2IBT6hc4cQHbG5Ho2C8gFy');
 
 INSERT INTO typevehicule (id, libelle, montant) VALUES
     ('D4',  '4 CV Diesel',       0.52),

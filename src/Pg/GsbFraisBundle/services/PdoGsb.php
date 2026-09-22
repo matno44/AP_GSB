@@ -855,4 +855,140 @@ class PdoGsb{
                 $stmt->execute();
                 return $stmt->fetchAll();
         }
+
+/* =========================================================================
+ * Partie comptable (phase 5)
+ * ========================================================================= */
+
+/**
+ * Authentifie un comptable
+ *
+ * À la différence de getInfosVisiteur(), le mot de passe n'est PAS comparé
+ * dans la requête SQL : la base ne contient qu'une empreinte produite par
+ * password_hash(), et deux empreintes du même mot de passe sont différentes
+ * -chacune porte son propre grain de sel. On récupère donc la ligne par le
+ * seul login, puis password_verify() fait la comparaison.
+ *
+ * @param $login
+ * @param $mdp le mot de passe en clair saisi dans le formulaire
+ * @return id, nom, prenom, ou false si l'authentification échoue
+*/
+        public function getInfosComptable($login, $mdp){
+                $req = "select comptable.id as id, comptable.nom as nom,
+                comptable.prenom as prenom, comptable.mdp as mdp
+                from comptable where comptable.login = :login";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':login', $login);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                if(!is_array($laLigne) || !password_verify($mdp, $laLigne['mdp'])){
+                        return false;
+                }
+                // L'empreinte ne doit pas ressortir de cette méthode : elle n'a
+                // aucune raison de circuler dans les contrôleurs ni la session.
+                unset($laLigne['mdp']);
+                return $laLigne;
+        }
+/**
+ * Retourne la liste des visiteurs, classés par nom
+ *
+ * Alimente la liste déroulante de l'écran de validation. Le comptable
+ * connaît les visiteurs par leur nom, pas par leur identifiant.
+ *
+ * @return un tableau associatif : id, nom, prenom
+*/
+        public function getLesVisiteurs(){
+                $req = "select visiteur.id as id, visiteur.nom as nom,
+                visiteur.prenom as prenom from visiteur
+                order by visiteur.nom, visiteur.prenom";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+/**
+ * Fait passer d'un état à un autre toutes les fiches d'un mois
+ *
+ * Sert aux trois traitements par lot du cycle de vie : la clôture -CR vers
+ * CL-, la mise en paiement -VA vers MP- et le remboursement -MP vers RB.
+ *
+ * Le filtre sur l'état de départ est essentiel : sans lui, relancer le script
+ * ferait repartir en arrière des fiches déjà avancées dans le cycle.
+ *
+ * UNE SEULE requête, quel que soit le nombre de fiches : le serveur SQL fait
+ * le travail. Une boucle PHP lisant puis modifiant fiche par fiche serait le
+ * motif N+1.
+ *
+ * @param $mois sous la forme aaaamm
+ * @param $etatDepart l'état que doivent avoir les fiches concernées
+ * @param $etatArrivee le nouvel état
+ * @return le nombre de fiches effectivement modifiées
+*/
+        public function majEtatFichesDuMois($mois, $etatDepart, $etatArrivee){
+                $req = "update fichefrais set idEtat = :etatArrivee, dateModif = now()
+                where fichefrais.mois = :mois and fichefrais.idEtat = :etatDepart";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':etatArrivee', $etatArrivee);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->bindParam(':etatDepart', $etatDepart);
+                $stmt->execute();
+                // rowCount() donne le nombre de lignes réellement touchées :
+                // c'est ce qui permet à la commande d'annoncer un résultat
+                // exact plutôt qu'un « traitement terminé » sans contenu.
+                return $stmt->rowCount();
+        }
+/**
+ * Valide une fiche de frais et enregistre son montant
+ *
+ * Étape 9 du cas d'utilisation : « Le système passe la fiche à l'état
+ * "Validée" et met à jour la date de modification de la fiche. »
+ * On en profite pour renseigner montantValide, colonne qui existait depuis
+ * l'origine mais que rien n'alimentait.
+ *
+ * Le total est calculé PAR LA BASE, dans la requête : le lire d'abord en PHP
+ * pour le réécrire ensuite laisserait un intervalle pendant lequel une autre
+ * opération pourrait modifier la fiche, et l'on enregistrerait un montant
+ * périmé.
+ *
+ * Le filtre sur l'état 'CL' interdit de valider deux fois, ou de valider une
+ * fiche encore en saisie.
+ *
+ * @param $idVisiteur
+ * @param $mois sous la forme aaaamm
+ * @return vrai si la fiche a bien été validée
+*/
+        public function validerFicheFrais($idVisiteur, $mois){
+                $req = "update fichefrais set idEtat = 'VA', dateModif = now(),
+                montantValide = (
+                        select coalesce(sum(lignefraisforfait.quantite * lignefraisforfait.montantUnitaire), 0)
+                        from lignefraisforfait
+                        where lignefraisforfait.idVisiteur = :idVisiteur
+                        and lignefraisforfait.mois = :mois)
+                + (
+                        select coalesce(sum(lignefraishorsforfait.montant), 0)
+                        from lignefraishorsforfait
+                        where lignefraishorsforfait.idVisiteur = :idVisiteur
+                        and lignefraishorsforfait.mois = :mois)
+                where fichefrais.idVisiteur = :idVisiteur and fichefrais.mois = :mois
+                and fichefrais.idEtat = 'CL'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->execute();
+                return $stmt->rowCount() == 1;
+        }
+/**
+ * Clôture la fiche du mois précédent d'un visiteur, si elle ne l'est pas
+ *
+ * Première modalité de clôture du cahier des charges : « À la première saisie
+ * pour le mois N par le visiteur, sa fiche du mois précédent est clôturée si
+ * elle ne l'est pas. » Déjà assurée par creeNouvellesLignesFrais() ; cette
+ * méthode n'est pas utilisée par la saisie, elle sert à la commande de
+ * clôture par lot pour traiter le cas d'un visiteur qui n'a rien saisi.
+ *
+ * @param $mois le mois à clôturer, sous la forme aaaamm
+ * @return le nombre de fiches clôturées
+*/
+        public function cloturerFichesDuMois($mois){
+                return $this->majEtatFichesDuMois($mois, 'CR', 'CL');
+        }
 }
