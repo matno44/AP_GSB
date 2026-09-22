@@ -233,6 +233,25 @@ Trois POST ne portent pas de jeton, volontairement, parce qu'ils n'écrivent
 rien : la sélection du mois en consultation, la sélection visiteur/mois côté
 comptable, et la déconnexion.
 
+### Sessions
+
+Trois réglages protègent la session contre la **fixation** — attaque où un tiers
+impose à la victime un identifiant de session qu'il connaît, puis s'en sert une
+fois qu'elle s'est connectée :
+
+| Réglage | Où | Effet |
+|---------|-----|-------|
+| `use_strict_mode: true` | `app/config/config.yml` | PHP refuse d'adopter un identifiant qu'il n'a pas émis |
+| `$session->migrate(true)` | `fct.inc.php`, `connecterAvecRole()` | l'identifiant est régénéré à la connexion, l'ancien détruit |
+| `$session->invalidate()` | `fct.inc.php`, `deconnecter()` | l'identifiant cesse d'être valable à la déconnexion |
+
+`cookie_httponly: true` empêche par ailleurs la lecture du cookie par
+JavaScript.
+
+> **En production**, passer également `framework.session.cookie_secure` à
+> `true` et servir le site en HTTPS : sinon le cookie de session circule en
+> clair. Il est laissé à `false` pour permettre le développement en HTTP.
+
 ### Partie comptable
 
 Le comptable se connecte par le **même formulaire** que les visiteurs ; c'est

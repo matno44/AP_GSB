@@ -27,6 +27,17 @@ framework:
     session:
         # handler_id set to null will use default session handler from php.ini
         handler_id: ~
+        # Refuse d'adopter un identifiant de session qui n'a pas été émis par
+        # le serveur. Sans cela, n'importe qui peut IMPOSER un identifiant au
+        # navigateur d'une victime (par une URL, un sous-domaine, du script) ;
+        # PHP l'accepte tel quel et l'attaquant connaît alors la session.
+        # C'est la barrière amont contre la fixation de session ; la barrière
+        # aval est la régénération à la connexion (fct.inc.php).
+        use_strict_mode: true
+        # Le cookie de session n'est pas lisible par JavaScript : une faille
+        # XSS ne permet plus de le voler. Valeur par défaut de Symfony, écrite
+        # ici explicitement parce que php.ini du poste ne la fixe pas.
+        cookie_httponly: true
     fragments: ~
     http_method_override: true
 

@@ -12,6 +12,7 @@ définie au § 11 (glossaire).
 | 4 | Maquette HTML partie comptable | **validée par le client** |
 | 5 | Cas d'utilisation « Valider fiche de frais » | **terminée** |
 | 6 | Protection CSRF *(hors programme initial)* | **terminée** |
+| 7 | Fixation de session *(hors programme initial)* | **terminée** |
 
 ---
 
@@ -153,6 +154,17 @@ Demandée après la livraison des cinq phases, pour traiter la limite L28, qui
 | Vérifications | `Home`, `SaisirFrais`, `Vehicule`, `Justificatif`, `Validation` *(modifiés)* | 9 appels à `verifierJeton()`, un par action d'écriture |
 | Jetons dans les formulaires | 5 gabarits *(modifiés)* | `<input type="hidden" name="_token" …>` |
 | Correction du défaut B10 | `Resources/config/routing.yml`, `saisirfraishorsforfait.html.twig` *(modifiés)* | la suppression d'un frais passe de GET à **POST** |
+
+### Phase 7 (hors programme) — Régénération de session
+
+Traite la limite L32, signalée en phase 6 : l'identifiant de session ne
+changeait pas à la connexion.
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Régénération à la connexion | `Controller/include/fct.inc.php` *(modifié)* | `$session->migrate(true)` au début de `connecterAvecRole()` |
+| Invalidation à la déconnexion | `Controller/include/fct.inc.php` *(modifié)* | `$session->invalidate()` remplace `$session->clear()` |
+| Durcissement de la session | `app/config/config.yml` *(modifié)* | `use_strict_mode: true` et `cookie_httponly: true` |
 
 ---
 
@@ -1381,6 +1393,82 @@ Or le problème n'est pas l'identité de l'utilisateur, qui est parfaitement
 connu : c'est l'origine de sa requête. `AccessDeniedHttpException` produit un
 **403** franc. Vérifié sur les neuf actions.
 
+### Phase 7 — Fixation de session
+
+### Décision 7.1 — Démontrer la faille avant de la corriger
+
+Avant d'écrire une ligne, j'ai **reproduit l'attaque** : imposer un identifiant
+de session choisi, laisser la victime se connecter normalement, puis réutiliser
+cet identifiant. Résultat : `bonjour David Andre`, et accès complet à ses
+données en HTTP 200.
+
+- **Pourquoi c'est la bonne façon de procéder :** sans cette étape, je ne
+  saurais pas si la faille était réelle ou théorique, et je n'aurais aucun
+  moyen de prouver que la correction agit. Le même scénario, rejoué après
+  correction, échoue — c'est cela qui fait la démonstration, pas le fait
+  d'avoir ajouté une ligne.
+- Le scénario complet est au § 9.30, prêt à être rejoué devant un jury.
+
+### Décision 7.2 — Deux barrières, en amont et en aval
+
+| Barrière | Mécanisme | Ce qu'elle empêche |
+|----------|-----------|--------------------|
+| **Amont** | `use_strict_mode: true` | que PHP **adopte** un identifiant qu'il n'a pas émis. L'attaquant ne peut plus choisir l'identifiant |
+| **Aval** | `$session->migrate(true)` | que l'identifiant **survive** à la connexion. Même si un identifiant était imposé, il cesse de valoir au moment précis où la session devient authentifiée |
+
+- **Pourquoi les deux :** chacune suffirait en théorie. En pratique
+  `use_strict_mode` dépend de la configuration du serveur — un hébergeur peut
+  la remettre à zéro — tandis que `migrate()` est dans le code de
+  l'application et voyage avec elle. **Défense en profondeur :** la seconde
+  tient si la première tombe.
+- **Vérification :** `use_strict_mode` passe bien de `'0'` à `'1'` pendant le
+  traitement de la requête, et un identifiant inconnu est rejeté au profit
+  d'un identifiant émis par le serveur.
+
+### Décision 7.3 — `migrate(true)` avant d'écrire les informations de connexion
+
+Deux détails qui ne sautent pas aux yeux :
+
+- **L'argument `true`** détruit l'ancien enregistrement de session. Sans lui,
+  l'identifiant connu de l'attaquant continuerait de désigner une session
+  valide — vide, mais utilisable pour une nouvelle tentative.
+- **L'ordre.** `migrate()` est appelé **avant** les `$session->set()`. Ainsi,
+  à aucun instant une session contenant les informations d'un utilisateur
+  authentifié n'existe sous l'ancien identifiant. L'ordre inverse
+  fonctionnerait aussi — `migrate()` conserve les données — mais ouvrirait une
+  fenêtre de quelques instructions pendant laquelle la session authentifiée
+  porterait encore l'identifiant que l'attaquant connaît.
+
+### Décision 7.4 — `invalidate()` plutôt que `clear()` à la déconnexion
+
+C'est une **modification du code du prédécesseur**, et je la signale comme
+telle. `clear()` vide les données mais **conserve l'identifiant**, qui reste
+donc valable après la déconnexion. `invalidate()` vide *et* régénère.
+
+- **Le cas concret :** un visiteur se déconnecte sur un poste partagé.
+  Avec `clear()`, quelqu'un qui aurait relevé l'identifiant — par-dessus
+  l'épaule, dans l'historique, dans les journaux d'un serveur mandataire —
+  pourrait encore s'en servir. Avec `invalidate()`, il ne désigne plus rien.
+- **Vérifié :** après déconnexion, l'ancien identifiant ne donne plus accès à
+  rien.
+
+### Décision 7.5 — `cookie_httponly` écrit explicitement
+
+C'est la valeur par défaut de Symfony, mais le `php.ini` du poste laisse
+`session.cookie_httponly` vide. L'écrire dans `config.yml` rend le
+comportement indépendant de la configuration du serveur, et visible à la
+lecture. Le cookie devient inaccessible à JavaScript : une faille XSS ne permet
+plus de le voler. **Vérifié dans l'en-tête de réponse :**
+`Set-Cookie: PHPSESSID=…; path=/; HttpOnly`.
+
+### Décision 7.6 — Ne pas activer `cookie_secure`
+
+`cookie_secure` demanderait au navigateur de n'envoyer le cookie qu'en HTTPS.
+C'est la bonne valeur **en production**, mais le poste de développement
+fonctionne en HTTP : l'activer rendrait la connexion impossible en local. Je
+l'ai donc laissé désactivé et je le signale comme un réglage à basculer au
+déploiement (limite L36).
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -1983,6 +2071,13 @@ formulaire — dépôt de justificatif, suppression, refus — donc son propre c
 - **Cas limite :** aucune ligne hors forfait → la boucle n'émet rien, et le
   formulaire de création garde le sien.
 
+### Phase 7
+
+**Aucune boucle, aucun algorithme.** La correction tient en deux appels de
+méthode et deux lignes de configuration. Tout le travail de cette phase a
+consisté à **démontrer la faille, puis à prouver qu'elle était fermée** —
+c'est-à-dire à écrire des tests, pas du code.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -2416,6 +2511,65 @@ Je préfère l'écrire que de meubler cette section.
   7.14 et 7.18, encore une fois : ne pas tester du HTML avec des expressions
   régulières approximatives.
 
+### Phase 7
+
+### 7.21 Mon test « après correction » était contaminé par le test « avant »
+- **Symptôme :** après avoir posé `migrate()` et `use_strict_mode`, j'ai
+  rejoué l'attaque… et elle **réussissait encore** : « *** ENCORE VULNÉRABLE ***
+  : bonjour David Andre ». J'ai cru un instant que la correction était sans
+  effet.
+- **Cause réelle :** j'avais réutilisé **le même identifiant de session** que
+  pour la démonstration de la faille. Or cet identifiant désignait désormais
+  une session **existante et authentifiée**, créée par le test précédent.
+  `use_strict_mode` ne rejette que les identifiants **inconnus** du serveur —
+  c'est tout son principe. Il a donc accepté celui-là, à juste titre, et
+  l'attaque a semblé passer alors qu'elle ne faisait que rouvrir une session
+  légitimement ouverte quelques minutes plus tôt.
+- **Correction :** rejouer avec un identifiant jamais utilisé. L'attaque échoue
+  alors à toutes les étapes.
+- **Ce que ça m'apprend :** un test de sécurité qui réutilise l'état du test
+  précédent ne prouve rien. Il faut repartir d'un environnement propre —
+  ici, un identifiant neuf — sinon on mesure l'historique, pas le code.
+
+### 7.22 Ma sonde de diagnostic cassait ce qu'elle mesurait
+- **Message exact :**
+  `Failed to start the session because headers have already been sent by
+  "…/sonde.php" at line 9. (500 Internal Server Error)`
+- **Ce que je faisais :** écrire un script qui démarre le noyau Symfony,
+  traite une requête et affiche l'état des sessions. J'affichais les réglages
+  **avant** d'appeler `$kernel->handle()`.
+- **Cause réelle :** tout `echo` ou `printf` envoie les en-têtes HTTP. La
+  session, qui a besoin d'envoyer un cookie, ne peut plus démarrer. Mon
+  diagnostic renvoyait donc 500 — et j'ai failli attribuer cette erreur à
+  l'application.
+- **Correction :** accumuler les mesures dans un tableau et ne les afficher
+  qu'après le traitement de la requête, sur la sortie d'erreur.
+- **Pour ne pas le refaire :** un outil de diagnostic ne doit rien écrire avant
+  ce qu'il observe. C'est la règle générale : mesurer sans perturber.
+
+### 7.23 Un comportement que je n'explique pas complètement
+- **Observation :** sur une simple requête `GET /accueil` portant un
+  identifiant de session inconnu, l'application **ne réémet pas** de cookie,
+  alors que PHP seul le fait. Vérifié : un script PHP nu de six lignes, avec
+  `use_strict_mode=1` et le même identifiant imposé, répond
+  `Set-Cookie: PHPSESSID=l51tm1ph…` ; l'application, non. Le comportement est
+  identique en environnement de développement et de production : ce n'est donc
+  pas le profileur.
+- **Ce que j'ai pu établir :** l'identifiant imposé **est bien rejeté** —
+  une sonde interne montre que `session_id()` vaut un identifiant différent,
+  émis par le serveur. La protection fonctionne ; c'est sa trace dans la
+  réponse HTTP qui manque.
+- **Effet pratique, mesuré :** aucun effet néfaste. Un utilisateur arrivant
+  avec un cookie périmé **peut se connecter normalement** et reste connecté —
+  vérifié : le cookie correct lui est délivré au moment de la connexion, par
+  `migrate(true)`. C'est précisément l'instant où il compte.
+- **Je préfère l'écrire que de le passer sous silence.** Je soupçonne la
+  gestion de la réponse par Symfony 2.8, qui n'achemine pas le `Set-Cookie`
+  émis nativement par PHP lorsque celui-ci rejette un identifiant, mais **je
+  ne l'ai pas prouvé** et je ne présenterai donc pas cette hypothèse comme un
+  fait. Ce qui est établi, c'est que la faille est fermée et que le
+  fonctionnement normal est intact.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -2707,15 +2861,27 @@ nouveau le formulaire, pré-rempli, avec un message explicatif. **Non fait** —
 cela demanderait de réafficher chaque formulaire depuis son action, soit neuf
 cas particuliers.
 
-#### 🟠 L32 — La session n'est pas régénérée à la connexion
-Découvert en travaillant sur l'authentification, **ce n'est pas du CSRF mais
-c'est voisin** : `connecterAvecRole()` n'appelle pas `$session->migrate()`.
-Un attaquant capable d'imposer un identifiant de session à la victime **avant**
-qu'elle se connecte conserverait ensuite l'accès à sa session — c'est la
-fixation de session. La correction tient en une ligne
-(`$session->migrate(true)` au moment de la connexion), mais elle touche le
-parcours d'authentification que je viens de tester, et elle sort du périmètre
-demandé. **Je la signale plutôt que de l'ajouter en catimini.**
+#### ✅ L32 — LEVÉ en phase 7
+La session est régénérée à la connexion (`migrate(true)`), invalidée à la
+déconnexion (`invalidate()`), et PHP refuse désormais d'adopter un identifiant
+qu'il n'a pas émis (`use_strict_mode`). L'attaque, démontrée avant correction,
+échoue après.
+
+#### 🟡 L35 — Le comportement du cookie sur identifiant rejeté n'est pas élucidé
+Voir § 7.23 : l'application ne réémet pas de cookie là où PHP seul le fait.
+**Aucun effet néfaste mesuré** — la connexion fonctionne, le cookie est délivré
+au bon moment — mais je n'ai pas identifié la cause avec certitude.
+
+#### 🟡 L36 — `cookie_secure` volontairement désactivé
+Le cookie de session est transmis même en HTTP. C'est nécessaire pour
+travailler en local, mais **en production il faut passer
+`framework.session.cookie_secure` à `true`** (et servir le site en HTTPS),
+sans quoi le cookie circule en clair sur le réseau.
+
+#### 🟡 L37 — Pas de limite de durée de session
+Aucune valeur de `cookie_lifetime` ni de `gc_maxlifetime` n'est fixée :
+l'application s'en remet à la configuration du serveur. Une session oubliée
+sur un poste partagé reste ouverte aussi longtemps que le serveur la conserve.
 
 #### 🟡 L33 — Le jeton est lié à la session, donc perdu à la déconnexion
 `deconnecter()` fait `$session->clear()`, ce qui efface aussi le stock de
@@ -3332,6 +3498,74 @@ formulaire le jeton qui lui appartient.
 
 Syntaxe des 23 fichiers PHP du bundle : OK.
 
+### 9.30 Phase 7 — démontrer la faille, puis sa fermeture
+
+**C'est la manipulation à montrer au jury.** Elle se fait en quatre commandes,
+et elle a l'avantage de prouver la faille *avant* de prouver la correction.
+
+```bash
+php -S 127.0.0.1:8000 -t web web/app_dev.php &
+ATT="idjamaisemisparleserveur12345678"        # identifiant choisi par l'attaquant
+
+# 1. la victime charge la page avec l'identifiant imposé, et récupère son jeton
+curl -s -D- -H "Cookie: PHPSESSID=$ATT" http://127.0.0.1:8000/accueil
+
+# 2. elle se connecte NORMALEMENT (bon login, bon mot de passe)
+curl -s -D- -H "Cookie: PHPSESSID=$ATT" \
+     -d "login=dandre&mdp=oppg5&_token=<le jeton>" \
+     http://127.0.0.1:8000/validerconnexion
+
+# 3. l'attaquant réutilise l'identifiant qu'il avait imposé
+curl -s -H "Cookie: PHPSESSID=$ATT" http://127.0.0.1:8000/accueil | grep bonjour
+```
+
+| | Avant la phase 7 | Après |
+|---|------------------|-------|
+| Identifiant après connexion | **inchangé** | **régénéré** (nouveau `Set-Cookie`) |
+| Étape 3 | `bonjour David Andre` — **attaque réussie** | rien : **non connecté** |
+| Accès à `/listefrais` avec l'identifiant imposé | **HTTP 200** | 302 vers `/accueil` |
+| Identifiant d'avant la connexion | valide | **ne vaut plus rien** |
+
+> **Piège de manipulation** (§ 7.21) : utiliser un identifiant **jamais
+> employé** pour le test d'après-correction. Réutiliser celui de la
+> démonstration le ferait reconnaître comme une session existante, et
+> l'attaque semblerait réussir encore.
+
+### 9.31 Phase 7 — contrôles complémentaires
+
+| # | Vérification | Attendu | Obtenu |
+|---|--------------|---------|--------|
+| S1 | `use_strict_mode` pendant la requête | passe de `'0'` à `'1'` | ✔ |
+| S2 | Identifiant inconnu imposé | rejeté, remplacé par un identifiant émis par le serveur | ✔ |
+| S3 | Identifiant régénéré à la connexion | nouveau `Set-Cookie` | ✔ |
+| S4 | Identifiant d'avant la connexion, réutilisé | aucun accès | ✔ |
+| S5 | **Déconnexion** : identifiant régénéré | avant `367krdp80k…`, après `qn4cso70vc…` | ✔ |
+| S6 | Ancien identifiant après déconnexion | aucun accès | ✔ |
+| S7 | En-tête du cookie | `Set-Cookie: PHPSESSID=…; path=/; HttpOnly` | ✔ |
+| S8 | **Un utilisateur au cookie périmé peut-il se connecter ?** | oui, et il reste connecté | ✔ |
+
+S8 est le contrôle qui compte autant que les autres : une protection qui
+empêcherait les utilisateurs légitimes de se connecter serait pire que la
+faille.
+
+### 9.32 Phase 7 — non-régression complète (vérifiée)
+
+| Parcours visiteur | Résultat |
+|-------------------|----------|
+| Connexion | ✔ |
+| Saisie des quantités | ✔ |
+| Ajout d'un frais hors forfait avec justificatif | ✔ |
+| Suppression d'un frais | 302 ✔ |
+| Changement de véhicule | E56 en base ✔ |
+| Consultation et impression PDF | 200 / 200 ✔ |
+| Déconnexion puis réutilisation de l'ancien identifiant | aucun accès ✔ |
+
+| Parcours comptable | Résultat |
+|--------------------|----------|
+| Connexion, écran de validation, détail d'une fiche | 200 / 200 ✔ |
+| Archive ZIP du mois | 200 ✔ |
+| POST sans jeton CSRF | **403** — la protection de la phase 6 tient toujours ✔ |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -3911,6 +4145,70 @@ correction tient en une ligne). Et le cookie n'a **pas d'attribut `SameSite`**,
 qui serait une seconde barrière indépendante des jetons — Symfony 2.8 est
 antérieur à cette option.
 
+### Questions sur la fixation de session
+
+**Q71. Qu'est-ce que la fixation de session ?**
+L'attaquant **impose** à la victime un identifiant de session qu'il connaît —
+par une URL piégée, un sous-domaine, ou du JavaScript. La victime se connecte
+normalement ; si l'identifiant ne change pas à ce moment-là, l'attaquant
+possède désormais l'identifiant d'une session **authentifiée**. Il n'a jamais
+eu besoin du mot de passe. Démontré sur ce projet avant correction : l'attaquant
+obtenait « bonjour David Andre » et l'accès complet aux fiches de frais.
+
+**Q72. En quoi est-ce différent du vol de session ?**
+Dans le vol, l'attaquant **dérobe** un identifiant existant — il faut qu'il
+mette la main dessus. Dans la fixation, il **choisit** l'identifiant à l'avance
+et attend simplement que la victime se connecte. C'est plus simple pour lui, et
+c'est pour cela que la parade doit être côté serveur.
+
+**Q73. Comment l'as-tu corrigée ?**
+Par deux barrières. En amont, `use_strict_mode: true` : PHP refuse d'adopter un
+identifiant qu'il n'a pas émis lui-même, donc l'attaquant ne peut plus le
+choisir. En aval, `$session->migrate(true)` à la connexion : l'identifiant est
+régénéré au moment précis où la session devient authentifiée, et l'ancien
+enregistrement est détruit. Chacune suffirait ; les deux ensemble font une
+défense en profondeur.
+
+**Q74. Pourquoi `migrate(true)` et pas `migrate()` ?**
+L'argument `true` détruit l'ancien enregistrement de session. Sans lui,
+l'identifiant connu de l'attaquant continuerait de désigner une session
+valide — vide, mais réutilisable pour une nouvelle tentative.
+
+**Q75. Pourquoi l'appeler avant d'écrire les informations de connexion ?**
+Pour qu'à aucun instant une session contenant des informations d'utilisateur
+authentifié n'existe sous l'ancien identifiant. L'ordre inverse fonctionnerait —
+`migrate()` conserve les données — mais laisserait une fenêtre de quelques
+instructions pendant laquelle la session authentifiée porterait encore
+l'identifiant que l'attaquant connaît.
+
+**Q76. Tu as aussi changé la déconnexion. Pourquoi ?**
+`clear()` vidait les données mais **conservait l'identifiant**, qui restait donc
+valable. `invalidate()` vide *et* régénère. Le cas concret est le poste
+partagé : quelqu'un ayant relevé l'identifiant ne peut plus s'en servir après
+la déconnexion. C'est une modification du code du prédécesseur, que je signale
+comme telle.
+
+**Q77. Comment sais-tu que ta correction fonctionne ?**
+Parce que j'ai démontré la faille **avant** de corriger, et rejoué exactement
+le même scénario **après**. Avant : « bonjour David Andre », HTTP 200 sur les
+données. Après : aucun accès, ni avec l'identifiant imposé, ni avec celui
+d'avant la connexion. Sans la démonstration préalable, je ne pourrais pas
+prouver que la ligne ajoutée sert à quelque chose.
+
+**Q78. Un piège dans lequel tu es tombé en testant ?**
+Oui. J'ai rejoué le test d'après-correction avec **le même identifiant** que la
+démonstration. Or cet identifiant désignait alors une session existante et
+authentifiée : `use_strict_mode` l'a accepté — c'est son principe, il ne rejette
+que les identifiants inconnus — et l'attaque a semblé réussir encore. Un test
+de sécurité qui réutilise l'état du test précédent ne mesure pas le code, il
+mesure l'historique.
+
+**Q79. Reste-t-il quelque chose à faire sur les sessions ?**
+Deux réglages de déploiement : `cookie_secure` à `true` en production (avec
+HTTPS), sinon le cookie circule en clair ; et une durée de vie de session, non
+fixée aujourd'hui. `cookie_httponly` est déjà actif : le cookie n'est pas
+lisible par JavaScript, donc une faille XSS ne permet pas de le voler.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -3964,6 +4262,10 @@ antérieur à cette option.
 | **Politique de même origine** | Règle du navigateur qui empêche un site de lire le contenu des pages d'un autre site. C'est elle qui rend le jeton inaccessible à l'attaquant. |
 | **Fixation de session** | Attaque consistant à imposer à la victime un identifiant de session connu de l'attaquant, avant qu'elle se connecte. Se contre en régénérant la session à la connexion. |
 | **SameSite** | Attribut de cookie demandant au navigateur de ne pas l'envoyer lors d'une requête venue d'un autre site. Seconde barrière contre le CSRF, indépendante des jetons. |
+| **`use_strict_mode` (PHP)** | Réglage qui fait refuser par PHP tout identifiant de session qu'il n'a pas émis lui-même. Barrière amont contre la fixation de session. |
+| **`migrate()` / `invalidate()`** | `migrate()` remplace l'identifiant de session en conservant les données ; `invalidate()` vide les données *et* remplace l'identifiant. |
+| **HttpOnly** | Attribut de cookie interdisant sa lecture par JavaScript. Empêche une faille XSS de déboucher sur un vol de session. |
+| **Défense en profondeur** (rappel) | Ici : `use_strict_mode` côté serveur *et* `migrate()` côté application. La seconde tient si la première est désactivée par l'hébergeur. |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |

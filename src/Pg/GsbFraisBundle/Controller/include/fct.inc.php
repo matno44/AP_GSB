@@ -45,6 +45,17 @@ function connecter($session, $id,$nom,$prenom){
  * @param $role
  */
 function connecterAvecRole($session, $id, $nom, $prenom, $role){
+    // FIXATION DE SESSION. Avant cette ligne, l'identifiant de session ne
+    // changeait pas à la connexion : un attaquant ayant réussi à imposer un
+    // identifiant au navigateur de la victime AVANT qu'elle se connecte se
+    // retrouvait, après coup, connecté à sa place — il connaissait
+    // l'identifiant d'une session devenue authentifiée.
+    // migrate() produit un nouvel identifiant en conservant les données ;
+    // l'argument true détruit en plus l'ancien enregistrement, pour que
+    // l'identifiant connu de l'attaquant ne désigne plus rien.
+    // À faire AVANT d'écrire les infos de connexion, pour qu'aucune donnée
+    // d'utilisateur authentifié n'existe un instant sous l'ancien identifiant.
+    $session->migrate(true);
     $session->set('id',$id);
     $session->set('nom',$nom);
     $session->set('prenom',$prenom);
@@ -137,7 +148,11 @@ function totalDesLignes($lesLignes, $cle){
  * Détruit la session active
  */
 function deconnecter($session){
-	$session->clear();
+    // invalidate() plutôt que clear() : clear() vide les données mais CONSERVE
+    // l'identifiant de session, qui reste donc valable après la déconnexion.
+    // invalidate() vide ET régénère l'identifiant, de sorte que l'ancien ne
+    // désigne plus rien — utile sur un poste partagé.
+    $session->invalidate();
 }
 /**
  * Transforme une date au format français jj/mm/aaaa vers le format anglais aaaa-mm-jj
