@@ -1,0 +1,5 @@
+# Les justificatifs téléversés ne sont pas versionnés : ce sont des données
+# d'utilisateurs, pas du code. Seul ce fichier est suivi, pour que le dossier
+# existe après un clone.
+*
+!.gitignore

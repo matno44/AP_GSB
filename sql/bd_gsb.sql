@@ -9,7 +9,8 @@
 --
 -- Ce fichier est tenu à jour avec les migrations du dossier sql/ : il doit
 -- toujours produire le MÊME schéma qu'une base créée à l'origine puis migrée.
--- Migrations intégrées ici : 001 (puissance fiscale du véhicule).
+-- Migrations intégrées ici : 001 (puissance fiscale du véhicule),
+--                            002 (justificatifs des frais hors forfait).
 -- ---------------------------------------------------------------------------
 
 DROP DATABASE IF EXISTS bd_gsb;
@@ -105,7 +106,15 @@ CREATE TABLE lignefraishorsforfait (
     libelle    VARCHAR(100)   NOT NULL,
     date       DATE           NOT NULL,
     montant    DECIMAL(10, 2) NOT NULL,
+    -- Justificatif (migration 002). Les trois colonnes sont NULL : le frais
+    -- peut exister sans facture, le visiteur pouvant la joindre plus tard.
+    -- nomFichier est le nom RÉEL sur le disque, généré aléatoirement ;
+    -- nomOriginal est le nom affiché, jamais utilisé comme chemin.
+    nomFichier  VARCHAR(64)   DEFAULT NULL,
+    nomOriginal VARCHAR(255)  DEFAULT NULL,
+    typeMime    VARCHAR(100)  DEFAULT NULL,
     PRIMARY KEY (id),
+    UNIQUE KEY uk_lhf_nomfichier (nomFichier),
     KEY fk_lhf_fichefrais (idVisiteur, mois),
     CONSTRAINT fk_lhf_fichefrais FOREIGN KEY (idVisiteur, mois) REFERENCES fichefrais (idVisiteur, mois) ON DELETE CASCADE
 ) ENGINE=InnoDB;
@@ -154,11 +163,14 @@ INSERT INTO visiteur (id, nom, prenom, login, mdp, adresse, cp, ville, dateEmbau
 -- Le mois courant est créé automatiquement par l'application à la
 -- première visite de la page « Saisie fiche de frais ».
 -- ---------------------------------------------------------------------------
+-- nbJustificatifs vaut 0 : ce compteur désigne le nombre de lignes hors
+-- forfait accompagnées d'un justificatif TÉLÉVERSÉ (migration 002), et le jeu
+-- de démonstration n'en contient aucun.
 INSERT INTO fichefrais (idVisiteur, mois, nbJustificatifs, montantValide, dateModif, idEtat) VALUES
-    ('a17', '202606', 4, 1250.40, '2026-07-05', 'RB'),
-    ('a17', '202607', 2,  842.00, '2026-08-04', 'VA'),
-    ('a17', '202608', 3,    0.00, '2026-09-02', 'CL'),
-    ('a55', '202608', 1,    0.00, '2026-09-03', 'CL');
+    ('a17', '202606', 0, 1250.40, '2026-07-05', 'RB'),
+    ('a17', '202607', 0,  842.00, '2026-08-04', 'VA'),
+    ('a17', '202608', 0,    0.00, '2026-09-02', 'CL'),
+    ('a55', '202608', 0,    0.00, '2026-09-03', 'CL');
 
 -- Le montant unitaire est historisé sur la ligne (migration 001). Les fiches
 -- de démonstration sont antérieures au barème par véhicule : elles portent

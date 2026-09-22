@@ -200,3 +200,16 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     font-size: .85em;
     color: #55606a;
 }
+
+/* ------------------------------------------------------- justificatifs */
+
+.listeLegere .justificatif { width: 16em; }
+
+.formJustificatif {
+    margin: .35em 0 0;
+}
+
+.formJustificatif input[type="file"] {
+    max-width: 11em;
+    font-size: .8em;
+}

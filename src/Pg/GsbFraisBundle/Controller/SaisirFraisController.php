@@ -47,8 +47,25 @@ class SaisirFraisController extends Controller
         $libelle = $request->request->get('libelle');
         $montant = $request->request->get('montant');
         $lesErreursHorsForfait = valideInfosFrais($dateFrais, $libelle, $montant);
+
+        // Le justificatif est facultatif à la création : le cahier des charges
+        // laisse au visiteur tout le mois pour fournir sa facture. On ne le
+        // contrôle donc que si un fichier a effectivement été choisi.
+        $stockage = $this->get('pg_gsb_frais.justificatifs');
+        $fichier = $request->files->get('justificatif');
+        if ($fichier !== null) {
+            $lesErreursHorsForfait = array_merge($lesErreursHorsForfait,
+                $stockage->valider($fichier));
+        }
+
         if (count($lesErreursHorsForfait) == 0) {
-            $pdo->creeNouveauFraisHorsForfait($idVisiteur, $mois, $libelle, $dateFrais, $montant);
+            $idFrais = $pdo->creeNouveauFraisHorsForfait($idVisiteur, $mois, $libelle, $dateFrais, $montant);
+            if ($fichier !== null) {
+                $nomOriginal = $stockage->assainirNom($fichier->getClientOriginalName());
+                $typeMime = $fichier->getMimeType();
+                $pdo->majJustificatifFrais($idFrais, $stockage->enregistrer($fichier),
+                    $nomOriginal, $typeMime);
+            }
         }
 
         return $this->rendreSaisie($pdo, $idVisiteur, $mois, array(), $lesErreursHorsForfait);
@@ -68,7 +85,17 @@ class SaisirFraisController extends Controller
         if (!$pdo->estValideSuppressionFrais($idVisiteur, $mois, $id)) {
             throw $this->createNotFoundException('Frais hors forfait introuvable');
         }
+        // Le justificatif éventuel doit disparaître avec la ligne, sinon des
+        // fichiers orphelins s'accumulent sur le disque sans que rien ne les
+        // référence. On lit son nom AVANT la suppression en base.
+        $laLigne = $pdo->getLigneFraisHorsForfait($id);
         $pdo->supprimerFraisHorsForfait($id);
+        if (is_array($laLigne) && $laLigne['nomFichier'] !== null) {
+            $this->get('pg_gsb_frais.justificatifs')->supprimer($laLigne['nomFichier']);
+        }
+        // La ligne n'existe plus : le compteur est recalculé à partir du
+        // couple visiteur/mois et non à partir de l'identifiant du frais.
+        $pdo->recalculerNbJustificatifs($idVisiteur, $mois);
 
         return $this->redirect($this->generateUrl('pg_gsb_frais_saisirfrais'));
     }
@@ -81,10 +108,19 @@ class SaisirFraisController extends Controller
         $lesFraisForfait = $pdo->getLesFraisForfait($idVisiteur, $mois);
         $lesFraisHorsForfait = $pdo->getLesFraisHorsForfait($idVisiteur, $mois);
 
+        // JustificatifController::joindreAction() redirige vers cette page :
+        // ses messages d'erreur transitent par le flash bag, qui survit à une
+        // redirection et se vide à la première lecture.
+        $session = $this->get('request_stack')->getCurrentRequest()->getSession();
+        $erreursHorsForfait = array_merge($erreursHorsForfait, getLesErreurs($session));
+
         return $this->render('PgGsbFraisBundle:SaisirFrais:saisirtouslesfrais.html.twig',
             array('lesfraisforfait' => $lesFraisForfait,
                 'lesfraishorsforfait' => $lesFraisHorsForfait,
                 'nummois' => substr($mois, 4, 2), 'numannee' => substr($mois, 0, 4),
+                'nbjustificatifs' => $pdo->getNbjustificatifs($idVisiteur, $mois),
+                'extensions' => $this->get('pg_gsb_frais.justificatifs')->getExtensionsAutorisees(),
+                'taillemax' => $this->get('pg_gsb_frais.justificatifs')->getTailleMaxEnMo(),
                 'leserreursforfait' => $erreursForfait,
                 'leserreurshorsforfait' => $erreursHorsForfait));
     }

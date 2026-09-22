@@ -291,6 +291,11 @@ class PdoGsb{
                 $stmt->bindParam(':date', $dateAng);
                 $stmt->bindParam(':montant', $montant);
                 $stmt->execute();
+                // Ajout phase 2 : on retourne l'identifiant créé, pour pouvoir
+                // rattacher aussitôt le justificatif à la ligne. lastInsertId()
+                // est propre à la connexion en cours : aucun risque de récupérer
+                // l'identifiant inséré par un autre utilisateur au même instant.
+                return PdoGsb::$monPdo->lastInsertId();
         }
 /**
  * Supprime le frais hors forfait dont l'id est passé en argument
@@ -564,5 +569,116 @@ class PdoGsb{
                         PdoGsb::$monPdo->rollBack();
                         throw $e;
                 }
+        }
+
+/* =========================================================================
+ * Justificatifs des frais hors forfait (phase 2)
+ * ========================================================================= */
+
+/**
+ * Retourne une ligne de frais hors forfait avec son justificatif
+ *
+ * Renvoie aussi idVisiteur et mois : c'est ce qui permet au contrôleur de
+ * vérifier À QUI appartient le frais avant de servir le fichier.
+ *
+ * @param $idFrais
+ * @return un tableau associatif, ou false si la ligne n'existe pas
+*/
+        public function getLigneFraisHorsForfait($idFrais){
+                $req = "select lignefraishorsforfait.id as id,
+                lignefraishorsforfait.idVisiteur as idVisiteur,
+                lignefraishorsforfait.mois as mois,
+                lignefraishorsforfait.libelle as libelle,
+                lignefraishorsforfait.nomFichier as nomFichier,
+                lignefraishorsforfait.nomOriginal as nomOriginal,
+                lignefraishorsforfait.typeMime as typeMime
+                from lignefraishorsforfait where lignefraishorsforfait.id = :idFrais";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idFrais', $idFrais);
+                $stmt->execute();
+                return $stmt->fetch();
+        }
+/**
+ * Rattache un justificatif à une ligne de frais hors forfait
+ *
+ * Les deux écritures -la ligne, puis le compteur de la fiche- forment un
+ * tout : si la seconde échouait, la fiche afficherait un nombre de
+ * justificatifs faux. D'où la transaction.
+ *
+ * @param $idFrais
+ * @param $nomFichier le nom généré sur le disque
+ * @param $nomOriginal le nom d'origine, assaini
+ * @param $typeMime
+*/
+        public function majJustificatifFrais($idFrais, $nomFichier, $nomOriginal, $typeMime){
+                PdoGsb::$monPdo->beginTransaction();
+                try{
+                        $req = "update lignefraishorsforfait
+                        set nomFichier = :nomFichier, nomOriginal = :nomOriginal,
+                            typeMime = :typeMime
+                        where lignefraishorsforfait.id = :idFrais";
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':nomFichier', $nomFichier);
+                        $stmt->bindParam(':nomOriginal', $nomOriginal);
+                        $stmt->bindParam(':typeMime', $typeMime);
+                        $stmt->bindParam(':idFrais', $idFrais);
+                        $stmt->execute();
+
+                        $this->recalculerNbJustificatifsDuFrais($idFrais);
+                        PdoGsb::$monPdo->commit();
+                }
+                catch(\Exception $e){
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
+        }
+/**
+ * Recalcule le nombre de justificatifs de la fiche à laquelle appartient un frais
+ *
+ * Le compteur est REcalculé à partir des lignes réellement pourvues d'un
+ * fichier, et non incrémenté. Un compteur incrémenté dérive : il suffit
+ * d'une erreur, d'un double clic ou d'une suppression non répercutée pour
+ * qu'il devienne faux, sans moyen de s'en apercevoir.
+ *
+ * Une seule instruction SQL : la sous-requête compte et l'UPDATE écrit dans
+ * la foulée, sans aller-retour lecture puis écriture.
+ *
+ * @param $idFrais
+*/
+        public function recalculerNbJustificatifsDuFrais($idFrais){
+                $req = "update fichefrais
+                inner join lignefraishorsforfait on lignefraishorsforfait.idVisiteur = fichefrais.idVisiteur
+                                                and lignefraishorsforfait.mois = fichefrais.mois
+                set fichefrais.nbJustificatifs = (
+                        select count(*) from lignefraishorsforfait lhf
+                        where lhf.idVisiteur = fichefrais.idVisiteur
+                        and lhf.mois = fichefrais.mois
+                        and lhf.nomFichier is not null)
+                where lignefraishorsforfait.id = :idFrais";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idFrais', $idFrais);
+                $stmt->execute();
+        }
+/**
+ * Recalcule le nombre de justificatifs d'une fiche désignée par visiteur et mois
+ *
+ * Même principe que ci-dessus, mais utilisable quand la ligne de frais
+ * n'existe plus -cas de la suppression d'un frais hors forfait.
+ *
+ * @param $idVisiteur
+ * @param $mois sous la forme aaaamm
+*/
+        public function recalculerNbJustificatifs($idVisiteur, $mois){
+                $req = "update fichefrais
+                set nbJustificatifs = (
+                        select count(*) from lignefraishorsforfait
+                        where lignefraishorsforfait.idVisiteur = :idVisiteur
+                        and lignefraishorsforfait.mois = :mois
+                        and lignefraishorsforfait.nomFichier is not null)
+                where fichefrais.idVisiteur = :idVisiteur and fichefrais.mois = :mois";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->execute();
         }
 }

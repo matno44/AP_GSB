@@ -1,10 +1,11 @@
 <table class="listeLegere">
-  	   <caption>Descriptif des éléments hors forfait -{{nbjustificatifs}} justificatifs reçus -
+  	   <caption>Descriptif des éléments hors forfait &ndash; {{nbjustificatifs}} justificatif(s) pris en compte dans le remboursement &ndash;
        </caption>
              <tr>
                 <th class="date">Date</th>
                 <th class="libelle">Libellé</th>
                 <th class='montant'>Montant</th>                
+                <th class="justificatif">Justificatif</th>
              </tr>
          {% for unFrais in  lesfraishorsforfait %}
 		{% set date = unFrais.date%}
@@ -14,6 +15,13 @@
                     <td>{{date}}</td>
                     <td>{{libelle}}</td>
                     <td>{{montant}}</td>
+                    <td>
+                        {% if unFrais.nomFichier %}
+                            <a href="{{path('pg_gsb_frais_consulterjustificatif',{'id' : unFrais.id})}}" target="_blank">{{ unFrais.nomOriginal }}</a>
+                        {% else %}
+                            <em>aucun</em>
+                        {% endif %}
+                    </td>
                 </tr>
            {% endfor %}  
     </table>

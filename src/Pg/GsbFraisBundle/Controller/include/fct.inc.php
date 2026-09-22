@@ -33,6 +33,21 @@ function connecter($session, $id,$nom,$prenom){
     $session->set('prenom',$prenom);
 }
 /**
+ * Indique si l'utilisateur connecté est un comptable
+
+ * Le rôle est posé en session à la connexion. Aujourd'hui aucun compte
+ * comptable n'existe -il sera créé en phase 5- : cette fonction renvoie donc
+ * faux pour tout le monde. Elle est écrite dès maintenant parce que le
+ * contrôle d'accès aux justificatifs en a besoin : le jour où le compte
+ * comptable existera, la consultation des pièces jointes fonctionnera sans
+ * qu'une ligne de JustificatifController soit modifiée.
+
+ * @return vrai ou faux
+ */
+function estComptable($session){
+    return $session->get('role') === 'comptable';
+}
+/**
  * Détruit la session active
  */
 function deconnecter($session){

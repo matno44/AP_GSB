@@ -44,6 +44,7 @@ mysql -u root bd_gsb < sql/001_puissance_fiscale_vehicule.sql
 | Migration | Objet |
 |-----------|-------|
 | `001_puissance_fiscale_vehicule.sql` | barème kilométrique par véhicule, rattachement du visiteur, historisation du montant unitaire |
+| `002_justificatifs.sql` | pièces jointes des frais hors forfait, remise à zéro du compteur `nbJustificatifs` |
 
 Les paramètres de connexion sont dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml` :
@@ -120,6 +121,8 @@ Fonctionnalités
 | `pg_gsb_frais_supprimerfraishorsforfait` | `/supprimerfraishorsforfait/{id}` | suppression d'un frais hors forfait |
 | `pg_gsb_frais_monvehicule` | `/monvehicule` | déclaration du véhicule du visiteur |
 | `pg_gsb_frais_validermonvehicule` | `/validermonvehicule` | enregistrement du véhicule (POST) |
+| `pg_gsb_frais_joindrejustificatif` | `/joindrejustificatif/{id}` | dépôt d'un justificatif sur une ligne hors forfait (POST) |
+| `pg_gsb_frais_consulterjustificatif` | `/justificatif/{id}` | consultation d'un justificatif |
 
 > Le nom `pg_gsb_frais_validerfraishorsforfais` comporte une faute de frappe
 > d'origine (`…forfai**s**`). Elle est conservée telle quelle : les templates
@@ -132,6 +135,25 @@ Le tarif dépend du véhicule du visiteur (table `typevehicule`, de 0,52 à
 **figé sur chaque ligne de frais** (`lignefraisforfait.montantUnitaire`) : un
 changement de barème ne recalcule jamais une fiche déjà clôturée. Un visiteur
 qui n'a pas déclaré de véhicule est remboursé au tarif historique de 0,62 €/km.
+
+### Justificatifs
+
+Un frais hors forfait n'est remboursé que sur présentation de la facture. Le
+visiteur peut joindre un fichier (**pdf, jpg, jpeg, png**, 2 Mo maximum) à
+chaque ligne hors forfait, au moment de la saisie ou plus tard.
+
+Les fichiers sont stockés dans **`app/justificatifs/`**, donc en dehors de
+`web/` : ils ne sont jamais servis directement par le serveur web. Chaque
+fichier reçoit un nom généré aléatoirement (32 caractères hexadécimaux) ; le
+nom d'origine n'est conservé que pour l'affichage. La consultation passe
+obligatoirement par `/justificatif/{id}`, qui vérifie côté serveur que le
+demandeur est le propriétaire du frais (ou un comptable, à partir de la
+phase 5). Ce dossier n'est pas versionné et **n'est pas inclus dans un
+`mysqldump`** : une sauvegarde complète doit emporter la base *et* ce dossier.
+
+Pour accepter des fichiers plus volumineux, modifier `upload_max_filesize` et
+`post_max_size` dans `php.ini`, **puis** `justificatifs.taille_max` dans
+`src/Pg/GsbFraisBundle/Resources/config/services.yml`.
 
 La fiche du mois en cours est créée automatiquement à la première visite de
 `/saisirfrais`, et la fiche du mois précédent passe alors de l'état `CR`

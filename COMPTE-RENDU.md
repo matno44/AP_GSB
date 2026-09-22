@@ -7,7 +7,7 @@ définie au § 11 (glossaire).
 |-------|----------|------|
 | 0 | Audit du code existant | **terminée** |
 | 1 | Puissance fiscale du véhicule | **terminée** |
-| 2 | Upload des justificatifs | à faire |
+| 2 | Upload des justificatifs | **terminée** |
 | 3 | Génération PDF des fiches | à faire |
 | 4 | Maquette HTML partie comptable | à faire |
 | 5 | Cas d'utilisation « Valider fiche de frais » | à faire |
@@ -67,6 +67,23 @@ définie au § 11 (glossaire).
 | Affichage en consultation | `Resources/views/ListeFrais/listefraisforfait.html.twig` *(modifié)* | deux lignes ajoutées au tableau : montant unitaire appliqué, et total de la ligne |
 | Affichage en saisie | `Resources/views/SaisirFrais/saisirfraisforfait.html.twig` *(modifié)* | le montant unitaire figure en face de chaque libellé, avec un lien vers « Mon véhicule » |
 | Style | `Resources/public/styles/styles.css` *(modifié)* | classe `.legendeTableau` pour les légendes sous tableau |
+
+### Phase 2 — Upload des justificatifs
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration du schéma | `sql/002_justificatifs.sql` *(créé)* | ajoute `nomFichier`, `nomOriginal`, `typeMime` à `lignefraishorsforfait` ; remet `fichefrais.nbJustificatifs` en accord avec la réalité |
+| Synchronisation | `sql/bd_gsb.sql` *(modifié)* | mêmes colonnes, et compteurs du jeu de démonstration remis à 0 |
+| Service de stockage | `services/StockageJustificatifs.php` *(créé)* | validation (extension, type réel, taille), nom généré, écriture, suppression, assainissement du nom affiché |
+| Déclaration du service | `Resources/config/services.yml` *(modifié)* | `pg_gsb_frais.justificatifs` + paramètres `justificatifs.dossier` et `justificatifs.taille_max` |
+| Dossier de stockage | `app/justificatifs/` *(créé)* | hors de `web/` ; son `.gitignore` exclut les fichiers déposés mais conserve le dossier |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | `getLigneFraisHorsForfait`, `majJustificatifFrais`, `recalculerNbJustificatifsDuFrais`, `recalculerNbJustificatifs` ; `creeNouveauFraisHorsForfait` retourne désormais l'identifiant créé |
+| Dépôt et consultation | `Controller/JustificatifController.php` *(créé)* | `joindreAction` (POST) et `consulterAction`, avec contrôle d'accès côté serveur |
+| Rôle comptable | `Controller/include/fct.inc.php` *(modifié)* | `estComptable($session)` — la règle d'accès est posée, l'acteur arrivera en phase 5 |
+| Saisie | `Controller/SaisirFraisController.php` *(modifié)* | justificatif facultatif à la création ; suppression du fichier et recalcul du compteur quand un frais est supprimé ; remontée des messages du flash bag |
+| Routes | `Resources/config/routing.yml` *(modifié)* | `pg_gsb_frais_joindrejustificatif` (POST), `pg_gsb_frais_consulterjustificatif` |
+| Vues | `views/SaisirFrais/saisirfraishorsforfait.html.twig`, `views/ListeFrais/listefraishorsforfait.html.twig` *(modifiées)* | colonne « Justificatif », formulaire d'envoi par ligne, compteur dans la légende |
+| Style | `Resources/public/styles/styles.css` *(modifié)* | mise en forme des formulaires d'envoi |
 
 ---
 
@@ -348,6 +365,36 @@ Contenu de `typevehicule` :
 `fraisforfait.KM` **reste à 0,62 €** : cette ligne n'est plus le tarif de tout
 le monde, elle devient le **tarif de repli** appliqué à un visiteur qui n'a pas
 encore déclaré son véhicule. Aucune donnée n'a été détruite.
+
+### 3.5 Évolution du schéma en phase 2
+
+```
+ ┌──────────────────────────────────────────────────────┐
+ │              lignefraishorsforfait                   │
+ │  id, idVisiteur, mois, libelle, date, montant        │
+ │  nomFichier  VARCHAR(64)  NULL  UNIQUE  ← nom réel   │
+ │              sur le disque : 32 caractères tirés au  │
+ │              hasard + extension                      │
+ │  nomOriginal VARCHAR(255) NULL   ← nom affiché,      │
+ │              assaini, jamais utilisé comme chemin    │
+ │  typeMime    VARCHAR(100) NULL   ← type réel détecté │
+ └──────────────────────────────────────────────────────┘
+
+ fichefrais.nbJustificatifs — colonne qui existait déjà mais n'était
+ alimentée par personne (point B16). Elle signifie désormais :
+ « nombre de lignes hors forfait accompagnées d'un justificatif téléversé ».
+```
+
+**L'unicité sur `nomFichier`** n'est pas décorative : elle empêche qu'une erreur
+de code fasse pointer deux lignes de frais vers le même fichier, cas où
+supprimer l'une rendrait l'autre illisible.
+
+**Aucune table `justificatif` séparée.** Le cahier des charges parle d'une
+facture par dépense hors forfait : la relation est de 1 pour 1, les colonnes
+vont donc sur la ligne de frais. Une table séparée n'aurait de sens que pour
+plusieurs pièces par frais, ce qui n'est pas demandé (voir limite L9).
+
+---
 
 ## 4. Le cahier des charges du client (`ap-gsb-web.pdf`)
 
@@ -705,6 +752,135 @@ avant d'avoir décidé où il doit vivre.
   test avait été créée avec la collation par défaut du serveur). La base jetable
   a été supprimée ensuite ; `bd_gsb` n'a pas été touchée.
 
+### Phase 2
+
+### Décision 2.1 — Stocker hors de `web/` **et** générer un nom imprévisible
+
+- **Problème :** empêcher qu'un visiteur accède au justificatif d'un collègue.
+- **Le sujet propose l'un OU l'autre** (« stockage hors du dossier public **ou**
+  avec nom généré non devinable »). **J'ai fait les deux.**
+- **Pourquoi pas seulement le nom imprévisible :** un fichier dans `web/`
+  reste servi par le serveur web sans passer par l'application. Celui qui
+  obtient l'adresse — par un historique de navigateur, un copier-coller dans un
+  message, un journal de serveur mandataire — y accède pour toujours, même
+  après le départ du visiteur de l'entreprise. C'est de la **sécurité par
+  l'obscurité** : elle ne résiste pas à une fuite d'adresse.
+- **Pourquoi pas seulement hors de `web/` :** ce serait déjà suffisant, le
+  contrôle d'accès étant fait par le contrôleur. Le nom aléatoire est une
+  **défense en profondeur** : si une erreur de configuration exposait un jour
+  le dossier, les noms resteraient indevinables.
+- **Comment le nom est généré :** `bin2hex(random_bytes(16))`, soit 32
+  caractères hexadécimaux. `random_bytes()` est un générateur
+  **cryptographiquement sûr** ; `rand()` ou `uniqid()` ne le sont pas
+  (`uniqid()` est fondé sur l'horloge, donc partiellement prévisible).
+
+### Décision 2.2 — Vérifier le contenu du fichier, pas seulement son extension
+
+- **Problème :** un fichier nommé `facture.pdf` peut contenir n'importe quoi.
+- **Retenu :** deux contrôles qui doivent **tous les deux** passer — l'extension
+  doit figurer dans la liste autorisée, **et** le type MIME réel doit
+  correspondre à cette extension.
+- **Comment le type réel est obtenu :** `UploadedFile::getMimeType()` s'appuie
+  sur l'extension PHP `fileinfo`, qui **lit les premiers octets du fichier**.
+  Elle ne fait pas confiance à ce que le navigateur annonce — cette
+  déclaration est entièrement sous le contrôle de celui qui envoie.
+- **Vérifié en test (T7) :** un PDF renommé en `.png` est refusé avec
+  « Le contenu du fichier ne correspond pas à son extension .png ».
+
+### Décision 2.3 — Le nom d'origine n'est jamais un chemin
+
+- **Problème :** l'attaque classique du téléversement consiste à envoyer un
+  fichier nommé `../../app/config/parameters.yml` pour écrire, ou lire, hors du
+  dossier prévu (« traversée de répertoire »).
+- **Retenu :** le nom fourni par le navigateur ne sert **qu'à l'affichage**. Le
+  fichier est écrit sous le nom généré. Le nom d'origine est en plus assaini
+  (`preg_replace('/[^A-Za-z0-9._-]/', '_', …)` après `basename()`), puis
+  tronqué à 255 caractères.
+- **Double sécurité :** `StockageJustificatifs::chemin()` applique de nouveau
+  `basename()` avant de construire le chemin de lecture. Même si un nom
+  fantaisiste parvenait en base, il ne pourrait pas faire sortir le chemin du
+  dossier de stockage.
+
+### Décision 2.4 — Recalculer le compteur, ne jamais l'incrémenter
+
+- **Problème :** tenir à jour `fichefrais.nbJustificatifs`.
+- **Écarté :** `UPDATE … SET nbJustificatifs = nbJustificatifs + 1`. Un
+  compteur incrémenté **dérive** : un double clic, une erreur au milieu d'une
+  opération, une suppression non répercutée, et il devient faux — sans que rien
+  ne le signale. Or ce compteur est ce que le comptable lit pour décider d'un
+  remboursement.
+- **Retenu :** un `UPDATE` dont la valeur vient d'un `SELECT COUNT(*)` sur les
+  lignes réellement pourvues d'un fichier. Le compteur est donc **recalculé à
+  partir de la vérité**, en une seule instruction, à chaque dépôt et à chaque
+  suppression. Il ne peut pas diverger.
+- **Pourquoi je n'ai pas utilisé `majNbJustificatifs()` du prédécesseur :**
+  cette méthode reçoit le nombre **déjà calculé** par l'appelant. Il faudrait
+  donc lire puis écrire en deux temps, ce qui rouvre la porte à la dérive si
+  deux opérations se croisent. Je l'ai laissée intacte (règle : ne rien
+  supprimer) mais elle reste inutilisée.
+
+### Décision 2.5 — Répondre 404 et non 403 à une consultation interdite
+
+- **Problème :** quel code renvoyer à un visiteur qui demande le justificatif
+  d'un autre ?
+- **Retenu :** **404 « introuvable »**, le même que pour un identifiant qui
+  n'existe pas.
+- **Pourquoi :** un 403 « interdit » **confirmerait l'existence** du document.
+  En comparant 403 et 404, un curieux pourrait cartographier les frais de ses
+  collègues sans jamais ouvrir un fichier. Avec un 404 uniforme, il n'apprend
+  rien.
+
+### Décision 2.6 — Écrire `estComptable()` maintenant, sans compte comptable
+
+- **Problème :** le sujet exige que « le comptable puisse consulter la pièce
+  jointe », mais le comptable n'existe pas avant la phase 5.
+- **Retenu :** poser dès maintenant la **règle d'accès** —
+  `$estProprietaire || estComptable($session)` — avec une fonction qui renvoie
+  faux pour tout le monde tant qu'aucun rôle « comptable » n'est en session.
+- **Pourquoi :** le jour où la phase 5 créera le compte, la consultation
+  fonctionnera **sans qu'une ligne de `JustificatifController` soit modifiée**.
+  L'alternative — écrire le contrôle « propriétaire seulement » puis le
+  reprendre en phase 5 — obligerait à retoucher du code de sécurité déjà
+  testé, ce qui est exactement là où l'on introduit des failles.
+- **Je suis clair là-dessus :** la règle est livrée, **l'acteur ne l'est pas**.
+  Ce point est donc partiellement fait, et listé en limite L7.
+
+### Décision 2.7 — Le justificatif est facultatif à la saisie
+
+Le cahier des charges laisse au visiteur tout le mois pour compléter sa fiche,
+et le service comptable réceptionne les factures « au plus tard le 10 du mois
+suivant ». Imposer la facture au moment de la saisie du frais serait donc plus
+restrictif que le besoin réel. La ligne peut être créée seule, le justificatif
+joint ou remplacé plus tard.
+
+### Décision 2.8 — Plafond à 2 Mo, aligné sur `php.ini`
+
+- **Retenu :** `justificatifs.taille_max: 2097152` (2 Mo), soit exactement la
+  valeur de `upload_max_filesize` du poste.
+- **Pourquoi aligner :** au-delà de la limite de `php.ini`, PHP écarte le
+  fichier **avant** que l'application le voie ; annoncer 5 Mo dans l'interface
+  alors que PHP en refuse 3 produirait un message incompréhensible.
+- **Pour accepter des fichiers plus gros**, il faut modifier les **deux** :
+  `upload_max_filesize` et `post_max_size` dans `php.ini`, **puis**
+  `justificatifs.taille_max` dans `services.yml`. Une photo de facture prise au
+  téléphone dépasse souvent 2 Mo : **à toi de décider** si on relève la limite.
+
+### Décision 2.9 — Le disque doit suivre la base à la suppression
+
+- **Problème :** la donnée vit à deux endroits — une ligne en base et un fichier
+  sur le disque. La base sait propager une suppression (`ON DELETE CASCADE`) ;
+  le disque, non.
+- **Retenu :** dans `supprimerfraishorsforfaitAction()`, lire la ligne **avant**
+  de la supprimer pour mémoriser le nom du fichier, supprimer la ligne, effacer
+  le fichier, puis recalculer le compteur par (visiteur, mois).
+- **Ce qui serait arrivé sans cela :** rien de visible. Aucune erreur, aucun
+  écran cassé — simplement un dossier `app/justificatifs/` qui grossit
+  indéfiniment avec des factures que plus aucune ligne ne référence, et qui
+  contiennent des données personnelles. C'est le genre de défaut qu'on ne
+  découvre que des mois plus tard.
+- **Vérifié en test (T13) :** après suppression du frais, le fichier a disparu
+  du disque et le compteur est passé de 2 à 1.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -925,6 +1101,114 @@ template Twig — celui-ci se contente d'afficher une valeur déjà calculée.
 Le seul « parcours » restant est le `{% for %}` des templates, qui **affiche**
 une ligne par élément et n'exécute aucune requête : ce n'est pas un N+1.
 
+### Phase 2
+
+> **Aucune boucle nouvelle n'a été écrite en phase 2**, sauf une boucle de
+> recopie de messages d'erreur (§ 6.10). Tout le travail de comptage est fait
+> par le moteur SQL. Le détail ci-dessous explique pourquoi, à chaque fois, la
+> boucle PHP aurait été un mauvais choix.
+
+### 6.8 Le comptage des justificatifs — une agrégation SQL, pas un parcours
+
+*Fichier :* `PdoGsb::recalculerNbJustificatifs()` et
+`recalculerNbJustificatifsDuFrais()`
+
+Pseudo-code de l'intention :
+
+```
+POUR la fiche (visiteur, mois) :
+    n ← nombre de lignes hors forfait de cette fiche ayant un nomFichier
+    fichefrais.nbJustificatifs ← n
+```
+
+Écrit tel quel en PHP, cela donnerait : une requête pour lire les lignes, une
+boucle pour compter celles qui ont un fichier, puis une requête pour écrire le
+résultat. **Trois opérations et un aller-retour lecture/écriture.**
+
+Écrit en SQL, c'est une seule instruction :
+
+```sql
+update fichefrais
+   set nbJustificatifs = (
+       select count(*) from lignefraishorsforfait
+        where lignefraishorsforfait.idVisiteur = :idVisiteur
+          and lignefraishorsforfait.mois       = :mois
+          and lignefraishorsforfait.nomFichier is not null)
+ where fichefrais.idVisiteur = :idVisiteur and fichefrais.mois = :mois
+```
+
+- **Pourquoi c'est mieux qu'une boucle :** la lecture et l'écriture ont lieu
+  dans la **même instruction**, donc dans le même instant logique pour la base.
+  Avec lecture puis écriture séparées, un second dépôt de justificatif survenu
+  entre les deux serait écrasé par une valeur périmée.
+- **Cas limites gérés :** aucune ligne hors forfait → `COUNT(*)` vaut 0, pas
+  NULL, donc pas de division ni d'affectation NULL ; ligne supprimée → c'est la
+  variante par (visiteur, mois) qui est appelée, puisque l'identifiant du frais
+  n'existe plus.
+- **Coût :** **1 requête**, quel que soit le nombre de lignes de frais. Aucun
+  risque de N+1.
+
+### 6.9 Pourquoi deux variantes de la même méthode
+
+`recalculerNbJustificatifsDuFrais($idFrais)` retrouve la fiche **par jointure**
+depuis la ligne de frais ; `recalculerNbJustificatifs($idVisiteur, $mois)`
+désigne la fiche directement.
+
+La première est pratique après un dépôt (on n'a sous la main que
+l'identifiant du frais). La seconde est **indispensable** après une
+suppression : la ligne n'existe plus, la jointure ne trouverait rien et le
+compteur resterait figé à sa valeur d'avant. C'est un cas limite qui ne se voit
+pas à la lecture du code et qui se serait manifesté par un compteur faussement
+élevé après chaque suppression.
+
+### 6.10 La seule boucle de la phase 2
+
+*Fichier :* `JustificatifController::joindreAction()`
+
+```
+POUR CHAQUE message d'erreur de validation
+    l'ajouter au flash bag de la session
+```
+
+- **Ce qu'elle parcourt :** le tableau de messages retourné par
+  `StockageJustificatifs::valider()` (0 à 3 éléments).
+- **Pourquoi une boucle :** `ajouterErreur()`, la fonction du prédécesseur,
+  n'accepte qu'un message à la fois. Je ne la modifie pas.
+- **Pourquoi le flash bag et pas un simple tableau :** cette action **redirige**
+  vers la page de saisie. Un tableau passé au gabarit serait perdu, puisque la
+  redirection déclenche une nouvelle requête. Le flash bag survit à une
+  redirection **et se vide à la première lecture** — exactement le comportement
+  voulu pour un message ponctuel. (C'est aussi pourquoi il ne convenait pas
+  pour la connexion, cf. § 6.2.)
+- **Pourquoi rediriger plutôt que rendre la page directement :** sans
+  redirection, un rafraîchissement du navigateur réenverrait le fichier.
+- **Coût :** aucune requête SQL. Cas limite : tableau vide → la boucle ne
+  s'exécute pas, aucun message parasite.
+
+### 6.11 L'ordre des opérations lors d'un remplacement — un algorithme en soi
+
+*Fichier :* `JustificatifController::joindreAction()`
+
+L'ordre des quatre étapes n'est pas indifférent :
+
+```
+1. mémoriser le nom de l'ANCIEN fichier
+2. écrire le NOUVEAU fichier sur le disque
+3. enregistrer le nouveau nom en base (dans une transaction avec le compteur)
+4. SEULEMENT MAINTENANT, effacer l'ancien fichier du disque
+```
+
+- **Si l'on effaçait l'ancien en premier** et que l'écriture du nouveau
+  échouait (disque plein, fichier corrompu), le visiteur perdrait son
+  justificatif sans rien obtenir en échange. **Dans l'ordre retenu, le pire qui
+  puisse arriver est de conserver l'ancien.**
+- **Pourquoi la base et le disque sont dans cet ordre :** si l'écriture en base
+  échoue, il reste un fichier orphelin sur le disque — gênant mais sans
+  conséquence pour l'utilisateur. Si c'était l'inverse, la base référencerait un
+  fichier inexistant, et la consultation planterait.
+- La lecture/écriture en base est enveloppée dans une **transaction** :
+  la ligne de frais et le compteur de la fiche changent ensemble ou pas du tout.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -1088,6 +1372,62 @@ passé du premier coup (voir § 9).*
   `git diff --stat` après chaque modification — un diff disproportionné par
   rapport au travail réel est le signal d'alerte.
 
+### Phase 2
+
+### 7.9 Le jeu de démonstration annonçait des justificatifs inexistants
+- **Constat :** `fichefrais.nbJustificatifs` valait 4, 2, 3 et 1 dans le jeu de
+  données, alors qu'aucun fichier n'existait — et pour cause, la fonctionnalité
+  n'existait pas. Ces valeurs n'avaient jamais été calculées par du code
+  (point B16 de l'audit) : elles avaient été écrites à la main.
+- **Pourquoi c'est un problème :** une fois la phase 2 en place, l'écran aurait
+  affiché « 4 justificatif(s) pris en compte dans le remboursement » sur une
+  fiche n'en présentant aucun. Un compteur faux est pire qu'un compteur à zéro :
+  le comptable prendrait sa décision de remboursement sur une information
+  inventée.
+- **Correction :** la migration 002 se termine par un `UPDATE` qui recalcule le
+  compteur de **toutes** les fiches à partir des lignes réellement pourvues
+  d'un fichier — donc 0 partout aujourd'hui. Le jeu de démonstration de
+  `sql/bd_gsb.sql` a été aligné sur la même valeur.
+- **C'est une modification de données existantes**, signalée en gros dans le
+  script et non faite « en douce ». Alternative écartée : laisser les valeurs
+  d'origine, pour ne pas toucher aux données — mais conserver un chiffre faux
+  par respect de l'historique n'a aucun sens quand ce chiffre n'a jamais eu de
+  signification.
+
+### 7.10 Un commentaire qui annonçait l'inverse des données livrées
+- **Ce que je faisais :** synchroniser `sql/bd_gsb.sql` avec la migration 002.
+- **Ce que j'ai écrit :** un commentaire annonçant « nbJustificatifs vaut 0 :
+  ce compteur désigne le nombre de lignes accompagnées d'un justificatif
+  téléversé, et le jeu de démonstration n'en contient aucun »… **au-dessus d'un
+  `INSERT` qui insérait toujours 4, 2, 3 et 1.**
+- **Conséquence si je ne l'avais pas vu :** une base créée de zéro aurait
+  reproduit exactement le défaut que la migration 002 venait de corriger sur la
+  base existante. Les deux chemins d'installation auraient divergé.
+- **Comment je m'en suis aperçu :** en relisant la sortie de ma propre
+  vérification, qui affiche les lignes insérées. Le commentaire disait 0, les
+  données disaient 4.
+- **Correction :** les quatre valeurs passées à 0, puis re-création d'une base
+  jetable depuis `bd_gsb.sql` pour confirmer que le résultat correspond bien à
+  la base migrée.
+- **Pour ne pas le refaire :** un commentaire n'est pas une preuve. Le seul
+  contrôle qui vaille est de **rejouer le script et de regarder le résultat** —
+  c'est ce que fait la vérification de la décision 1.7, que j'ai réutilisée ici.
+
+### 7.11 Peu d'erreurs en phase 2 — et pourquoi je le dis
+Contrairement à la phase 1, cette phase n'a pas produit d'erreur d'exécution :
+les tests de téléversement, de contrôle d'accès et de suppression sont passés
+du premier coup. Je le signale plutôt que de gonfler cette section, mais je note
+les deux pièges que j'ai **évités par conception**, et qui auraient chacun
+produit un défaut silencieux :
+- **les fichiers orphelins** : supprimer une ligne de frais sans effacer son
+  fichier ne provoque aucune erreur visible ; le dossier grossit simplement
+  avec des factures que plus personne ne peut consulter. Traité par la
+  décision 2.9.
+- **`$this->getRequest()`** : cette méthode, omniprésente dans les exemples en
+  ligne, est **dépréciée depuis Symfony 2.4**. J'ai utilisé
+  `$this->get('request_stack')->getCurrentRequest()`. Sur un projet en 2.8, il
+  faut se méfier des exemples écrits pour les versions 2.0 à 2.3.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -1154,6 +1494,57 @@ ne rien détruire sans ton accord. Dis-le-moi si tu veux repartir de l'état
 initial — la sauvegarde `sauvegardes/bd_gsb_avant_phase1.sql` le permet, mais
 elle est **antérieure à la migration 001** : il faudrait la restaurer puis
 rejouer `sql/001_puissance_fiscale_vehicule.sql`.
+
+### ✅ B16 — LEVÉ en phase 2
+`fichefrais.nbJustificatifs` est désormais alimenté, et recalculé à partir des
+données réelles à chaque dépôt et à chaque suppression. Il est affiché dans la
+légende des tableaux hors forfait, en saisie comme en consultation.
+
+### Limites propres à la phase 2
+
+#### 🔴 L7 — Le comptable ne peut pas encore consulter les justificatifs
+La **règle d'accès** est écrite et en place : `consulterAction()` autorise le
+propriétaire du frais **ou** un comptable. Mais `estComptable()` renvoie faux
+pour tout le monde, puisqu'aucun compte comptable n'existe (point B3). **Le
+mécanisme est livré, l'acteur ne l'est pas.** La consultation côté comptable
+fonctionnera dès la phase 5, sans modification de `JustificatifController`.
+*Ce point du sujet est donc partiellement fait, et je ne le présente pas
+autrement.* Il n'est pas non plus testable en l'état : la branche « comptable »
+du contrôle d'accès sera exercée en phase 5.
+
+#### 🟠 L8 — Plafond de 2 Mo, sans doute insuffisant en pratique
+Une photo de facture prise au téléphone dépasse fréquemment 2 Mo. La limite
+vient de `upload_max_filesize` du poste ; la relever demande de modifier
+`php.ini` (`upload_max_filesize` **et** `post_max_size`) **puis**
+`justificatifs.taille_max` dans `services.yml`. **Décision à prendre** — je ne
+modifie pas la configuration PHP du poste sans ton accord.
+
+#### 🟠 L9 — Un seul justificatif par ligne de frais
+Une dépense justifiée par deux documents (facture + ticket) ne peut pas être
+couverte. Le cahier des charges parle d'« une facture » par dépense, la
+relation retenue est donc 1 pour 1. Passer à plusieurs pièces demanderait une
+table `justificatif` séparée — structure connue, mais non demandée.
+
+#### 🟡 L10 — Aucune protection CSRF sur les formulaires d'envoi
+Comme tous les formulaires de l'application (point B9), celui du justificatif
+n'a pas de jeton anti-CSRF. Un site malveillant pourrait théoriquement faire
+déposer un fichier par un visiteur connecté. L'impact reste limité — il faudrait
+connaître l'identifiant d'une ligne de frais appartenant à la victime — mais
+**c'est une dette technique réelle**, héritée du choix de ne pas utiliser le
+composant Form de Symfony.
+
+#### 🟡 L11 — Pas d'analyse antivirus des fichiers déposés
+Les fichiers sont contrôlés en extension, en type réel et en taille, mais leur
+contenu n'est pas analysé. Un PDF peut contenir du code malveillant qui ne
+s'exécutera qu'à l'ouverture, chez le comptable. Une analyse (ClamAV par
+exemple) serait la réponse en production ; c'est hors du périmètre de l'AP et
+cela ajouterait une dépendance système.
+
+#### 🟡 L12 — Les fichiers ne sont pas sauvegardés avec la base
+`mysqldump` sauvegarde la base, pas `app/justificatifs/`. Restaurer une
+sauvegarde sans le dossier laisserait des lignes référençant des fichiers
+absents (le contrôleur répond alors 404 avec un message explicite). Toute
+procédure de sauvegarde doit donc emporter **les deux**.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -1385,6 +1776,85 @@ Tous les scénarios de la phase 0 repassent après modification :
 | R6 | `/listefrais` sans session | Redirection 302 vers `/accueil` ✔ |
 | R7 | Suppression du frais d'un autre visiteur | HTTP 404 ✔ |
 
+### 9.9 Phase 2 — installation
+
+```bash
+cd "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet"
+mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_002.sql
+mysql -u root bd_gsb < sql/002_justificatifs.sql
+php app/console assets:install web
+php app/console cache:clear --env=dev
+```
+
+Le dossier `app/justificatifs/` est créé automatiquement au premier dépôt. Il
+doit être **accessible en écriture** par l'utilisateur qui fait tourner PHP.
+
+### 9.10 Phase 2 — scénarios de test
+
+Préparer quatre fichiers : une vraie facture PDF, une image PNG ou JPG, un
+fichier texte `note.txt`, et un PDF que l'on renomme en `.png`.
+Se connecter avec `dandre` / `oppg5`, aller dans « Saisie fiche de frais ».
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| T1 | Ajouter un frais hors forfait **sans** fichier | La ligne apparaît, colonne Justificatif : *aucun*, avec un bouton « Envoyer » |
+| T2 | Sur cette ligne, choisir le PDF et cliquer « Envoyer » | Le nom du fichier devient un lien, le bouton devient « Remplacer », et la légende du tableau passe à « 1 justificatif(s) pris en compte dans le remboursement » |
+| T3 | Cliquer sur le lien | Le PDF s'ouvre dans un nouvel onglet (il **ne se télécharge pas** : la réponse est envoyée en `inline`) |
+| T4 | Remplacer par l'image PNG | Le lien porte le nouveau nom ; **l'ancien fichier a disparu du disque** (`ls app/justificatifs/`) |
+| T5 | Créer un frais **avec** un justificatif en une seule fois | La ligne est créée avec son lien, le compteur passe à 2 |
+| T6 | Menu « Mes fiches de frais », mois en cours | Colonne Justificatif présente, mêmes liens, même compteur |
+| T7 | Supprimer un frais qui porte un justificatif | La ligne disparaît, **le fichier disparaît du disque**, le compteur redescend |
+
+### 9.11 Phase 2 — cas d'erreur (contrôles de validité)
+
+| # | Fichier envoyé | Message attendu |
+|---|----------------|-----------------|
+| T8 | `note.txt` | « Extension non autorisée : seuls les fichiers pdf, jpg, jpeg, png sont acceptés » |
+| T9 | Un PDF renommé en `.png` | « Le contenu du fichier ne correspond pas à son extension .png » |
+| T10 | Un fichier de 3 Mo | « Le transfert du fichier a échoué : The file … exceeds your upload_max_filesize ini directive » |
+
+**Après chacun de ces trois refus, vérifier que le justificatif précédent est
+toujours en place** (ligne inchangée en base, fichier toujours sur le disque).
+C'est le test de la décision 2.9 sur l'ordre des opérations.
+
+### 9.12 Phase 2 — contrôle d'accès (le plus important)
+
+Ces tests se font hors du navigateur, car il s'agit de vérifier ce qui se passe
+quand on ne se contente pas de cliquer sur les liens affichés.
+
+```bash
+# se connecter en tant que dandre et conserver sa session
+curl -s -o /dev/null -c ck_dandre.txt -d "login=dandre&mdp=oppg5" \
+     http://127.0.0.1:8000/validerconnexion
+# se connecter en tant que cbedos
+curl -s -o /dev/null -c ck_cbedos.txt -d "login=cbedos&mdp=gthe8" \
+     http://127.0.0.1:8000/validerconnexion
+```
+
+| # | Action | Attendu | Obtenu |
+|---|--------|---------|--------|
+| T11 | `curl -b ck_dandre.txt http://127.0.0.1:8000/justificatif/7` | 200, `Content-Type: application/pdf`, `Content-Disposition: inline; filename="facture.pdf"` | ✔ |
+| T12 | **`curl -b ck_cbedos.txt http://127.0.0.1:8000/justificatif/7`** | **404** — un visiteur ne voit pas le justificatif d'un autre | ✔ |
+| T13 | `curl http://127.0.0.1:8000/justificatif/7` (sans session) | 302 vers `/accueil` | ✔ |
+| T14 | `curl -b ck_cbedos.txt -F "justificatif=@f.pdf" http://127.0.0.1:8000/joindrejustificatif/7` | **404** — on ne joint pas un fichier au frais d'un autre | ✔ |
+| T15 | `curl -b ck_dandre.txt http://127.0.0.1:8000/justificatif/999999` | 404 — **le même code que T12**, donc rien n'est révélé sur l'existence du document | ✔ |
+
+**Vérification du stockage :** `ls app/justificatifs/` montre des noms du type
+`6a187e57e45151de7e6542b603764f63.png` — 32 caractères hexadécimaux. Le dossier
+est en dehors de `web/` : essayer `http://127.0.0.1:8000/justificatifs/…` ou
+`http://127.0.0.1:8000/app/justificatifs/…` donne **404**, le serveur web ne
+sert que `web/`.
+
+### 9.13 Phase 2 — non-régression (vérifiée)
+
+| # | Vérification | Résultat |
+|---|--------------|----------|
+| R2 | Saisie de quantités forfaitisées | Valeur enregistrée et réaffichée ✔ |
+| R3 | Quantité non numérique | Message d'erreur ✔ |
+| R5 | Frais daté de plus d'un an | Message d'erreur ✔ |
+| P1 | Tarif kilométrique du véhicule déclaré | 0.67 € affiché en saisie ✔ |
+| P1 | Fiche clôturée 202608 | Toujours à 0.62 € — **l'historisation de la phase 1 tient** ✔ |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -1590,6 +2060,78 @@ schémas avec `mysqldump --no-data` et `diff`. Aucune différence de structure.
 Sans cette vérification, un camarade qui installerait le projet de zéro
 obtiendrait une base subtilement différente de la mienne.
 
+### Questions sur la phase 2
+
+**Q22. Où sont stockés les justificatifs, et pourquoi pas dans `web/` ?**
+Dans `app/justificatifs/`, donc **hors de la racine web**. Un fichier placé
+dans `web/` est servi directement par le serveur, sans passer par
+l'application : n'importe qui connaissant son adresse y accéderait, sans
+contrôle. Hors de `web/`, le seul chemin possible est
+`JustificatifController::consulterAction()`, qui vérifie d'abord les droits.
+
+**Q23. Le nom aléatoire suffirait-il, sans sortir de `web/` ?**
+Non, et c'est une question de fond. Un nom indevinable est de la **sécurité par
+l'obscurité** : elle tient tant que l'adresse ne fuit pas — or une adresse
+fuit (historique de navigateur, copier-coller dans un message, journaux d'un
+serveur mandataire). Et une fois qu'elle a fui, il n'y a plus aucun contrôle
+possible. J'ai donc fait les deux : stockage hors de `web/` pour le contrôle
+réel, nom aléatoire comme défense supplémentaire.
+
+**Q24. Comment empêches-tu qu'on envoie un exécutable renommé en `.pdf` ?**
+Par un double contrôle. L'extension doit figurer dans la liste autorisée (pdf,
+jpg, jpeg, png), **et** le type MIME réel doit correspondre à cette extension.
+Ce type réel est obtenu par `getMimeType()`, qui s'appuie sur l'extension PHP
+`fileinfo` : elle lit **les premiers octets du fichier**, elle ne fait pas
+confiance à ce que le navigateur annonce — cette déclaration étant entièrement
+sous le contrôle de l'expéditeur. Testé : un PDF renommé en `.png` est refusé.
+
+**Q25. Que se passe-t-il si quelqu'un envoie un fichier nommé
+`../../app/config/parameters.yml` ?**
+Rien de dangereux. Le nom fourni ne sert **jamais** à construire un chemin : le
+fichier est écrit sous un nom généré aléatoirement. Le nom d'origine est
+seulement conservé pour l'affichage, après `basename()` et remplacement de tous
+les caractères autres que lettres, chiffres, point, tiret et souligné.
+`StockageJustificatifs::chemin()` réapplique `basename()` à la lecture : c'est
+une seconde barrière, au cas où un nom anormal parviendrait en base.
+
+**Q26. Pourquoi renvoyer 404 et non 403 quand l'accès est refusé ?**
+Parce qu'un 403 « interdit » **confirmerait que le document existe**. En
+comparant les réponses 403 et 404, un visiteur curieux pourrait cartographier
+les frais de ses collègues sans jamais ouvrir un seul fichier. Avec un 404
+uniforme — même code pour « ça n'existe pas » et pour « ce n'est pas à vous » —
+il n'apprend rien.
+
+**Q27. Comment est calculé le nombre de justificatifs affiché ?**
+Il n'est pas *calculé*, il est **recalculé** : `UPDATE fichefrais SET
+nbJustificatifs = (SELECT COUNT(*) …)`, en une seule instruction, à chaque
+dépôt et à chaque suppression. J'ai écarté l'incrémentation (`= nbJustificatifs
++ 1`) parce qu'un compteur incrémenté dérive : un double clic, une erreur en
+cours d'opération, une suppression non répercutée, et il devient faux sans que
+rien ne le signale. Or c'est sur ce chiffre que le comptable décide d'un
+remboursement.
+
+**Q28. Que se passe-t-il si le remplacement d'un justificatif échoue ?**
+Le visiteur garde l'ancien. L'ordre des opérations est délibéré : mémoriser le
+nom de l'ancien, écrire le nouveau, enregistrer en base, **et seulement ensuite**
+effacer l'ancien du disque. Si on effaçait d'abord et que l'écriture échouait,
+le visiteur perdrait sa facture sans rien obtenir en échange.
+
+**Q29. Et quand on supprime un frais hors forfait ?**
+La ligne est lue avant d'être supprimée pour mémoriser le nom du fichier, puis
+le fichier est effacé du disque et le compteur recalculé. Sans cela, on
+accumulerait des fichiers orphelins — des factures contenant des données
+personnelles, que plus aucune ligne ne référence. La base sait propager une
+suppression (`ON DELETE CASCADE`), pas le système de fichiers : dès qu'une
+donnée vit à deux endroits, chaque suppression doit être pensée deux fois.
+
+**Q30. Le comptable peut-il consulter les justificatifs ?**
+La **règle** est écrite : l'accès est accordé au propriétaire du frais **ou** à
+un comptable. Mais l'acteur n'existe pas encore — aucun compte comptable n'est
+créé avant la phase 5, donc `estComptable()` renvoie faux pour tout le monde.
+J'ai écrit la règle dès maintenant pour ne pas avoir à retoucher en phase 5 du
+code de sécurité déjà testé : c'est exactement là qu'on introduit des failles.
+**Ce point du sujet est donc partiellement livré**, et je le présente comme tel.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -1616,6 +2158,12 @@ obtiendrait une base subtilement différente de la mienne.
 | **COALESCE** | Fonction SQL qui renvoie son premier argument non NULL. Sert ici à appliquer un tarif de repli. |
 | **Échappement HTML** | Remplacement automatique par Twig des caractères `< > & ' "` par leur équivalent inoffensif (`&#039;`…), pour qu'une donnée saisie ne puisse pas être interprétée comme du code. Base de la protection contre les failles XSS. |
 | **XSS** | *Cross-Site Scripting* : injection de code JavaScript via une donnée saisie, exécutée dans le navigateur des autres utilisateurs. |
+| **Type MIME** | Étiquette normalisée décrivant la nature d'un fichier (`application/pdf`, `image/png`). Celui annoncé par le navigateur n'est pas fiable ; celui détecté par `fileinfo` à partir du contenu l'est. |
+| **Traversée de répertoire** | Attaque consistant à glisser `../` dans un nom de fichier pour atteindre un dossier situé hors de la zone prévue. |
+| **Sécurité par l'obscurité** | Protection qui repose uniquement sur le fait qu'une information est difficile à deviner. Elle s'effondre dès que cette information fuit ; elle ne remplace jamais un contrôle d'accès. |
+| **Défense en profondeur** | Superposition volontaire de plusieurs protections, pour qu'une seule faille ne suffise pas. |
+| **Fichier orphelin** | Fichier resté sur le disque alors que plus aucune donnée ne le référence. Invisible, mais il occupe de l'espace et peut contenir des données personnelles. |
+| **Flash bag** (complément) | Le message survit à une **redirection**, ce qui est indispensable quand l'action qui produit l'erreur n'est pas celle qui affiche la page. |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |
