@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Corrections prises en compte</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Comptable : bonjour Marie Valette</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Valider les fiches de frais</a></li>
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Imprimer les fiches du mois</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Fiche de frais de Christian Bedos — Août 2026</h2>
+
+  <div class="confirmation">
+    <strong>Les frais forfaitisés ont été actualisés.</strong>
+    Le kilométrage a été ramené de 1 240 à 860 km et le nombre de repas de 18 à 16.
+    La fiche reste à l'état « Clôturée » : elle n'est pas encore validée.
+  </div>
+
+  <div class="encadre">
+    <p>
+      État : <span class="etat etatCloturee">Clôturée</span>
+      depuis le 01/09/2026 &nbsp;·&nbsp;
+      <strong>2</strong> justificatif(s) reçu(s) &nbsp;·&nbsp;
+      Matricule : a55
+    </p>
+  </div>
+
+  <form>
+    <table class="listeLegere">
+      <caption>Frais forfaitisés — valeurs actualisées</caption>
+      <tr>
+        <th>Libellé</th>
+        <th class="montant">Quantité</th>
+        <th class="montant">Montant unitaire</th>
+        <th class="montant">Total</th>
+      </tr>
+      <tr>
+        <td>Forfait Etape</td>
+        <td class="nombre"><input type="text" value="2" size="5" /></td>
+        <td class="nombre">110.00 €</td>
+        <td class="nombre">220.00 €</td>
+      </tr>
+      <tr>
+        <td>Frais Kilométrique</td>
+        <td class="nombre"><input type="text" value="860" size="5" /></td>
+        <td class="nombre">0.58 €</td>
+        <td class="nombre">498.80 €</td>
+      </tr>
+      <tr>
+        <td>Nuitée Hôtel</td>
+        <td class="nombre"><input type="text" value="4" size="5" /></td>
+        <td class="nombre">80.00 €</td>
+        <td class="nombre">320.00 €</td>
+      </tr>
+      <tr>
+        <td>Repas Restaurant</td>
+        <td class="nombre"><input type="text" value="16" size="5" /></td>
+        <td class="nombre">25.00 €</td>
+        <td class="nombre">400.00 €</td>
+      </tr>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total des frais forfaitisés</td>
+          <td class="nombre">1 438.80 €</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="piedForm">
+      <p>
+        <a class="bouton" href="04-corrections-prises-en-compte.html">Enregistrer les corrections</a>
+      </p>
+    </div>
+  </form>
+</div>
+
+<div id="contenu">
+  <table class="listeLegere">
+    <caption>Frais hors forfait — 2 justificatif(s) pris en compte dans le remboursement</caption>
+    <tr>
+      <th class="date">Date</th>
+      <th>Libellé</th>
+      <th class="montant">Montant</th>
+      <th>Justificatif</th>
+      <th>&nbsp;</th>
+    </tr>
+    <tr>
+      <td>04/08/2026</td>
+      <td>Repas avec le Dr. Lemoine</td>
+      <td class="nombre">86.40 €</td>
+      <td><a href="#">facture_restaurant.pdf</a></td>
+      <td><a class="boutonRefus" href="04-corrections-prises-en-compte.html">Refuser</a></td>
+    </tr>
+    <tr>
+      <td>12/08/2026</td>
+      <td>Location salle — réunion régionale</td>
+      <td class="nombre">240.00 €</td>
+      <td><a href="#">facture_salle.pdf</a></td>
+      <td><a class="boutonRefus" href="04-corrections-prises-en-compte.html">Refuser</a></td>
+    </tr>
+    <tfoot>
+      <tr>
+        <td colspan="2">Total des frais hors forfait</td>
+        <td class="nombre">326.40 €</td>
+        <td colspan="2">&nbsp;</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="confirmation">
+    <strong>Le frais « Achat fleuriste » du 21/08 (64.90 €) a été refusé et supprimé.</strong>
+    Pensez à prévenir Christian Bedos de cette suppression : le système n'en
+    garde aucune trace et ne l'informe pas automatiquement.
+  </div>
+
+  <div class="encadre" style="margin-top:1.5em">
+    <p>
+      <strong>Total général de la fiche : 1 765.20 €</strong>
+      &nbsp;(1 438.80 € forfaitisés + 326.40 € hors forfait)
+    </p>
+    <p>
+      <a class="bouton" href="05-fiche-validee.html">Valider la fiche</a>
+      <a class="boutonSecondaire" href="02-choix-visiteur-mois.html">Revenir au choix du visiteur</a>
+    </p>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Étape 6 du scénario nominal :</strong> « Le système indique que la
+  modification a été prise en compte et affiche les informations actualisées ».
+  <ul>
+    <li>
+      <strong>Le message et les données actualisées sont sur le même écran.</strong>
+      Le cahier des charges demande les deux : un message de confirmation, et le
+      réaffichage des valeurs. Les totaux ont suivi la correction (1 709,20 €
+      → 1 438,80 €).
+    </li>
+    <li>
+      <strong>La fiche reste « Clôturée ».</strong> Corriger n'est pas valider :
+      le comptable peut enchaîner plusieurs corrections avant de trancher. Seul
+      le bouton « Valider la fiche » fait changer l'état.
+    </li>
+    <li>
+      <strong>La ligne refusée a disparu du tableau</strong> et le total hors
+      forfait a été recalculé. Un message rappelle au comptable qu'il doit
+      prévenir le visiteur lui-même.
+    </li>
+    <li>
+      <strong>Le compteur de justificatifs reste à 2</strong> : la ligne
+      supprimée n'en avait pas.
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider :</strong> le message de confirmation doit-il rappeler les
+    valeurs précédentes (« ramené de 1 240 à 860 km »), comme ici ? C'est utile
+    à l'écran, mais cela n'est conservé nulle part : le message disparaît au
+    rafraîchissement de la page.
+  </div>
+</div>
+</body>
+</html>

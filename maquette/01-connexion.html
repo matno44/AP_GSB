@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Connexion comptable</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="contenu" style="margin:1.5em">
+  <h2>Identification</h2>
+
+  <form>
+    <div class="corpsForm">
+      <p>
+        <label for="login">Login*</label>
+        <input id="login" type="text" name="login" size="30" value="mvalette" />
+      </p>
+      <p>
+        <label for="mdp">Mot de passe*</label>
+        <input id="mdp" type="password" name="mdp" size="30" value="secret" />
+      </p>
+    </div>
+    <div class="piedForm">
+      <p>
+        <a class="bouton" href="02-choix-visiteur-mois.html">Valider</a>
+        <a class="boutonSecondaire" href="01-connexion.html">Annuler</a>
+      </p>
+    </div>
+  </form>
+</div>
+
+<div class="annotation" style="margin:0 1.5em 1.5em">
+  <strong>Pré-condition du cas d'utilisation : « Utilisateur Comptable authentifié ».</strong>
+  <ul>
+    <li>
+      <strong>Un seul écran de connexion pour tout le monde.</strong> Le
+      comptable saisit ses identifiants dans le même formulaire que les
+      visiteurs ; c'est le compte qui détermine ce qu'il voit ensuite. Cela
+      évite une deuxième page de connexion à maintenir, et cela évite surtout
+      de révéler qui est comptable et qui ne l'est pas.
+    </li>
+    <li>
+      <strong>Ce sont les droits qui changent, pas la porte d'entrée.</strong>
+      Après connexion, un comptable arrive sur le menu ci-contre (validation des
+      fiches, impression du mois) ; un visiteur arrive sur son menu habituel
+      (saisie, consultation, véhicule).
+    </li>
+    <li>
+      <strong>Message d'erreur identique</strong> en cas de login inconnu ou de
+      mot de passe faux : « Erreur de login ou de mot de passe ». Distinguer les
+      deux cas indiquerait à un curieux quels comptes existent.
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider :</strong> le comptable se connecte-t-il bien par le même
+    formulaire que les visiteurs ?
+  </div>
+</div>
+</body>
+</html>

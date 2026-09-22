@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Choix du visiteur et du mois</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Comptable : bonjour Marie Valette</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Valider les fiches de frais</a></li>
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Imprimer les fiches du mois</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Valider les fiches de frais</h2>
+
+  <p>Choisissez le visiteur et le mois à traiter.</p>
+
+  <form>
+    <div class="corpsForm">
+      <fieldset>
+        <legend>Fiche à valider</legend>
+        <p>
+          <label for="lstVisiteur">Visiteur :</label>
+          <select id="lstVisiteur" name="lstVisiteur">
+            <option>Andre David</option>
+            <option selected>Bedos Christian</option>
+            <option>Bentot Pascal</option>
+            <option>Bioret Luc</option>
+            <option>Bunisset Francine</option>
+            <option>Cacheux Bernard</option>
+            <option>Charoze Catherine</option>
+            <option>Clepkens Christophe</option>
+            <option>Daburon François</option>
+          </select>
+        </p>
+        <p>
+          <label for="lstMois">Mois :</label>
+          <select id="lstMois" name="lstMois">
+            <option selected>08/2026</option>
+            <option>07/2026</option>
+            <option>06/2026</option>
+            <option>05/2026</option>
+          </select>
+        </p>
+      </fieldset>
+    </div>
+    <div class="piedForm">
+      <p>
+        <a class="bouton" href="03-detail-fiche.html">Valider</a>
+        <a class="boutonSecondaire" href="06-aucune-fiche.html">Voir le cas « aucune fiche »</a>
+      </p>
+    </div>
+  </form>
+</div>
+
+<div class="annotation">
+  <strong>Étapes 1 à 3 du scénario nominal :</strong> « L'utilisateur comptable
+  demande à valider les fiches de frais » · « Le système propose de choisir le
+  visiteur et le mois concernés » · « L'utilisateur sélectionne les informations
+  et valide ».
+  <ul>
+    <li>
+      <strong>Deux listes déroulantes plutôt qu'une liste de fiches à traiter.</strong>
+      C'est ce que décrit le cas d'utilisation. Avec 9 visiteurs, le choix est
+      simple ; si l'effectif augmentait, une liste des fiches restant à valider
+      serait plus efficace.
+    </li>
+    <li>
+      <strong>Les visiteurs sont classés par nom</strong>, et non par
+      identifiant : c'est ainsi que le comptable les connaît.
+    </li>
+    <li>
+      <strong>Les mois proposés sont ceux pour lesquels ce visiteur a une
+      fiche</strong>, du plus récent au plus ancien. Le mois à traiter (le mois
+      écoulé) est sélectionné par défaut.
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider :</strong> faut-il limiter la liste des mois aux seules
+    fiches <em>clôturées</em> (donc prêtes à être validées), ou laisser le
+    comptable consulter aussi les fiches déjà validées et remboursées ?
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,215 @@
+/* ---------------------------------------------------------------------------
+   Feuille de style de l'intranet GSB.
+   Les sélecteurs reprennent les id et classes posés par les templates Twig :
+   #page, #entete, #logoGSB, #menuGauche, #infosUtil, #menuList, .smenu,
+   #contenu, .corpsForm, .piedForm, .listeLegere, .qteForfait, .encadre, .erreur
+   --------------------------------------------------------------------------- */
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0 0 3em;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    color: #23303a;
+    background: #eef2f5;
+}
+
+/* ------------------------------------------------------------------ entête */
+
+#page { background: #fff; border-bottom: 3px solid #0b5c8f; }
+
+#entete {
+    display: flex;
+    align-items: center;
+    gap: 1.25em;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 1em 1.5em;
+}
+
+#logoGSB { width: 72px; height: 72px; flex: none; }
+
+#entete h1 {
+    margin: 0;
+    font-size: 1.5em;
+    font-weight: 600;
+    color: #0b5c8f;
+}
+
+/* -------------------------------------------------------------- menu gauche */
+
+#menuGauche {
+    float: left;
+    width: 230px;
+    margin: 1.5em 0 1.5em 1.5em;
+    padding: 1em;
+    background: #fff;
+    border: 1px solid #d3dde5;
+    border-radius: 6px;
+}
+
+#infosUtil h3 {
+    margin: 0 0 .75em;
+    padding-bottom: .75em;
+    font-size: 1em;
+    font-weight: 600;
+    color: #0b5c8f;
+    border-bottom: 1px solid #e3eaef;
+}
+
+#menuList { margin: 0; padding: 0; list-style: none; }
+
+.smenu { margin: .35em 0; }
+
+.smenu a {
+    display: block;
+    padding: .5em .75em;
+    color: #23303a;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.smenu a:hover, .smenu a:focus { background: #0b5c8f; color: #fff; }
+
+/* ----------------------------------------------------------------- contenu */
+
+#contenu {
+    overflow: hidden;
+    margin: 1.5em 1.5em 1.5em 270px;
+    padding: 1.25em 1.5em;
+    background: #fff;
+    border: 1px solid #d3dde5;
+    border-radius: 6px;
+}
+
+#contenu + #contenu { margin-top: -.5em; }
+
+h2 { margin-top: 0; font-size: 1.25em; color: #0b5c8f; }
+h3 { font-size: 1.05em; }
+
+/* ---------------------------------------------------------------- formulaires */
+
+label {
+    display: inline-block;
+    min-width: 200px;
+    font-weight: 600;
+}
+
+input[type="text"], input[type="password"], select {
+    padding: .4em .5em;
+    font: inherit;
+    color: inherit;
+    background: #fff;
+    border: 1px solid #b9c7d2;
+    border-radius: 4px;
+}
+
+input[type="text"]:focus, input[type="password"]:focus, select:focus {
+    outline: 2px solid #0b5c8f;
+    outline-offset: 1px;
+}
+
+fieldset {
+    margin: 0 0 1em;
+    padding: 1em 1.25em;
+    border: 1px solid #d3dde5;
+    border-radius: 4px;
+}
+
+legend { padding: 0 .5em; font-weight: 600; color: #0b5c8f; }
+
+.corpsForm p { margin: .6em 0; }
+
+.piedForm {
+    padding-top: .75em;
+    border-top: 1px solid #e3eaef;
+}
+
+input[type="submit"], input[type="reset"] {
+    padding: .5em 1.25em;
+    font: inherit;
+    font-weight: 600;
+    color: #fff;
+    background: #0b5c8f;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+input[type="reset"] { color: #23303a; background: #dfe7ed; }
+
+input[type="submit"]:hover { background: #08476e; }
+input[type="reset"]:hover  { background: #ccd8e1; }
+
+/* -------------------------------------------------------------------- tables */
+
+.listeLegere {
+    width: 100%;
+    margin: 1em 0;
+    border-collapse: collapse;
+}
+
+.listeLegere caption {
+    padding: .5em 0;
+    font-weight: 600;
+    text-align: left;
+    color: #0b5c8f;
+}
+
+.listeLegere th, .listeLegere td {
+    padding: .5em .75em;
+    text-align: left;
+    border-bottom: 1px solid #e3eaef;
+}
+
+.listeLegere th { background: #f4f7f9; font-weight: 600; }
+
+.listeLegere td.qteForfait, .listeLegere th.montant, .listeLegere td:nth-child(3) {
+    text-align: right;
+}
+
+.listeLegere .date { width: 8em; }
+.listeLegere .montant { width: 8em; }
+.listeLegere .action { width: 12em; }
+
+.encadre {
+    padding: .25em 1em 1em;
+    background: #f7fafc;
+    border: 1px solid #d3dde5;
+    border-radius: 4px;
+}
+
+/* -------------------------------------------------------------------- erreurs */
+
+.erreur ul {
+    margin: 0 0 1em;
+    padding: .75em 1em .75em 2.25em;
+    color: #8a1c1c;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+    border-radius: 4px;
+}
+
+/* ------------------------------------------------- légende sous un tableau */
+
+.legendeTableau {
+    margin: .5em 0 0;
+    font-size: .85em;
+    color: #55606a;
+}
+
+/* ------------------------------------------------------- justificatifs */
+
+.listeLegere .justificatif { width: 16em; }
+
+.formJustificatif {
+    margin: .35em 0 0;
+}
+
+.formJustificatif input[type="file"] {
+    max-width: 11em;
+    font-size: .8em;
+}

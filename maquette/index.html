@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — partie comptable GSB</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écrans non fonctionnels, données fictives. Aucune donnée réelle, aucun enregistrement.
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais — partie comptable</h1>
+  </div>
+</div>
+
+<div class="sommaire">
+  <div id="contenu" style="margin:0">
+    <h2>Maquette de l'interface de validation</h2>
+
+    <p>
+      Cette maquette présente les écrans du cas d'utilisation
+      <strong>« Valider fiche de frais »</strong> (annexe 2 du cahier des
+      charges). Le cahier des charges demande qu'elle soit validée avant tout
+      développement :
+    </p>
+    <blockquote>
+      « Avant toute chose, établir une maquette de l'UI (en html) de votre
+      application de validation. Faire valider cette maquette par le client (Moi)
+      avant de vous lancer dans le développement. »
+    </blockquote>
+
+    <p>
+      Les pages sont <strong>statiques</strong> : les boutons font passer d'un
+      écran au suivant, mais rien n'est calculé ni enregistré. Les chiffres et
+      les noms sont inventés.
+    </p>
+
+    <h3>Parcours principal</h3>
+    <ol>
+      <li><a href="01-connexion.html">Connexion du comptable</a> — pré-condition du cas d'utilisation</li>
+      <li><a href="02-choix-visiteur-mois.html">Choix du visiteur et du mois</a> — étapes 1 à 3</li>
+      <li><a href="03-detail-fiche.html">Détail de la fiche de frais</a> — étapes 4, 5 et 7</li>
+      <li><a href="04-corrections-prises-en-compte.html">Confirmation des corrections</a> — étape 6</li>
+      <li><a href="05-fiche-validee.html">Fiche validée</a> — étapes 8 et 9</li>
+    </ol>
+
+    <h3>Cas particulier</h3>
+    <ol start="6">
+      <li><a href="06-aucune-fiche.html">Aucune fiche pour ce visiteur ce mois</a> — exception 4-a</li>
+    </ol>
+
+    <div class="annotation" style="margin:1.5em 0 0">
+      <strong>Trois points sur lesquels j'attends une réponse explicite du client.</strong>
+      Ils sont rappelés en bas des écrans concernés.
+      <ul>
+        <li>
+          <strong>Correction des frais forfaitisés sans trace.</strong> Le cahier
+          des charges l'impose (« sans que ne soit conservée trace de la
+          modification »). La maquette l'applique, mais cela signifie qu'un
+          visiteur ne pourra pas savoir pourquoi son remboursement a baissé, et
+          que l'entreprise n'aura aucune trace en cas de litige.
+          <em>Confirmez-vous ?</em>
+        </li>
+        <li>
+          <strong>Refus d'un frais hors forfait = suppression définitive</strong>,
+          sans motif enregistré. Conforme au cahier des charges. La maquette
+          prévoit un message d'avertissement avant suppression.
+          <em>Confirmez-vous ?</em>
+        </li>
+        <li>
+          <strong>Le cinquième état.</strong> Le diagramme du cahier des charges
+          distingue « Validée » et « Mise en paiement », mais la base livrée n'a
+          que quatre états, dont un intitulé « Validée <em>et</em> mise en
+          paiement ». La maquette s'arrête à « Validée », conformément à
+          l'étape 9. <em>Faut-il ajouter l'état « Mise en paiement » et un écran
+          pour déclencher le paiement du 20 ?</em>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+</body>
+</html>

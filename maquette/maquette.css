@@ -1,0 +1,119 @@
+/* ---------------------------------------------------------------------------
+   Compléments de style propres à la MAQUETTE de la partie comptable.
+
+   styles.css est une copie conforme de la feuille de l'application : la
+   maquette ressemble ainsi exactement à ce que sera l'écran réel. Ce fichier-ci
+   ne contient que ce qui n'existe pas encore dans l'application. Au moment du
+   développement (phase 5), son contenu sera repris dans la vraie feuille de
+   style, et le dossier maquette/ restera comme trace de la validation client.
+   --------------------------------------------------------------------------- */
+
+/* --------------------------------------------------- bandeau d'avertissement */
+
+.bandeauMaquette {
+    padding: .6em 1.5em;
+    font-weight: 600;
+    color: #5c4310;
+    text-align: center;
+    background: #fdf3d8;
+    border-bottom: 1px solid #e8d391;
+}
+
+/* ------------------------------------------------ annotations pour le client */
+
+.annotation {
+    margin: 0 1.5em 1.5em 270px;
+    padding: .75em 1em;
+    font-size: .9em;
+    color: #1f4a63;
+    background: #eaf3f8;
+    border: 1px dashed #9cc2d6;
+    border-radius: 6px;
+}
+
+.annotation strong { color: #0b5c8f; }
+
+.annotation ul { margin: .4em 0 0; padding-left: 1.4em; }
+
+.aValider {
+    margin-top: .6em;
+    padding-top: .6em;
+    border-top: 1px dashed #9cc2d6;
+}
+
+/* -------------------------------------------------------- boutons en liens */
+
+.bouton, .boutonSecondaire, .boutonRefus {
+    display: inline-block;
+    padding: .5em 1.25em;
+    font-weight: 600;
+    text-decoration: none;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.bouton { color: #fff; background: #0b5c8f; }
+.bouton:hover { background: #08476e; }
+
+.boutonSecondaire { color: #23303a; background: #dfe7ed; }
+.boutonSecondaire:hover { background: #ccd8e1; }
+
+.boutonRefus {
+    padding: .3em .8em;
+    font-size: .9em;
+    color: #8a1c1c;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+}
+.boutonRefus:hover { background: #f8dcdc; }
+
+/* ------------------------------------------------------------- états, messages */
+
+.etat {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    border-radius: 999px;
+}
+
+.etatCloturee { color: #5c4310; background: #fdf3d8; }
+.etatValidee  { color: #14562c; background: #ddf3e4; }
+
+.confirmation {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #14562c;
+    background: #ddf3e4;
+    border: 1px solid #a8d9ba;
+    border-radius: 4px;
+}
+
+.avertissement {
+    margin: 1em 0 0;
+    padding: .75em 1em;
+    font-size: .9em;
+    color: #5c4310;
+    background: #fdf3d8;
+    border: 1px solid #e8d391;
+    border-radius: 4px;
+}
+
+/* --------------------------------------------------------- tableau de saisie */
+
+.listeLegere td input[type="text"] { width: 5em; text-align: right; }
+
+.listeLegere tfoot td {
+    font-weight: 700;
+    background: #f4f7f9;
+    border-top: 2px solid #0b5c8f;
+}
+
+.nombre { text-align: right; }
+
+/* ------------------------------------------------------------- page sommaire */
+
+.sommaire { margin: 1.5em; }
+
+.sommaire ol { line-height: 2; }

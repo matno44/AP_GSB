@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Fiche validée</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Comptable : bonjour Marie Valette</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Valider les fiches de frais</a></li>
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Imprimer les fiches du mois</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Fiche de frais de Christian Bedos — Août 2026</h2>
+
+  <div class="confirmation">
+    <strong>La fiche a été validée.</strong>
+    Elle est passée à l'état « Validée » et sa date de modification a été mise
+    au 22/09/2026. Elle n'est plus modifiable.
+  </div>
+
+  <div class="encadre">
+    <p>
+      État : <span class="etat etatValidee">Validée</span>
+      depuis le 22/09/2026 &nbsp;·&nbsp;
+      <strong>2</strong> justificatif(s) pris en compte &nbsp;·&nbsp;
+      Matricule : a55
+    </p>
+    <p><strong>Montant validé : 1 765.20 €</strong></p>
+  </div>
+
+  <table class="listeLegere">
+    <caption>Frais forfaitisés</caption>
+    <tr>
+      <th>Libellé</th>
+      <th class="montant">Quantité</th>
+      <th class="montant">Montant unitaire</th>
+      <th class="montant">Total</th>
+    </tr>
+    <tr><td>Forfait Etape</td><td class="nombre">2</td><td class="nombre">110.00 €</td><td class="nombre">220.00 €</td></tr>
+    <tr><td>Frais Kilométrique</td><td class="nombre">860</td><td class="nombre">0.58 €</td><td class="nombre">498.80 €</td></tr>
+    <tr><td>Nuitée Hôtel</td><td class="nombre">4</td><td class="nombre">80.00 €</td><td class="nombre">320.00 €</td></tr>
+    <tr><td>Repas Restaurant</td><td class="nombre">16</td><td class="nombre">25.00 €</td><td class="nombre">400.00 €</td></tr>
+    <tfoot>
+      <tr><td colspan="3">Total des frais forfaitisés</td><td class="nombre">1 438.80 €</td></tr>
+    </tfoot>
+  </table>
+
+  <table class="listeLegere">
+    <caption>Frais hors forfait</caption>
+    <tr>
+      <th class="date">Date</th>
+      <th>Libellé</th>
+      <th class="montant">Montant</th>
+      <th>Justificatif</th>
+    </tr>
+    <tr><td>04/08/2026</td><td>Repas avec le Dr. Lemoine</td><td class="nombre">86.40 €</td><td><a href="#">facture_restaurant.pdf</a></td></tr>
+    <tr><td>12/08/2026</td><td>Location salle — réunion régionale</td><td class="nombre">240.00 €</td><td><a href="#">facture_salle.pdf</a></td></tr>
+    <tfoot>
+      <tr><td colspan="2">Total des frais hors forfait</td><td class="nombre">326.40 €</td><td>&nbsp;</td></tr>
+    </tfoot>
+  </table>
+
+  <p>
+    <a class="bouton" href="02-choix-visiteur-mois.html">Valider une autre fiche</a>
+    <a class="boutonSecondaire" href="#">Imprimer cette fiche (PDF)</a>
+  </p>
+</div>
+
+<div class="annotation">
+  <strong>Étapes 8 et 9 du scénario nominal :</strong> « L'utilisateur valide la
+  fiche » · « Le système passe la fiche à l'état "Validée" et met à jour la date
+  de modification de la fiche ».
+  <ul>
+    <li>
+      <strong>Plus aucun champ modifiable.</strong> Les quantités sont affichées
+      en texte simple et les boutons « Refuser » ont disparu. La fiche validée
+      est un état de référence : on ne la corrige plus.
+    </li>
+    <li>
+      <strong>Le montant validé est enregistré</strong> dans la colonne
+      <em>montantValide</em> de la fiche, jusqu'alors jamais alimentée par
+      l'application. C'est le total au moment de la validation.
+    </li>
+    <li>
+      <strong>La date de modification passe à aujourd'hui</strong>, comme
+      l'exige l'étape 9.
+    </li>
+    <li>
+      <strong>L'impression PDF reste accessible</strong> : c'est précisément
+      cette fiche que le comptable archive sur papier (fonctionnalité déjà
+      livrée en phase 3).
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider (2 points) :</strong>
+    <br />1. Le cahier des charges parle de « mise en paiement au 20 du mois
+    suivant », et son diagramme distingue « Validée » de « Mise en paiement ».
+    La maquette s'arrête à « Validée » car c'est là que s'arrête le cas
+    d'utilisation. <em>Faut-il un écran supplémentaire pour passer les fiches
+    validées en « Mise en paiement », puis en « Remboursée » ?</em>
+    <br />2. Le montant validé doit-il être calculé automatiquement (comme ici)
+    ou le comptable doit-il pouvoir le saisir ?
+  </div>
+</div>
+</body>
+</html>

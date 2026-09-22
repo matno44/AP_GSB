@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Détail de la fiche de frais</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Comptable : bonjour Marie Valette</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Valider les fiches de frais</a></li>
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Imprimer les fiches du mois</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Fiche de frais de Christian Bedos — Août 2026</h2>
+
+  <div class="encadre">
+    <p>
+      État : <span class="etat etatCloturee">Clôturée</span>
+      depuis le 01/09/2026 &nbsp;·&nbsp;
+      <strong>2</strong> justificatif(s) reçu(s) &nbsp;·&nbsp;
+      Matricule : a55
+    </p>
+  </div>
+
+  <form>
+    <table class="listeLegere">
+      <caption>Frais forfaitisés — quantités déclarées par le visiteur</caption>
+      <tr>
+        <th>Libellé</th>
+        <th class="montant">Quantité</th>
+        <th class="montant">Montant unitaire</th>
+        <th class="montant">Total</th>
+      </tr>
+      <tr>
+        <td>Forfait Etape</td>
+        <td class="nombre"><input type="text" value="2" size="5" /></td>
+        <td class="nombre">110.00 €</td>
+        <td class="nombre">220.00 €</td>
+      </tr>
+      <tr>
+        <td>Frais Kilométrique</td>
+        <td class="nombre"><input type="text" value="1240" size="5" /></td>
+        <td class="nombre">0.58 €</td>
+        <td class="nombre">719.20 €</td>
+      </tr>
+      <tr>
+        <td>Nuitée Hôtel</td>
+        <td class="nombre"><input type="text" value="4" size="5" /></td>
+        <td class="nombre">80.00 €</td>
+        <td class="nombre">320.00 €</td>
+      </tr>
+      <tr>
+        <td>Repas Restaurant</td>
+        <td class="nombre"><input type="text" value="18" size="5" /></td>
+        <td class="nombre">25.00 €</td>
+        <td class="nombre">450.00 €</td>
+      </tr>
+      <tfoot>
+        <tr>
+          <td colspan="3">Total des frais forfaitisés</td>
+          <td class="nombre">1 709.20 €</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="piedForm">
+      <p>
+        <a class="bouton" href="04-corrections-prises-en-compte.html">Enregistrer les corrections</a>
+      </p>
+    </div>
+  </form>
+
+  <div class="avertissement">
+    <strong>Le kilométrage de 1 240 km paraît élevé.</strong> Le cahier des
+    charges demande au comptable de contrôler « le nombre de jours enregistrés
+    en ne dépassant pas le nombre de jours effectivement travaillés (congés),
+    distance kilométrique cohérente ». La correction se fait directement dans
+    les cases ci-dessus, après contact téléphonique avec le visiteur.
+  </div>
+</div>
+
+<div id="contenu">
+  <table class="listeLegere">
+    <caption>Frais hors forfait — 2 justificatif(s) pris en compte dans le remboursement</caption>
+    <tr>
+      <th class="date">Date</th>
+      <th>Libellé</th>
+      <th class="montant">Montant</th>
+      <th>Justificatif</th>
+      <th>&nbsp;</th>
+    </tr>
+    <tr>
+      <td>04/08/2026</td>
+      <td>Repas avec le Dr. Lemoine</td>
+      <td class="nombre">86.40 €</td>
+      <td><a href="#">facture_restaurant.pdf</a></td>
+      <td><a class="boutonRefus" href="03-detail-fiche.html">Refuser</a></td>
+    </tr>
+    <tr>
+      <td>12/08/2026</td>
+      <td>Location salle — réunion régionale</td>
+      <td class="nombre">240.00 €</td>
+      <td><a href="#">facture_salle.pdf</a></td>
+      <td><a class="boutonRefus" href="03-detail-fiche.html">Refuser</a></td>
+    </tr>
+    <tr>
+      <td>21/08/2026</td>
+      <td>Achat fleuriste</td>
+      <td class="nombre">64.90 €</td>
+      <td><em>aucun</em></td>
+      <td><a class="boutonRefus" href="03-detail-fiche.html">Refuser</a></td>
+    </tr>
+    <tfoot>
+      <tr>
+        <td colspan="2">Total des frais hors forfait</td>
+        <td class="nombre">391.30 €</td>
+        <td colspan="2">&nbsp;</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <div class="avertissement">
+    <strong>La ligne du 21/08 n'a pas de justificatif.</strong> Le cahier des
+    charges est explicite : un frais hors forfait n'est remboursé que sur
+    présentation de la facture. C'est le cas type de refus.
+    <br /><br />
+    <strong>Refuser supprime définitivement la ligne</strong>, sans enregistrer
+    de motif — c'est la règle du cahier des charges. Le comptable devra prévenir
+    le visiteur par téléphone. Une demande de confirmation sera affichée avant
+    la suppression.
+  </div>
+
+  <div class="encadre" style="margin-top:1.5em">
+    <p>
+      <strong>Total général de la fiche : 2 100.50 €</strong>
+      &nbsp;(1 709.20 € forfaitisés + 391.30 € hors forfait)
+    </p>
+    <p>
+      <a class="bouton" href="05-fiche-validee.html">Valider la fiche</a>
+      <a class="boutonSecondaire" href="02-choix-visiteur-mois.html">Revenir au choix du visiteur</a>
+    </p>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Étapes 4, 5 et 7 du scénario nominal :</strong> « Le système affiche
+  le détail de la fiche de frais — frais forfaitisés et hors forfait » ·
+  « L'utilisateur actualise les informations des frais forfaitisés » ·
+  « L'utilisateur demande le refus des lignes de frais hors forfait non valides ».
+  <ul>
+    <li>
+      <strong>Tout sur un seul écran.</strong> Le comptable a besoin de voir
+      l'ensemble pour juger : séparer forfait et hors forfait en deux pages
+      l'obligerait à naviguer entre les deux.
+    </li>
+    <li>
+      <strong>Seules les quantités sont modifiables.</strong> Les montants
+      unitaires sont affichés mais verrouillés : ils sont figés à la saisie
+      (barème du véhicule du visiteur, ici 0,58 €/km pour un 5/6 CV Diesel) et
+      les modifier réécrirait le passé.
+    </li>
+    <li>
+      <strong>Le justificatif s'ouvre en un clic.</strong> C'est ce qui permet
+      au comptable de « constater la facture » comme le demande le cahier des
+      charges.
+    </li>
+    <li>
+      <strong>Deux actions distinctes.</strong> « Enregistrer les corrections »
+      met à jour les quantités sans valider la fiche : le comptable peut
+      corriger, vérifier le résultat, puis valider. « Valider la fiche » est
+      l'acte final.
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider (2 points) :</strong>
+    <br />1. Les corrections de quantités sont enregistrées <em>sans aucune
+    trace</em> de la valeur d'origine, conformément au cahier des charges.
+    Confirmez-vous ? Cela signifie qu'en cas de contestation, rien ne permettra
+    de retrouver ce que le visiteur avait déclaré.
+    <br />2. Le refus supprime la ligne <em>sans enregistrer de motif</em>.
+    Confirmez-vous ? Faut-il au moins afficher un rappel « pensez à prévenir le
+    visiteur » après la suppression ?
+  </div>
+</div>
+</body>
+</html>

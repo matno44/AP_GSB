@@ -9,7 +9,7 @@ définie au § 11 (glossaire).
 | 1 | Puissance fiscale du véhicule | **terminée** |
 | 2 | Upload des justificatifs | **terminée** |
 | 3 | Génération PDF des fiches | **terminée** |
-| 4 | Maquette HTML partie comptable | à faire |
+| 4 | Maquette HTML partie comptable | **livrée — en attente de validation client** |
 | 5 | Cas d'utilisation « Valider fiche de frais » | à faire |
 
 ---
@@ -100,6 +100,25 @@ définie au § 11 (glossaire).
 | Impression de masse en console | `Command/ImprimerFichesCommand.php` *(créé)* | `gsb:imprimer-fiches`, utilisable sans compte comptable |
 | Jeu de données de test | `Command/GenererDonneesCommand.php` *(créé)* | `gsb:generer-donnees` — comble le point B7 |
 | Lien d'impression | `views/ListeFrais/listefraisforfait.html.twig` *(modifié)* | « Imprimer cette fiche (PDF) » |
+
+### Phase 4 — Maquette HTML de la partie comptable
+
+| Fichier | Rôle |
+|---------|------|
+| `maquette/index.html` | sommaire : parcours des écrans + les 3 points à trancher |
+| `maquette/01-connexion.html` | connexion du comptable — pré-condition |
+| `maquette/02-choix-visiteur-mois.html` | étapes 1 à 3 du scénario nominal |
+| `maquette/03-detail-fiche.html` | étapes 4, 5 et 7 — détail, correction, refus |
+| `maquette/04-corrections-prises-en-compte.html` | étape 6 — confirmation et données actualisées |
+| `maquette/05-fiche-validee.html` | étapes 8 et 9 — fiche à l'état « Validée » |
+| `maquette/06-aucune-fiche.html` | exception 4-a |
+| `maquette/styles.css` | copie conforme de la feuille de l'application |
+| `maquette/maquette.css` | seulement ce qui n'existe pas encore dans l'application |
+| `maquette/logo.svg` | copie du logo |
+
+**Aucun fichier de l'application n'a été touché en phase 4.** Le dossier
+`maquette/` est autonome : il s'ouvre dans un navigateur sans serveur, sans PHP
+et sans base de données.
 
 ---
 
@@ -989,6 +1008,82 @@ serveur**. C'est une faille connue (SSRF) : le serveur devient un relais pour
 atteindre des adresses internes. Le gabarit n'a besoin d'aucune ressource
 distante, la coupure ne retire donc rien.
 
+### Phase 4
+
+### Décision 4.1 — Une maquette statique, vraiment statique
+
+- **Retenu :** sept fichiers HTML, deux feuilles de style, un logo. Aucun PHP,
+  aucun Twig, aucun JavaScript, aucune requête. Vérifié par recherche : pas une
+  occurrence de `<?php`, `{{` ou `{%`.
+- **Pourquoi :** le cahier des charges demande de faire valider la maquette
+  **avant** de développer. Si la maquette était déjà branchée sur
+  l'application, la validation arriverait après coup et ne servirait plus à
+  rien. Une maquette statique s'envoie par courriel, s'ouvre sur n'importe
+  quelle machine, et ne peut rien casser.
+- **Conséquence assumée :** les boutons font passer d'un écran au suivant mais
+  ne calculent rien. Les chiffres sont écrits en dur — et vérifiés à la main
+  pour rester cohérents d'un écran à l'autre.
+
+### Décision 4.2 — Réutiliser la feuille de style réelle
+
+`maquette/styles.css` est une **copie conforme** de la feuille de
+l'application. La maquette ressemble donc exactement à ce que sera l'écran
+final : le client valide une apparence réelle, pas un croquis. Les seuls ajouts
+(bandeau, badges d'état, boutons de refus, encadrés de confirmation) sont
+isolés dans `maquette/maquette.css`, et seront repris dans la vraie feuille au
+moment du développement.
+
+**La duplication est volontaire** et limitée dans le temps : le dossier
+`maquette/` restera ensuite comme trace de la validation, sans plus évoluer.
+L'alternative — pointer vers la feuille de l'application par un chemin
+relatif — aurait cassé dès que la maquette serait transmise seule au client.
+
+### Décision 4.3 — Un bandeau « MAQUETTE » sur chaque page
+
+Chaque écran porte en haut un bandeau jaune : « MAQUETTE HTML — écran non
+fonctionnel, données fictives ». Personne ne doit pouvoir confondre une capture
+de maquette avec une capture de l'application, ni prendre les chiffres affichés
+pour des données réelles. Les noms (Marie Valette, comptable) sont inventés.
+
+### Décision 4.4 — Annoter chaque écran avec l'étape du cas d'utilisation
+
+Sous chaque page, un encadré bleu rappelle **l'étape exacte du scénario
+nominal** que l'écran couvre, explique les choix d'interface, et se termine par
+un bloc « À valider » posant une question précise.
+
+- **Pourquoi :** un client à qui l'on présente sept pages sans explication
+  répond « c'est bien » et l'on n'a rien appris. Une question précise appelle
+  une réponse précise — c'est tout l'intérêt du point d'arrêt.
+- Les annotations sont dans la maquette elle-même, donc impossibles à perdre.
+  Elles disparaîtront évidemment de l'application développée.
+
+### Décision 4.5 — Un seul écran pour le détail, la correction et le refus
+
+Le scénario nominal enchaîne « afficher le détail » (4), « actualiser les
+forfaitisés » (5) et « refuser les hors forfait non valides » (7) : trois
+étapes, mais **un seul écran**. Le comptable a besoin de voir l'ensemble pour
+juger ; répartir sur trois pages l'obligerait à naviguer sans cesse. Les deux
+actions restent distinctes : « Enregistrer les corrections » ne valide pas la
+fiche, « Valider la fiche » est l'acte final.
+
+### Décision 4.6 — Seules les quantités sont modifiables
+
+Les montants unitaires sont affichés, mais verrouillés. Ils ont été figés à la
+saisie (barème du véhicule du visiteur — 0,58 €/km sur la maquette, un 5/6 CV
+Diesel) et les rendre modifiables permettrait au comptable de réécrire le
+passé, ce que toute la phase 1 s'emploie à empêcher. Le cahier des charges ne
+demande d'ailleurs que de corriger « le nombre de jours » et « la distance
+kilométrique » : des quantités.
+
+### Décision 4.7 — Exception 4-a : le retour au choix, pas une page d'erreur
+
+Le cahier des charges dit « afficher "Pas de fiche de frais pour ce visiteur ce
+mois". Retour au 2. » La maquette affiche le message **sur l'écran de choix
+lui-même**, avec la sélection conservée. Une page d'erreur séparée obligerait à
+un clic de retour supplémentaire pour rien. Le message reprend le style
+d'erreur déjà utilisé côté visiteur, plutôt que d'introduire une troisième
+présentation.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -1450,6 +1545,27 @@ VALIDER    (ou TOUT ANNULER)
   lot par `rollBack()`, plutôt que de laisser un demi-jeu de test.
 - **Coût mesuré :** 200 visiteurs et leurs fiches en **0,8 seconde**.
 
+### Phase 4
+
+**Aucune boucle, aucun algorithme : la phase 4 ne contient pas une ligne de
+code exécutable.** C'est une maquette statique, et c'est précisément ce qui en
+fait une maquette. Les tableaux sont écrits en dur ; ce qui sera plus tard un
+`{% for %}` Twig est ici quatre lignes `<tr>` recopiées.
+
+Le seul « calcul » de la phase 4 a été fait à la main, et vérifié :
+
+| Écran | Contrôle | Résultat |
+|-------|----------|----------|
+| 03 | 2×110 + 1240×0,58 + 4×80 + 18×25 | 1 709,20 € ✔ |
+| 03 | 86,40 + 240,00 + 64,90 | 391,30 € ✔ |
+| 03 | total général 1 709,20 + 391,30 | 2 100,50 € ✔ |
+| 04 | après correction : 2×110 + 860×0,58 + 4×80 + 16×25 | 1 438,80 € ✔ |
+| 04 | après refus : 86,40 + 240,00 | 326,40 € ✔ |
+| 04/05 | total général 1 438,80 + 326,40 | 1 765,20 € ✔ |
+
+Ce n'est pas anecdotique : un client qui repère une addition fausse dans une
+maquette cesse de faire confiance au reste.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -1739,6 +1855,21 @@ produit un défaut silencieux :
   l'authentification faite main — certains d'entre eux se comportent de façon
   inattendue. C'est le prix, connu et assumé, de la décision 0.4.
 
+### Phase 4
+
+**Aucune erreur d'exécution en phase 4**, et c'est normal : il n'y a rien à
+exécuter. Les seules vérifications possibles sont structurelles, et elles ont
+été faites :
+
+- **balises équilibrées** — comptage des `<div>`/`</div>` et
+  `<table>`/`</table>` sur les sept pages : équilibré partout ;
+- **liens internes** — les neuf cibles référencées existent toutes ;
+- **ressources** — `logo.svg`, `styles.css`, `maquette.css` répondent ;
+- **absence de code dynamique** — aucune occurrence de `<?php`, `{{` ou `{%` ;
+- **cohérence arithmétique** — les six totaux vérifiés ci-dessus (§ 6).
+
+Je préfère l'écrire que de meubler cette section.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -1925,6 +2056,44 @@ DELETE FROM visiteur   WHERE id LIKE 'z%';
 
 Je ne les supprime pas de moi-même : ce sont des `DELETE`, et la règle est de
 ne rien détruire sans ton accord. Une seule commande les recrée si besoin.
+
+### Limites propres à la phase 4
+
+#### 🔴 L20 — POINT D'ARRÊT : la maquette n'est pas validée
+Le cahier des charges impose : « Faire valider cette maquette par le client
+(Moi) **avant de vous lancer dans le développement**. » La phase 5 n'est donc
+pas commencée, et ne le sera pas avant une validation explicite. Ce n'est pas
+un retard : c'est l'exigence du client.
+
+#### 🟠 L21 — Trois questions restent ouvertes dans la maquette
+Elles sont posées dans le sommaire et rappelées sur les écrans concernés :
+1. **Corrections sans trace** (écran 03) — conforme au cahier des charges, mais
+   un visiteur ne pourra pas savoir pourquoi son remboursement a baissé, et
+   l'entreprise n'aura aucune trace en cas de litige.
+2. **Refus = suppression sans motif** (écran 03) — conforme également. Faut-il
+   au moins un rappel « prévenez le visiteur » après la suppression ?
+3. **Le cinquième état** (écran 05) — la maquette s'arrête à « Validée », comme
+   le cas d'utilisation. Faut-il un écran pour « Mise en paiement » puis
+   « Remboursée » ? C'est le point B4, qui attend toujours sa réponse.
+
+Quatre questions secondaires sont posées sur les écrans 01, 02, 04 et 06.
+
+#### 🟠 L22 — La feuille de style est dupliquée
+`maquette/styles.css` est une copie de la feuille de l'application. Si celle-ci
+évolue, la maquette ne suivra pas. **Duplication volontaire** (décision 4.2) :
+la maquette doit pouvoir être transmise seule au client. Elle cessera d'évoluer
+après validation.
+
+#### 🟡 L23 — La maquette ne couvre pas l'impression de masse
+Le menu du comptable affiche « Imprimer les fiches du mois », mais le lien ne
+mène nulle part. Le cas d'utilisation à valider est « Valider fiche de frais » ;
+la génération de masse est déjà livrée en phase 3 et n'attend qu'un bouton. Si
+tu veux que l'écran correspondant soit lui aussi maquetté, dis-le-moi.
+
+#### 🟡 L24 — Pas de version pour petit écran
+Les écrans sont pensés pour un poste de bureau, comme l'application existante
+(menu de 230 px flottant à gauche). Le service comptable travaille sur poste
+fixe ; ce n'est pas un besoin exprimé.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -2319,6 +2488,34 @@ php app/console gsb:imprimer-fiches
 | P2 | Lien de consultation du justificatif | présent ✔ |
 | P2 | Accès croisé à un justificatif | 404 ✔ |
 
+### 9.19 Phase 4 — consulter la maquette
+
+Aucune installation, aucun serveur, aucune base :
+
+```bash
+open "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet/maquette/index.html"
+```
+
+Ou double-cliquer sur `maquette/index.html`. Le dossier entier peut être
+transmis tel quel au client (les 10 fichiers sont autonomes).
+
+### 9.20 Phase 4 — parcours à suivre pour valider
+
+| # | Écran | Ce qu'il faut regarder |
+|---|-------|------------------------|
+| M1 | `index.html` | Le sommaire et les **3 questions** posées en bas |
+| M2 | `01-connexion.html` | Un formulaire unique pour comptables et visiteurs |
+| M3 | `02-choix-visiteur-mois.html` | Deux listes déroulantes, le mois écoulé présélectionné |
+| M4 | `03-detail-fiche.html` | Le détail complet : quantités modifiables, montants unitaires verrouillés, justificatifs cliquables, bouton « Refuser » par ligne |
+| M5 | Toujours sur `03` | Les deux encadrés jaunes qui signalent le kilométrage suspect et la ligne sans justificatif |
+| M6 | `04-corrections-prises-en-compte.html` | Le message vert, les valeurs actualisées, la ligne refusée disparue, les totaux recalculés |
+| M7 | `05-fiche-validee.html` | L'état passé à « Validée », plus aucun champ modifiable, le montant validé enregistré |
+| M8 | `06-aucune-fiche.html` | Le message exact du cahier des charges, sur l'écran de choix, avec la sélection conservée |
+
+**Contrôles effectués avant livraison :** balises équilibrées sur les 7 pages,
+9 liens internes tous valides, 3 ressources (logo, 2 feuilles de style)
+présentes, aucune trace de PHP/Twig/JavaScript, 6 totaux vérifiés à la main.
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -2676,6 +2873,64 @@ inventer des valeurs, donc à livrer des données fausses. L'identifiant du
 visiteur tient ce rôle. C'est une décision prise en connaissance de cause, pas
 un oubli.
 
+### Questions sur la phase 4
+
+**Q41. Pourquoi faire une maquette avant de développer ?**
+Parce que le client l'exige, et la raison est bonne : corriger un écran en HTML
+statique coûte quelques minutes, le corriger une fois développé coûte des
+heures — contrôleur, requêtes, gabarit, tests. La maquette déplace la discussion
+au moment où changer d'avis est encore gratuit. Citation du cahier des charges :
+« Avant toute chose, établir une maquette de l'UI (en html) […] Faire valider
+cette maquette par le client (Moi) avant de vous lancer dans le développement. »
+
+**Q42. Pourquoi la maquette n'est-elle pas branchée sur la base ?**
+Parce que ce ne serait plus une maquette. Si les écrans étaient déjà
+fonctionnels, la validation arriverait après le développement et ne servirait
+plus à rien — on ferait valider un travail déjà fait. Une maquette statique
+s'ouvre sans serveur, s'envoie par courriel et ne peut rien casser.
+
+**Q43. Comment as-tu construit les écrans ?**
+En suivant le scénario nominal de l'annexe 2 étape par étape. Chaque écran
+couvre des étapes précises, indiquées en bas de page : choix (1-3), détail et
+corrections (4, 5, 7), confirmation (6), validation (8, 9), plus l'exception
+4-a. Je n'ai pas inventé un parcours : j'ai transcrit celui du cahier des
+charges.
+
+**Q44. Pourquoi les montants unitaires ne sont-ils pas modifiables par le
+comptable ?**
+Parce qu'ils sont historisés. Le montant affiché est celui qui s'appliquait au
+moment de la saisie — 0,58 €/km pour un 5/6 CV Diesel. Le laisser modifier
+permettrait de réécrire le passé, ce que toute la phase 1 empêche. Le cahier des
+charges ne demande d'ailleurs de contrôler que des quantités : nombre de jours
+et distance kilométrique.
+
+**Q45. Que se passe-t-il quand le comptable refuse un frais hors forfait ?**
+La ligne est **supprimée définitivement** et aucun motif n'est enregistré :
+c'est la règle du cahier des charges. Le comptable doit prévenir le visiteur
+par téléphone, le système ne le fait pas. J'ai signalé au client que c'est
+discutable, et la maquette prévoit une confirmation avant suppression ainsi
+qu'un rappel après.
+
+**Q46. Pourquoi deux boutons séparés, « Enregistrer les corrections » et
+« Valider la fiche » ?**
+Parce que ce sont deux étapes distinctes du scénario (5-6 d'un côté, 8-9 de
+l'autre). Le comptable doit pouvoir corriger, vérifier le résultat affiché,
+éventuellement corriger encore, puis seulement valider. Un bouton unique
+rendrait la validation irréversible dès la première correction.
+
+**Q47. Et si le visiteur n'a pas de fiche ce mois-là ?**
+C'est l'exception 4-a. Le message « Pas de fiche de frais pour ce visiteur ce
+mois » s'affiche **sur l'écran de choix**, avec la sélection conservée, ce qui
+réalise le « retour au 2 » du cahier des charges sans clic supplémentaire.
+
+**Q48. Quelles questions as-tu posées au client ?**
+Trois principales : les corrections sans trace, le refus sans motif, et le
+cinquième état « Mise en paiement ». Les deux premières sont des règles que le
+cahier des charges impose mais dont je signale les conséquences ; la troisième
+est une contradiction entre le diagramme d'états du cahier des charges (5 états)
+et la base livrée (4 états, dont un intitulé « Validée <em>et</em> mise en
+paiement »).
+
 ### Glossaire
 
 | Terme | Définition |
@@ -2712,6 +2967,10 @@ un oubli.
 | **Pic de mémoire** | Maximum de mémoire occupée depuis le début d'un script (`memory_get_peak_usage`). C'est le chiffre qui compte pour savoir si un traitement tiendra : une moyenne masquerait le pic qui fait échouer. |
 | **`unset()`** | Libère explicitement une variable. Utile dans une boucle qui manipule de gros contenus : sans lui, la valeur reste occupée jusqu'à sa réaffectation au tour suivant. |
 | **Commande console** | Point d'entrée de l'application lancé en ligne de commande (`php app/console …`) plutôt que par le navigateur. Adaptée aux traitements longs : pas de délai d'expiration HTTP. |
+| **Maquette** | Représentation statique d'une interface, sans code fonctionnel, destinée à faire valider les écrans avant de les développer. |
+| **Scénario nominal** | Déroulement normal d'un cas d'utilisation, quand tout se passe bien. Les écarts sont décrits à part, en « exceptions » (ici l'exception 4-a). |
+| **Cas d'utilisation** | Description d'un service rendu par le système à un acteur, sous forme d'étapes numérotées. Ici « Valider fiche de frais », acteur « Comptable ». |
+| **Pré-condition** | Ce qui doit être vrai avant que le cas d'utilisation puisse commencer (ici : comptable authentifié, fiches du mois clôturées). |
 | **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |
