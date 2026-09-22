@@ -9,6 +9,18 @@ require_once __DIR__.'/../Controller/include/fct.inc.php';
 
 class PdoGsb{
 	private static $monPdo;
+
+    /**
+     * Identifiant, dans la table fraisforfait, de la ligne dont le montant
+     * unitaire dépend du véhicule du visiteur.
+     *
+     * Le barème, lui, est en base (table typevehicule) : c'est bien la valeur
+     * qui n'est pas codée en dur. Reste à savoir QUELLE ligne de frais est la
+     * ligne kilométrique ; cette information est structurelle (elle ne change
+     * pas quand la direction modifie ses tarifs) et elle est déclarée ici, à
+     * un seul endroit, plutôt que recopiée dans chaque requête.
+     */
+    const ID_FRAIS_KILOMETRIQUE = 'KM';
 /**
  * Constructeur public, crée l'instance de PDO qui sera sollicitée
  * pour toutes les méthodes de la classe
@@ -103,8 +115,14 @@ class PdoGsb{
  * @return l'id, le libelle et la quantité sous la forme d'un tableau associatif 
 */
 	public function getLesFraisForfait($idVisiteur, $mois){
+		// montantUnitaire vient de la LIGNE et non de la table fraisforfait :
+		// c'est le tarif qui était en vigueur au moment de la saisie. Le total
+		// est calculé par le serveur SQL, ce qui évite une boucle en PHP.
 		$req = "select fraisforfait.id as idfrais, fraisforfait.libelle as libelle, 
-		lignefraisforfait.quantite as quantite from lignefraisforfait inner join fraisforfait 
+		lignefraisforfait.quantite as quantite, 
+		lignefraisforfait.montantUnitaire as montantunitaire, 
+		lignefraisforfait.quantite * lignefraisforfait.montantUnitaire as montant 
+		from lignefraisforfait inner join fraisforfait 
 		on fraisforfait.id = lignefraisforfait.idfraisforfait
 		where lignefraisforfait.idvisiteur = :idVisiteur and lignefraisforfait.mois= :mois 
 		order by lignefraisforfait.idfraisforfait";	
@@ -232,15 +250,21 @@ class PdoGsb{
                 $stmt->bindParam(':idVisiteur', $idVisiteur);
                  $stmt->bindParam(':mois', $mois);
                 $stmt->execute();
-                $lesIdFrais = $this->getLesIdFrais();
-                foreach($lesIdFrais as $uneLigneIdFrais){
-                        $unIdFrais = $uneLigneIdFrais['idfrais'];
-                        $req = "insert into lignefraisforfait(idvisiteur,mois,idFraisForfait,quantite) 
-                        values(:idVisiteur,:mois,:unIdFrais,0)";
+                // On fige ici le montant unitaire de chaque ligne : c'est ce
+                // qui garantit qu'un futur changement de barème ne modifiera
+                // pas cette fiche. Le tarif kilométrique retenu est celui du
+                // véhicule déclaré par le visiteur.
+                $lesMontants = $this->getLesMontantsUnitairesApplicables($idVisiteur);
+                foreach($lesMontants as $uneLigneFrais){
+                        $unIdFrais = $uneLigneFrais['idfrais'];
+                        $unMontant = $uneLigneFrais['montantunitaire'];
+                        $req = "insert into lignefraisforfait(idvisiteur,mois,idFraisForfait,quantite,montantUnitaire) 
+                        values(:idVisiteur,:mois,:unIdFrais,0,:unMontant)";
                         $stmt = PdoGsb::$monPdo->prepare($req);
                         $stmt->bindParam(':idVisiteur', $idVisiteur);
                         $stmt->bindParam(':mois', $mois);
                         $stmt->bindParam(':unIdFrais', $unIdFrais);
+                        $stmt->bindParam(':unMontant', $unMontant);
                         $stmt->execute();
                  }
         }
@@ -376,5 +400,169 @@ class PdoGsb{
             $ligne = $stmt->fetch();
             return $ligne['nb'];
 
+        }
+
+/* =========================================================================
+ * Puissance fiscale du véhicule (phase 1)
+ * ========================================================================= */
+
+/**
+ * Retourne tout le barème de remboursement kilométrique
+ *
+ * Sert à alimenter la liste déroulante de l'écran « Mon véhicule ».
+ * @return un tableau associatif : id, libelle, montant
+*/
+        public function getLesTypesVehicule(){
+                $req = "select typevehicule.id as id, typevehicule.libelle as libelle,
+                typevehicule.montant as montant from typevehicule order by typevehicule.id";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+/**
+ * Retourne le type de véhicule déclaré par un visiteur
+ *
+ * @param $idVisiteur
+ * @return un tableau associatif -id, libelle, montant- ou false si le
+ *         visiteur n'a pas encore déclaré de véhicule
+*/
+        public function getTypeVehiculeVisiteur($idVisiteur){
+                $req = "select typevehicule.id as id, typevehicule.libelle as libelle,
+                typevehicule.montant as montant from visiteur
+                inner join typevehicule on typevehicule.id = visiteur.idTypeVehicule
+                where visiteur.id = :idVisiteur";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                return $stmt->fetch();
+        }
+/**
+ * Vérifie qu'un identifiant de type de véhicule existe bien dans le barème
+ *
+ * Contrôle de sécurité : la valeur vient d'une liste déroulante, donc du
+ * navigateur, donc elle n'est pas digne de confiance. La clé étrangère
+ * refuserait de toute façon une valeur inconnue, mais avec une erreur SQL
+ * brute ; ici on peut afficher un message compréhensible.
+ *
+ * @param $idTypeVehicule
+ * @return vrai ou faux
+*/
+        public function estTypeVehiculeValide($idTypeVehicule){
+                $req = "select count(*) as nb from typevehicule where typevehicule.id = :idTypeVehicule";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['nb'] == 1;
+        }
+/**
+ * Retourne le montant unitaire à appliquer à chaque type de frais forfaitisé
+ * pour un visiteur donné
+ *
+ * Pour toutes les lignes, c'est le montant du référentiel fraisforfait.
+ * Pour la ligne kilométrique, c'est le tarif du véhicule du visiteur ; s'il
+ * n'a pas déclaré de véhicule, on retombe sur le montant historique de
+ * fraisforfait.KM -0,62 €/km-, ce qui préserve le comportement d'avant.
+ *
+ * Une seule requête, et non une par type de frais : voir le compte rendu,
+ * c'est ce qui évite un N+1 dans creeNouvellesLignesFrais().
+ *
+ * @param $idVisiteur
+ * @return un tableau associatif : idfrais, montantunitaire
+*/
+        public function getLesMontantsUnitairesApplicables($idVisiteur){
+                $req = "select fraisforfait.id as idfrais,
+                case when fraisforfait.id = :idFraisKm
+                     then coalesce(typevehicule.montant, fraisforfait.montant)
+                     else fraisforfait.montant
+                end as montantunitaire
+                from fraisforfait
+                left join visiteur on visiteur.id = :idVisiteur
+                left join typevehicule on typevehicule.id = visiteur.idTypeVehicule
+                order by fraisforfait.id";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                $stmt->bindParam(':idFraisKm', $idFraisKm);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+/**
+ * Retourne le tarif kilométrique réellement appliqué à un visiteur
+ *
+ * C'est le tarif de son véhicule, ou le tarif historique de fraisforfait.KM
+ * s'il n'a pas encore déclaré de véhicule. Sert à l'affichage : l'écran de
+ * saisie doit pouvoir annoncer au visiteur le tarif qui lui sera appliqué.
+ *
+ * @param $idVisiteur
+ * @return le tarif en euros par kilomètre
+*/
+        public function getTarifKilometrique($idVisiteur){
+                $req = "select coalesce(
+                        (select typevehicule.montant from typevehicule
+                         inner join visiteur on visiteur.idTypeVehicule = typevehicule.id
+                         where visiteur.id = :idVisiteur),
+                        (select fraisforfait.montant from fraisforfait
+                         where fraisforfait.id = :idFraisKm)) as tarif";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':idFraisKm', $idFraisKm);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['tarif'];
+        }
+/**
+ * Enregistre le véhicule d'un visiteur et répercute le nouveau tarif
+ * kilométrique sur ses fiches ENCORE MODIFIABLES
+ *
+ * Règle de gestion : seules les fiches à l'état 'CR' -saisie en cours- sont
+ * mises à jour. Une fiche clôturée, validée ou remboursée conserve pour
+ * toujours le tarif qui lui a été appliqué : c'est l'exigence de
+ * non-recalcul rétroactif du cahier des charges.
+ *
+ * Les deux mises à jour sont encadrées par une transaction : si la seconde
+ * échoue, la première est annulée, sinon le visiteur se retrouverait avec un
+ * véhicule déclaré mais une fiche en cours restée à l'ancien tarif.
+ *
+ * @param $idVisiteur
+ * @param $idTypeVehicule l'identifiant du type de véhicule
+*/
+        public function majTypeVehiculeVisiteur($idVisiteur, $idTypeVehicule){
+                PdoGsb::$monPdo->beginTransaction();
+                try{
+                        $req = "update visiteur set idTypeVehicule = :idTypeVehicule
+                        where visiteur.id = :idVisiteur";
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                        $stmt->bindParam(':idVisiteur', $idVisiteur);
+                        $stmt->execute();
+
+                        // coalesce : si le visiteur n'a plus de véhicule déclaré,
+                        // on revient au tarif historique de fraisforfait.KM.
+                        $req = "update lignefraisforfait
+                        inner join fichefrais on fichefrais.idVisiteur = lignefraisforfait.idVisiteur
+                                              and fichefrais.mois = lignefraisforfait.mois
+                        set lignefraisforfait.montantUnitaire = coalesce(
+                                (select typevehicule.montant from typevehicule
+                                 where typevehicule.id = :idTypeVehicule),
+                                (select fraisforfait.montant from fraisforfait
+                                 where fraisforfait.id = :idFraisKm))
+                        where lignefraisforfait.idVisiteur = :idVisiteur
+                        and lignefraisforfait.idFraisForfait = :idFraisKm
+                        and fichefrais.idEtat = 'CR'";
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                        $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                        $stmt->bindParam(':idFraisKm', $idFraisKm);
+                        $stmt->bindParam(':idVisiteur', $idVisiteur);
+                        $stmt->execute();
+
+                        PdoGsb::$monPdo->commit();
+                }
+                catch(\Exception $e){
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
         }
 }

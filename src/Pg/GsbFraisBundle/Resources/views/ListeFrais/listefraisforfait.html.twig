@@ -18,6 +18,21 @@
 	       <td class="qteForfait">{{quantite}} </td>
     {% endfor %}  
 	</tr>
+        {# Montant unitaire historisé sur la ligne : c'est le tarif qui était
+           en vigueur lors de la saisie, pas le tarif d'aujourd'hui. #}
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+	       <td class="qteForfait">{{unfrais.montantunitaire}} €</td>
+    {% endfor %}  
+	</tr>
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+	       <td class="qteForfait"><strong>{{unfrais.montant}} €</strong></td>
+    {% endfor %}  
+	</tr>
     </table>
+    <p class="legendeTableau">
+        Lignes du tableau : libellé, quantité, montant unitaire appliqué, total.
+    </p>
    </div>
  

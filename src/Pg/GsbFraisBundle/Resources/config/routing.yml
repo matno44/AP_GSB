@@ -25,3 +25,10 @@ pg_gsb_frais_supprimerfraishorsforfait:
     path:     /supprimerfraishorsforfait/{id}
     defaults: { _controller: PgGsbFraisBundle:SaisirFrais:supprimerfraishorsforfait }
     requirements: { id: '\d+' }
+pg_gsb_frais_monvehicule:
+    path:     /monvehicule
+    defaults: { _controller: PgGsbFraisBundle:Vehicule:index }
+pg_gsb_frais_validermonvehicule:
+    path:     /validermonvehicule
+    defaults: { _controller: PgGsbFraisBundle:Vehicule:valider }
+    methods:  [POST]

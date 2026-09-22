@@ -28,8 +28,22 @@ Installation
 mysql -u root < sql/bd_gsb.sql
 ```
 
-Le script crée la base `bd_gsb`, ses six tables et un jeu de données de
-démonstration.
+Le script crée la base `bd_gsb`, ses sept tables et un jeu de données de
+démonstration. Il est tenu à jour avec les migrations : une base créée de zéro
+a exactement le même schéma qu'une base migrée.
+
+**Sur une base déjà existante**, ne pas rejouer `bd_gsb.sql` (il commence par
+`DROP DATABASE`) : appliquer les migrations du dossier `sql/`, une seule fois
+chacune et dans l'ordre.
+
+```bash
+mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_001.sql
+mysql -u root bd_gsb < sql/001_puissance_fiscale_vehicule.sql
+```
+
+| Migration | Objet |
+|-----------|-------|
+| `001_puissance_fiscale_vehicule.sql` | barème kilométrique par véhicule, rattachement du visiteur, historisation du montant unitaire |
 
 Les paramètres de connexion sont dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml` :
@@ -102,8 +116,22 @@ Fonctionnalités
 | `pg_gsb_frais_deconnexion` | `/deconnexion` | vide la session |
 | `pg_gsb_frais_listefrais` | `/listefrais` | consultation d'une fiche par mois |
 | `pg_gsb_frais_saisirfrais` | `/saisirfrais` | saisie des frais du mois courant |
-| `pg_gsb_frais_validerfraishorsforfait` | `/validerfraishorsforfait` | ajout d'un frais hors forfait (POST) |
+| `pg_gsb_frais_validerfraishorsforfais` | `/validerfraishorsforfait` | ajout d'un frais hors forfait (POST) |
 | `pg_gsb_frais_supprimerfraishorsforfait` | `/supprimerfraishorsforfait/{id}` | suppression d'un frais hors forfait |
+| `pg_gsb_frais_monvehicule` | `/monvehicule` | déclaration du véhicule du visiteur |
+| `pg_gsb_frais_validermonvehicule` | `/validermonvehicule` | enregistrement du véhicule (POST) |
+
+> Le nom `pg_gsb_frais_validerfraishorsforfais` comporte une faute de frappe
+> d'origine (`…forfai**s**`). Elle est conservée telle quelle : les templates
+> l'utilisent et le sujet impose de ne pas réécrire l'existant.
+
+### Remboursement kilométrique
+
+Le tarif dépend du véhicule du visiteur (table `typevehicule`, de 0,52 à
+0,72 €/km). Le visiteur le déclare via « Mon véhicule ». Le tarif appliqué est
+**figé sur chaque ligne de frais** (`lignefraisforfait.montantUnitaire`) : un
+changement de barème ne recalcule jamais une fiche déjà clôturée. Un visiteur
+qui n'a pas déclaré de véhicule est remboursé au tarif historique de 0,62 €/km.
 
 La fiche du mois en cours est créée automatiquement à la première visite de
 `/saisirfrais`, et la fiche du mois précédent passe alors de l'état `CR`

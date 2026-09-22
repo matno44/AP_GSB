@@ -1,0 +1,56 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+{% include 'PgGsbFraisBundle:SaisirFrais:erreurs.html.twig' with {'leserreurs':leserreurs} %}
+<div id="contenu">
+    <h2>Mon véhicule</h2>
+
+    {% if lemessage is not empty %}
+        <div class="encadre"><p>{{ lemessage }}</p></div>
+    {% endif %}
+
+    <div class="encadre">
+    <p>
+        {% if letypevehicule is null %}
+            Vous n'avez pas encore déclaré votre véhicule. En attendant, vos frais
+            kilométriques sont remboursés au tarif historique de
+            <strong>{{ letarif }} € / km</strong>.
+        {% else %}
+            Véhicule déclaré : <strong>{{ letypevehicule.libelle }}</strong> —
+            remboursement à <strong>{{ letypevehicule.montant }} € / km</strong>.
+        {% endif %}
+    </p>
+    <p>
+        Le changement s'applique à votre fiche de frais en cours de saisie.
+        Vos fiches déjà clôturées, validées ou remboursées conservent le tarif
+        qui leur a été appliqué : elles ne sont pas recalculées.
+    </p>
+    </div>
+
+    <form method="post" action="{{ path('pg_gsb_frais_validermonvehicule') }}">
+        <div class="corpsForm">
+            <fieldset>
+                <legend>Barème de remboursement kilométrique</legend>
+                <p>
+                    <label for="idTypeVehicule">Mon véhicule : </label>
+                    <select id="idTypeVehicule" name="idTypeVehicule">
+                        {% for unTypeVehicule in lestypesvehicule %}
+                            {% if letypevehicule is not null and unTypeVehicule.id == letypevehicule.id %}
+                                <option selected value="{{ unTypeVehicule.id }}">{{ unTypeVehicule.libelle }} — {{ unTypeVehicule.montant }} €/km</option>
+                            {% else %}
+                                <option value="{{ unTypeVehicule.id }}">{{ unTypeVehicule.libelle }} — {{ unTypeVehicule.montant }} €/km</option>
+                            {% endif %}
+                        {% endfor %}
+                    </select>
+                </p>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+        <p>
+            <input id="ok" type="submit" value="Valider" size="20" />
+        </p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% endblock %}

@@ -192,3 +192,11 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     border: 1px solid #f3c2c2;
     border-radius: 4px;
 }
+
+/* ------------------------------------------------- légende sous un tableau */
+
+.legendeTableau {
+    margin: .5em 0 0;
+    font-size: .85em;
+    color: #55606a;
+}

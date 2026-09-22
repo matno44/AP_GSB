@@ -6,7 +6,7 @@ définie au § 11 (glossaire).
 | Phase | Intitulé | État |
 |-------|----------|------|
 | 0 | Audit du code existant | **terminée** |
-| 1 | Puissance fiscale du véhicule | à faire |
+| 1 | Puissance fiscale du véhicule | **terminée** |
 | 2 | Upload des justificatifs | à faire |
 | 3 | Génération PDF des fiches | à faire |
 | 4 | Maquette HTML partie comptable | à faire |
@@ -50,6 +50,23 @@ définie au § 11 (glossaire).
 `sauvegardes/bd_gsb_avant_phase1.sql`, et le dépôt Git.
 **Fichiers modifiés en phase 0 :** `.gitignore` (2 lignes d'exclusion ajoutées).
 **Aucun fichier de code n'a été modifié.**
+
+### Phase 1 — Puissance fiscale du véhicule
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration du schéma | `sql/001_puissance_fiscale_vehicule.sql` *(créé)* | crée la table `typevehicule` (le barème), ajoute `visiteur.idTypeVehicule` et `lignefraisforfait.montantUnitaire`, puis remplit cette dernière pour les fiches existantes |
+| Synchronisation du script de création | `sql/bd_gsb.sql` *(modifié)* | une base créée de zéro doit donner le même schéma qu'une base migrée |
+| Nouvelles méthodes d'accès aux données | `src/Pg/GsbFraisBundle/services/PdoGsb.php` *(modifié)* | `getLesTypesVehicule`, `getTypeVehiculeVisiteur`, `estTypeVehiculeValide`, `getLesMontantsUnitairesApplicables`, `getTarifKilometrique`, `majTypeVehiculeVisiteur` |
+| Historisation à la création de fiche | `PdoGsb::creeNouvellesLignesFrais()` *(modifié)* | fige le montant unitaire de chaque ligne au moment où la fiche est créée |
+| Remontée du montant historisé | `PdoGsb::getLesFraisForfait()` *(modifié)* | renvoie désormais `montantunitaire` et `montant` (= quantité × montant unitaire, calculé en SQL) |
+| Écran de déclaration du véhicule | `Controller/VehiculeController.php` *(créé)* | affiche le barème, contrôle la valeur reçue, enregistre |
+| Vue associée | `Resources/views/Vehicule/monvehicule.html.twig` *(créé)* | liste déroulante du barème + rappel de la règle de non-recalcul |
+| Routes | `Resources/config/routing.yml` *(modifié)* | `pg_gsb_frais_monvehicule` (GET), `pg_gsb_frais_validermonvehicule` (POST) |
+| Entrée de menu | `Resources/views/accueil.html.twig` *(modifié)* | lien « Mon véhicule » |
+| Affichage en consultation | `Resources/views/ListeFrais/listefraisforfait.html.twig` *(modifié)* | deux lignes ajoutées au tableau : montant unitaire appliqué, et total de la ligne |
+| Affichage en saisie | `Resources/views/SaisirFrais/saisirfraisforfait.html.twig` *(modifié)* | le montant unitaire figure en face de chaque libellé, avec un lien vers « Mon véhicule » |
+| Style | `Resources/public/styles/styles.css` *(modifié)* | classe `.legendeTableau` pour les légendes sous tableau |
 
 ---
 
@@ -293,6 +310,45 @@ pas à *modifier* un calcul existant, mais à **en introduire un qui n'existe pa
 
 ---
 
+### 3.4 Évolution du schéma en phase 1
+
+Deux ajouts, livrés par `sql/001_puissance_fiscale_vehicule.sql`.
+
+```
+       typevehicule  (NOUVELLE TABLE - le barème)
+     ┌──────────────────────────┐
+     │ id      CHAR(3)       PK │  D4 / D56 / D7 / E4 / E56 / E7
+     │ libelle VARCHAR(30)      │  « 5/6 CV Essence »
+     │ montant DECIMAL(5,2)     │  0.67  (€ par km)
+     └───────────┬──────────────┘
+                 │ idTypeVehicule (NULL autorisé)
+     ┌───────────▼──────────────┐
+     │        visiteur          │  + COLONNE idTypeVehicule CHAR(3) NULL
+     └──────────────────────────┘
+
+     ┌──────────────────────────────────────────┐
+     │           lignefraisforfait              │
+     │ ...                                      │
+     │ quantite        INT           NOT NULL   │
+     │ montantUnitaire DECIMAL(5,2)  NOT NULL   │  ← NOUVELLE COLONNE
+     └──────────────────────────────────────────┘
+```
+
+Contenu de `typevehicule` :
+
+| id | libelle | montant |
+|----|---------|---------|
+| D4 | 4 CV Diesel | 0.52 |
+| D56 | 5/6 CV Diesel | 0.58 |
+| D7 | 7 CV et + Diesel | 0.65 |
+| E4 | 4 CV Essence | 0.62 |
+| E56 | 5/6 CV Essence | 0.67 |
+| E7 | 7 CV et + Essence | 0.72 |
+
+`fraisforfait.KM` **reste à 0,62 €** : cette ligne n'est plus le tarif de tout
+le monde, elle devient le **tarif de repli** appliqué à un visiteur qui n'a pas
+encore déclaré son véhicule. Aucune donnée n'a été détruite.
+
 ## 4. Le cahier des charges du client (`ap-gsb-web.pdf`)
 
 Document fourni après le premier passage d'audit :
@@ -501,7 +557,9 @@ par le document lui-même : il manque une livraison annoncée.
 
 ---
 
-## 5. Pourquoi de cette manière (décisions de la phase 0)
+## 5. Pourquoi de cette manière
+
+### Phase 0
 
 ### Décision 0.1 — Travailler dans `gsbProjet/` et non dans `GsbFraisBundle/`
 - **Problème :** deux copies du même bundle coexistent.
@@ -548,6 +606,105 @@ par le document lui-même : il manque une livraison annoncée.
 - **Je signale l'arbitrage :** c'est moins « propre » que le composant Security
   officiel, et un jury peut poser la question. La réponse est préparée au § 11.
 
+### Phase 1
+
+### Décision 1.1 — Historiser sur la LIGNE de frais, pas sur la fiche
+
+- **Problème :** garantir qu'un changement de barème ne recalcule pas les fiches
+  déjà saisies.
+- **Options envisagées :**
+
+| Option | Principe | Verdict |
+|--------|----------|---------|
+| **A — colonne `montantUnitaire` sur `lignefraisforfait`** | chaque ligne porte le tarif qui lui a été appliqué | ✅ **retenue** |
+| B — colonne `tarifKm` sur `fichefrais` | une seule valeur par fiche | ❌ ne protège que le kilométrique ; si la direction change le prix du repas, toutes les fiches passées changent |
+| C — table d'historique des barèmes avec dates de validité | on retrouve le tarif en vigueur à la date de la fiche | ❌ correct mais disproportionné : il faut gérer les périodes, les chevauchements, et chaque lecture devient une jointure sur intervalle de dates. Difficile à défendre à l'oral pour un gain nul ici |
+| D — ne rien stocker, lire le barème à l'affichage | zéro modification de schéma | ❌ c'est exactement le défaut à corriger : le passé serait réécrit |
+
+- **Ce qui a tranché :** l'annexe 1 du cahier des charges (§ 4.4) imprime une
+  colonne **« Montant unitaire » ligne par ligne**. Le document du client
+  demande donc lui-même une information par ligne — l'option A n'est pas une
+  invention de ma part, c'est la lecture du besoin.
+- **Bénéfice non demandé mais gratuit :** l'option A protège aussi les montants
+  Nuitée, Repas et Étape, pas seulement le kilométrique.
+
+### Décision 1.2 — Répercuter un changement de véhicule sur les fiches à l'état `CR` uniquement
+
+- **Problème :** un visiteur déclare son véhicule le 10 du mois, alors que sa
+  fiche du mois a été créée le 2. Que devient le tarif déjà figé sur sa ligne ?
+- **Retenu :** `majTypeVehiculeVisiteur()` met à jour la ligne kilométrique des
+  fiches **à l'état `CR`** (saisie en cours), et uniquement celles-là.
+- **Raison :** « ne pas recalculer rétroactivement » vise les fiches
+  **terminées**. Une fiche encore en saisie n'est pas un historique, c'est un
+  brouillon : elle doit refléter la situation réelle du visiteur. Le contraire
+  produirait un bug absurde — un visiteur déclarant son véhicule le 10 serait
+  remboursé au mauvais tarif pour tout le mois, sans aucun moyen de corriger.
+- **Écarté :** ne jamais rien répercuter (le visiteur devrait attendre le mois
+  suivant) ; tout répercuter (viole le cahier des charges).
+- **Le filtre est dans le `WHERE` de la requête**, pas dans un `if` PHP : la
+  règle est appliquée par la base pour toutes les fiches en une seule
+  instruction, sans que l'application ait à les parcourir.
+
+### Décision 1.3 — Le barème en base, mais l'identifiant `KM` dans le code
+
+- **Problème :** le cahier des charges interdit de coder le barème en dur.
+  Les **valeurs** sont donc en base (`typevehicule`). Mais il faut bien savoir
+  *quelle* ligne de `fraisforfait` est la ligne kilométrique.
+- **Retenu :** une constante de classe,
+  `PdoGsb::ID_FRAIS_KILOMETRIQUE = 'KM'`, déclarée à un seul endroit et
+  passée en paramètre lié aux requêtes.
+- **Pourquoi c'est acceptable :** ce qui est volatile, c'est le **tarif** (la
+  direction le changera), pas le **fait** qu'il existe un type de frais
+  kilométrique. Cette information est structurelle.
+- **Alternative écartée :** ajouter une colonne booléenne
+  `fraisforfait.estKilometrique`. Plus « pur », mais cela ajoute une colonne à
+  une table du prédécesseur pour exprimer une information qui ne changera
+  jamais. **Je signale que c'est discutable** et qu'un jury peut préférer
+  l'autre choix : la réponse est préparée au § 11 (Q15).
+
+### Décision 1.4 — `montantUnitaire` en `NOT NULL` sans valeur par défaut
+
+- **Problème :** que faire si une future insertion oublie le montant unitaire ?
+- **Retenu :** `NOT NULL`, **sans** `DEFAULT`. MySQL en mode strict refuse
+  alors l'insertion.
+- **Écarté :** `NOT NULL DEFAULT 0.00`. L'insertion passerait, et produirait
+  silencieusement une ligne remboursée **zéro euro**. Une erreur bruyante vaut
+  mieux qu'un faux résultat : on la voit tout de suite, en développement.
+
+### Décision 1.5 — Reprise de l'existant avec le barème courant
+
+- **Problème :** les 16 lignes de frais déjà en base n'ont pas de montant
+  unitaire. Avec quelle valeur les remplir ?
+- **Retenu :** le montant courant de `fraisforfait` (donc 0,62 € pour le
+  kilométrique).
+- **C'est une hypothèse, et je l'assume comme telle :** aucun historique de
+  barème n'a jamais été conservé, donc la seule valeur connue est celle
+  d'aujourd'hui. Elle est exacte **parce que** les tarifs n'ont jamais changé
+  depuis la création de la base. Si le barème avait déjà bougé par le passé,
+  cette reprise serait fausse et il n'existerait aucun moyen de la corriger.
+  C'est précisément le problème que la colonne empêche de reproduire à l'avenir.
+
+### Décision 1.6 — Pas de total général pour l'instant
+
+L'écran de consultation affiche le montant unitaire et le total **de chaque
+ligne**, mais pas le total général de la fiche. Ce n'est pas un oubli : le total
+général (forfait + hors forfait) appartient à l'annexe 1, donc à la **phase 3**.
+L'ajouter ici m'obligerait à le coder deux fois, ou à le coder dans un template
+avant d'avoir décidé où il doit vivre.
+
+### Décision 1.7 — Maintenir `sql/bd_gsb.sql` en phase avec les migrations
+
+- **Problème :** après la migration 001, une base créée avec `bd_gsb.sql`
+  n'aurait plus le même schéma qu'une base migrée. Deux développeurs auraient
+  deux bases différentes.
+- **Retenu :** répercuter chaque migration dans `bd_gsb.sql`, et le vérifier.
+- **Vérification effectuée :** création d'une base jetable `bd_gsb_test` à
+  partir de `bd_gsb.sql`, puis comparaison de son schéma avec celui de `bd_gsb`
+  par `mysqldump --no-data` + `diff`. Résultat : **aucune différence de
+  structure** (les seuls écarts portaient sur la collation, parce que ma base de
+  test avait été créée avec la collation par défaut du serveur). La base jetable
+  a été supprimée ensuite ; `bd_gsb` n'a pas été touchée.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -556,6 +713,8 @@ par le document lui-même : il manque une livraison annoncée.
 En revanche j'ai lu les boucles existantes, et trois d'entre elles
 conditionnent les phases suivantes. Je les documente ici parce que je vais
 devoir m'y raccrocher.
+
+### Phase 0 — lecture des boucles existantes
 
 ### 6.1 `PdoGsb::creeNouvellesLignesFrais()` — création de fiche + clôture N-1
 
@@ -631,6 +790,141 @@ POUR i DE 0 À count(lesLignes)-1
   Pourquoi pas `array_map` : il faudrait reconstruire chaque ligne complète.
 - **Coût :** 1 requête, N itérations. Pas de N+1.
 
+### Phase 1
+
+> **Combien de boucles ai-je écrites en phase 1 ? Une seule**, et c'est une
+> boucle que j'ai *modifiée*, pas créée. Tout le reste est fait en SQL. Ce n'est
+> pas un hasard : à chaque fois qu'on est tenté d'écrire une boucle PHP qui
+> exécute une requête à chaque tour, il faut se demander si une seule requête
+> ne ferait pas le travail. Le détail ci-dessous.
+
+### 6.4 `PdoGsb::creeNouvellesLignesFrais()` — la boucle modifiée
+
+*Fichier :* `src/Pg/GsbFraisBundle/services/PdoGsb.php`
+
+**Avant (prédécesseur) :**
+
+```
+lesIdFrais ← les identifiants de fraisforfait        (1 requête)
+POUR CHAQUE idFrais
+    INSERER lignefraisforfait(visiteur, mois, idFrais, quantité = 0)
+```
+
+**Après (phase 1) :**
+
+```
+lesMontants ← pour chaque type de frais, le montant unitaire applicable
+              à CE visiteur                          (1 requête)
+POUR CHAQUE (idFrais, montantUnitaire) DANS lesMontants
+    INSERER lignefraisforfait(visiteur, mois, idFrais,
+                              quantité = 0, montantUnitaire)
+```
+
+- **Ce que la boucle parcourt :** les 4 types de frais forfaitisés, chacun
+  accompagné du montant unitaire qui s'applique **à ce visiteur** (tarif de son
+  véhicule pour la ligne kilométrique, tarif du référentiel pour les autres).
+- **Ce qu'elle produit :** les 4 lignes de la nouvelle fiche, à quantité 0,
+  chacune portant déjà son tarif figé.
+- **Invariant :** après le i-ᵉ tour, la fiche possède i lignes, et chacune
+  porte le montant unitaire en vigueur **à l'instant de la création**. Ce
+  montant ne sera plus jamais modifié, sauf si le visiteur change de véhicule
+  alors que la fiche est encore à l'état `CR`.
+- **Pourquoi `foreach` et pas `for` :** on parcourt un tableau associatif issu
+  de `fetchAll()`, sans avoir besoin de l'indice. Pourquoi pas `array_map` :
+  on ne construit pas un nouveau tableau, on provoque un effet de bord (4
+  insertions) — `array_map` détourné à cet usage est trompeur pour le lecteur.
+- **Pourquoi une boucle plutôt qu'une seule requête `INSERT … SELECT` ?**
+  Techniquement une seule instruction suffirait. J'ai gardé la boucle parce
+  que **c'est la structure du prédécesseur** et que la règle du sujet est de ne
+  pas réécrire l'existant. Le gain aurait été de 3 requêtes, sur une opération
+  qui n'a lieu **qu'une fois par visiteur et par mois**. Je signale l'arbitrage :
+  ici, la cohérence avec le code repris l'emporte sur la micro-optimisation.
+- **Cas limites gérés :** visiteur sans véhicule déclaré → la requête retombe
+  sur le tarif historique via `coalesce` ; premier mois d'un visiteur → pas de
+  fiche N-1 à clôturer (comportement d'origine, inchangé).
+- **Coût :** **6 requêtes SQL au total** — exactement le même nombre qu'avant
+  la phase 1. Le point important : la requête qui récupère les montants
+  unitaires est faite **une seule fois avant la boucle**, pas à chaque tour.
+  Une version naïve aurait appelé `getTarifKilometrique()` dans la boucle et
+  serait passée à 6 + 4 = 10 requêtes. **Aucun N+1 introduit.**
+
+### 6.5 L'algorithme du montant unitaire applicable — fait en SQL, sans boucle
+
+*Fichier :* `PdoGsb::getLesMontantsUnitairesApplicables()`
+
+La règle métier est : *« pour chaque type de frais, le montant unitaire est
+celui du référentiel, sauf pour la ligne kilométrique, où c'est le tarif du
+véhicule du visiteur, et à défaut le tarif historique. »*
+
+Écrite en PHP, cette règle serait une boucle avec un `if` et une requête
+supplémentaire. Écrite en SQL, c'est une seule requête :
+
+```sql
+select fraisforfait.id as idfrais,
+       case when fraisforfait.id = :idFraisKm
+            then coalesce(typevehicule.montant, fraisforfait.montant)
+            else fraisforfait.montant
+       end as montantunitaire
+from fraisforfait
+left join visiteur     on visiteur.id = :idVisiteur
+left join typevehicule on typevehicule.id = visiteur.idTypeVehicule
+order by fraisforfait.id
+```
+
+- **Pourquoi `LEFT JOIN` et pas `INNER JOIN` :** avec `INNER JOIN`, un visiteur
+  **sans véhicule déclaré** ne produirait aucune ligne du tout — la fiche
+  serait créée vide. Le `LEFT JOIN` conserve les 4 lignes de `fraisforfait`
+  même quand `typevehicule` n'a rien à apparier.
+- **Rôle de `coalesce` :** renvoie le premier argument non NULL. Quand le
+  visiteur n'a pas de véhicule, `typevehicule.montant` vaut NULL (conséquence
+  du `LEFT JOIN`) et on retombe sur `fraisforfait.montant`, c'est-à-dire
+  0,62 €/km — **le comportement exact d'avant la phase 1**.
+- **Cas limite « valeur NULL en base » :** c'est le cas nominal ici, pas une
+  anomalie. Les 9 visiteurs repris ont `idTypeVehicule = NULL`.
+- **Coût :** 1 requête, quel que soit le nombre de types de frais.
+
+### 6.6 La répercussion sur les fiches en cours — également sans boucle
+
+*Fichier :* `PdoGsb::majTypeVehiculeVisiteur()`
+
+Pseudo-code :
+
+```
+DÉBUT DE TRANSACTION
+    visiteur.idTypeVehicule ← le nouveau type
+    POUR toutes les lignes kilométriques du visiteur
+        dont la fiche est à l'état 'CR' :
+            montantUnitaire ← tarif du nouveau véhicule (ou tarif historique)
+VALIDER    (ou TOUT ANNULER en cas d'erreur)
+```
+
+La deuxième étape **n'est pas une boucle PHP** : c'est un `UPDATE … INNER JOIN
+… WHERE fichefrais.idEtat = 'CR'`. Le serveur SQL met à jour toutes les lignes
+concernées en une instruction.
+
+- **Pourquoi pas une boucle PHP ?** Il faudrait d'abord lire la liste des
+  fiches `CR` du visiteur (1 requête), puis faire un `UPDATE` par fiche : c'est
+  le motif **N+1** caractéristique. Avec l'`UPDATE` joint : **1 requête**, quel
+  que soit le nombre de fiches.
+- **Pourquoi une transaction ?** Les deux écritures forment un tout. Si la
+  seconde échouait, le visiteur aurait un véhicule déclaré mais une fiche en
+  cours restée à l'ancien tarif : un état incohérent, silencieux, et très
+  difficile à diagnostiquer plus tard. `beginTransaction()` / `commit()`, avec
+  `rollBack()` dans le `catch`, garantit « les deux ou aucune ».
+- **Cas limites gérés :** aucune fiche à l'état `CR` → l'`UPDATE` touche
+  0 ligne, ce n'est pas une erreur ; type de véhicule inexistant → rejeté
+  **avant** d'entrer ici, par `estTypeVehiculeValide()`.
+- **Coût :** 2 requêtes, quel que soit le nombre de fiches du visiteur.
+
+### 6.7 Le calcul des totaux — délégué au moteur SQL
+
+`getLesFraisForfait()` renvoie `quantite * montantUnitaire as montant`. Aucun
+calcul en PHP, aucune boucle dans le contrôleur, aucune arithmétique dans le
+template Twig — celui-ci se contente d'afficher une valeur déjà calculée.
+
+Le seul « parcours » restant est le `{% for %}` des templates, qui **affiche**
+une ligne par élément et n'exécute aucune requête : ce n'est pas un N+1.
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -703,8 +997,68 @@ POUR i DE 0 À count(lesLignes)-1
   caractères imprimables supérieur à 92 % : il a isolé immédiatement les 4 vrais
   flux de texte — et montré qu'ils étaient vides.
 
-*Aucune erreur applicative n'a été rencontrée : le test de fumée est passé du
-premier coup (voir § 9).*
+*Aucune erreur applicative n'a été rencontrée en phase 0 : le test de fumée est
+passé du premier coup (voir § 9).*
+
+### Phase 1
+
+### 7.5 Un faux négatif dans mon propre test de sécurité
+- **Ce que je faisais :** vérifier qu'un type de véhicule inventé
+  (`idTypeVehicule=ZZZ`) est bien rejeté, avec
+  `curl … | grep "Ce type de véhicule n'existe pas dans le barème"`.
+- **Symptôme :** la commande n'affichait **rien**. Pendant quelques secondes,
+  j'ai cru que le contrôle serveur ne fonctionnait pas.
+- **Cause réelle :** le contrôle fonctionnait parfaitement. C'est mon `grep`
+  qui était faux : **Twig échappe automatiquement le HTML**, l'apostrophe de
+  « n'existe » est rendue `&#039;` dans la page. La chaîne cherchée n'existait
+  donc pas telle quelle dans la réponse.
+- **Correction :** chercher le bloc `class="erreur"` plutôt qu'un texte
+  contenant une apostrophe. Le message est bien là :
+  `<li>Ce type de véhicule n&#039;existe pas dans le barème</li>`, réponse
+  HTTP 200, et `visiteur.idTypeVehicule` est resté inchangé en base.
+- **Ce que ça m'a appris — et c'est un bon point pour l'oral :** cet
+  « échec » est la **preuve que l'échappement automatique de Twig est actif**.
+  C'est lui qui protège l'application des failles XSS : si un visiteur saisissait
+  `<script>…</script>` dans un libellé de frais, Twig l'afficherait comme du
+  texte au lieu de l'exécuter.
+- **Pour ne pas le refaire :** ne jamais tester la présence d'un texte
+  contenant `'`, `"`, `<`, `>` ou `&` dans du HTML généré — tester une balise
+  ou une classe CSS.
+
+### 7.6 Une transaction qui ne transactionne rien (erreur de conception)
+- **Ce que j'avais écrit :** mon premier jet de
+  `sql/001_puissance_fiscale_vehicule.sql` encadrait toute la migration d'un
+  `START TRANSACTION … COMMIT`, avec l'idée de pouvoir tout annuler en cas
+  d'échec.
+- **Pourquoi c'était faux :** sous MySQL, **toute instruction DDL
+  (`CREATE TABLE`, `ALTER TABLE`) provoque une validation implicite** de la
+  transaction en cours. Le `COMMIT` final ne portait donc sur rien, et un échec
+  au milieu du script aurait laissé la base dans un état intermédiaire — avec,
+  en prime, la fausse assurance d'être protégé.
+- **Correction :** retirer la transaction, et **écrire noir sur blanc dans le
+  script pourquoi elle n'y est pas**, en indiquant le vrai filet de sécurité :
+  la sauvegarde `sauvegardes/bd_gsb_avant_phase1.sql`.
+- **À retenir :** les transactions protègent le **DML** (`INSERT`, `UPDATE`,
+  `DELETE`), pas le **DDL**. C'est d'ailleurs pour cela que
+  `majTypeVehiculeVisiteur()`, qui ne fait que des `UPDATE`, peut légitimement
+  en utiliser une (§ 6.6).
+
+### 7.7 Des liens symboliques là où il fallait des copies
+- **Ce que je faisais :** réinstaller les assets après avoir modifié la feuille
+  de style, avec `php app/console assets:install web --symlink`.
+- **Symptôme :** aucune erreur — et c'est le problème. `web/bundles/pggsbfrais`
+  est devenu un **lien symbolique** vers `src/Pg/GsbFraisBundle/Resources/public`.
+- **Pourquoi c'est un problème ici :** le projet est sur un disque externe
+  (`/Volumes/LaCie Data`). Un lien symbolique contient un chemin **absolu** :
+  il casse si le disque est monté sous un autre nom, ou si le projet est copié
+  sur une clé USB pour la soutenance. Le `README.md` documente par ailleurs la
+  version sans `--symlink`.
+- **Correction :** `rm -rf web/bundles/pggsbfrais` puis
+  `php app/console assets:install web` (sans option) — copie réelle. Vérifié :
+  les trois dossiers de `web/bundles/` sont redevenus de vrais répertoires.
+- **Pour ne pas le refaire :** `--symlink` est pratique en développement local
+  sur un disque interne ; sur support amovible ou avant une démonstration,
+  toujours la copie.
 
 ---
 
@@ -712,12 +1066,68 @@ premier coup (voir § 9).*
 
 Classés par criticité pour la suite du projet.
 
-### 🔴 B1 — Aucun calcul de montant n'existe dans l'application
+### 🔴 B1 *(état à l'audit — levé en phase 1)* — Aucun calcul de montant n'existe dans l'application
 `fraisforfait.montant` n'est jamais lu (§ 3.3). Aucun total forfait, aucun total
 hors forfait, aucun total général n'est calculé ni affiché.
 **Impact :** phases 1 et 3. La phase 1 devra créer le calcul, pas le corriger.
 
-### 🔴 B2 — `lignefraisforfait` ne stocke que la quantité
+### ✅ B1 / B2 — LEVÉS en phase 1
+**B1** (aucun calcul de montant) : `getLesFraisForfait()` renvoie désormais le
+montant unitaire et le total de chaque ligne, calculés en SQL, et les écrans de
+saisie et de consultation les affichent. Le **total général** de la fiche reste
+à faire — c'est la phase 3 (décision 1.6).
+**B2** (pas de prix unitaire sur la ligne) : la colonne
+`lignefraisforfait.montantUnitaire` existe, est `NOT NULL`, et est alimentée à
+la création de chaque ligne. Vérifié sur les données réelles (§ 9.6).
+
+### Limites propres à la phase 1
+
+#### 🟠 L1 — Un visiteur ne peut pas « annuler » sa déclaration de véhicule
+L'écran propose les 6 véhicules du barème, mais aucune option « non renseigné ».
+Une fois un véhicule déclaré, le visiteur peut en changer mais pas revenir à
+NULL. Ce n'est pas demandé par le cahier des charges, et la couche d'accès aux
+données sait déjà le gérer (`majTypeVehiculeVisiteur(null)` retomberait sur le
+tarif historique grâce au `coalesce`). **Dette assumée, 5 minutes de travail si
+tu la veux.**
+
+#### 🟠 L2 — Le comptable ne peut pas renseigner le véhicule d'un visiteur
+Le cahier des charges dit « le visiteur **(ou le comptable)** ». Je n'ai
+implémenté que le visiteur, pour une raison simple : **le comptable n'existe pas
+encore** — ni compte, ni rôle, ni authentification (point B3). Construire un
+écran comptable maintenant obligerait à inventer un contrôle d'accès provisoire
+qu'il faudrait jeter en phase 5. L'écran « véhicule » côté comptable sera donc
+ajouté en **phase 5**, quand le rôle existera. *C'est une fonctionnalité
+partielle, je ne la présente pas comme terminée.*
+
+#### 🟠 L3 — Aucune trace de l'historique des véhicules
+On sait quel véhicule un visiteur a **aujourd'hui**, pas quel véhicule il avait
+en juin. L'information n'est pas perdue pour le remboursement — le tarif, lui,
+est historisé sur chaque ligne — mais on ne peut pas répondre à « quel véhicule
+conduisait-il en juin ? ». Le cahier des charges ne le demande pas.
+
+#### 🟡 L4 — Le barème n'est modifiable qu'en SQL
+La table `typevehicule` n'a pas d'écran d'administration : changer un tarif se
+fait par un `UPDATE`. Le cahier des charges demande que le barème soit **stocké
+en base** (fait), pas qu'il soit administrable par écran. À signaler comme
+évolution possible.
+
+#### 🟡 L5 — Le script `001` n'est pas rejouable
+MySQL ne connaît pas `ADD COLUMN IF NOT EXISTS`. Un second passage s'arrête sur
+l'erreur 1060 « Duplicate column name » **sans rien abîmer**, mais il n'existe
+pas de table de suivi des migrations qui empêcherait de le relancer par erreur.
+C'est le prix de l'absence de Doctrine Migrations (décision 0.2).
+
+#### 🟡 L6 — Données de test laissées en base
+Mes tests ont modifié `bd_gsb` : `a17` (dandre) a désormais le véhicule **E56**,
+`a55` (cbedos) le véhicule **D7**, une fiche 202609 a été créée pour `a55`, et
+un frais hors forfait « Peage A6 » (18,50 €) a été ajouté à la fiche 202609 de
+`a17`. **Je ne les ai pas supprimés** : ce sont des `DELETE`, et la règle est de
+ne rien détruire sans ton accord. Dis-le-moi si tu veux repartir de l'état
+initial — la sauvegarde `sauvegardes/bd_gsb_avant_phase1.sql` le permet, mais
+elle est **antérieure à la migration 001** : il faudrait la restaurer puis
+rejouer `sql/001_puissance_fiscale_vehicule.sql`.
+
+### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
 qu'en joignant `fraisforfait` **à l'instant de la lecture**. Donc si on change
 le barème demain, toutes les fiches passées changent de montant.
@@ -874,6 +1284,79 @@ Puis ouvrir <http://127.0.0.1:8000/accueil>.
 ➡️ **L'application est opérationnelle en local. Aucune installation n'est
 nécessaire pour démarrer la phase 1.**
 
+### 9.5 Phase 1 — installation de la migration
+
+À faire **une seule fois**, sur une base déjà créée :
+
+```bash
+cd "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet"
+mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_001.sql
+mysql -u root bd_gsb < sql/001_puissance_fiscale_vehicule.sql
+php app/console assets:install web
+php app/console cache:clear --env=dev
+```
+
+Sur une base créée de zéro, `sql/bd_gsb.sql` contient déjà tout : rien à faire.
+
+### 9.6 Phase 1 — scénarios de test
+
+Se connecter avec `dandre` / `oppg5`.
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| V1 | Menu « Mon véhicule » | Message « Vous n'avez pas encore déclaré votre véhicule… tarif historique de **0.62 € / km** », et une liste des 6 véhicules avec leur tarif |
+| V2 | Choisir « 5/6 CV Essence — 0.67 €/km », Valider | « Votre véhicule a bien été enregistré. » puis « Véhicule déclaré : **5/6 CV Essence** — remboursement à **0.67 € / km** » |
+| V3 | Menu « Saisie fiche de frais » | En face de « Frais Kilométrique » s'affiche **(0.67 €)**, et **(110.00 €)**, **(80.00 €)**, **(25.00 €)** pour les trois autres |
+| V4 | Menu « Mes fiches de frais », choisir le mois en cours | Le tableau des éléments forfaitisés comporte 4 lignes : libellé, quantité, montant unitaire, total |
+| **V5** | **Choisir le mois 08/2026 (fiche clôturée)** | **Le montant unitaire kilométrique y est resté à 0.62 €** — la fiche n'a pas été recalculée. **C'est LE test de la phase 1.** |
+| V6 | Choisir 07/2026 (validée) puis 06/2026 (remboursée) | Même chose : 0.62 €, inchangé |
+| V7 | Revenir sur « Mon véhicule », choisir « 7 CV et + Diesel », Valider | Le mois en cours passe à 0.65 €, les mois clôturés restent à 0.62 € |
+
+**Vérification directe en base (la preuve la plus parlante à l'oral) :**
+
+```sql
+SELECT lff.mois, ff.idEtat AS etat, lff.quantite, lff.montantUnitaire,
+       lff.quantite * lff.montantUnitaire AS total
+  FROM lignefraisforfait lff
+ INNER JOIN fichefrais ff ON ff.idVisiteur = lff.idVisiteur AND ff.mois = lff.mois
+ WHERE lff.idVisiteur = 'a17' AND lff.idFraisForfait = 'KM'
+ ORDER BY lff.mois;
+```
+
+Résultat obtenu après avoir déclaré un 5/6 CV Essence :
+
+| mois | etat | quantite | montantUnitaire | total |
+|------|------|----------|-----------------|-------|
+| 202606 | RB | 480 | **0.62** | 297.60 |
+| 202607 | VA | 310 | **0.62** | 192.20 |
+| 202608 | CL | 225 | **0.62** | 139.50 |
+| 202609 | CR | 300 | **0.67** | 201.00 |
+
+➡️ Seule la fiche en cours de saisie (`CR`) a suivi le nouveau tarif. Les trois
+fiches terminées sont intactes.
+
+### 9.7 Phase 1 — cas d'erreur et sécurité
+
+| # | Action | Résultat attendu |
+|---|--------|------------------|
+| V8 | Envoyer un type de véhicule inexistant (hors navigateur) : `curl -b cookies -d "idTypeVehicule=ZZZ" http://127.0.0.1:8000/validermonvehicule` | Page réaffichée avec le bandeau rouge « Ce type de véhicule n'existe pas dans le barème ». **Rien n'est écrit en base.** Vérifiable par `SELECT idTypeVehicule FROM visiteur WHERE id='a17';` |
+| V9 | Appeler `/monvehicule` sans être connecté | Redirection 302 vers `/accueil` |
+| V10 | Appeler `/validermonvehicule` en GET | Erreur 404 (la route n'accepte que POST) |
+
+### 9.8 Phase 1 — non-régression (vérifiée)
+
+Tous les scénarios de la phase 0 repassent après modification :
+
+| # | Vérification | Résultat |
+|---|--------------|----------|
+| R1 | Mauvais mot de passe | Message d'erreur affiché ✔ |
+| R2 | Saisie de quantités valides | Valeurs enregistrées et réaffichées ✔ |
+| R3 | Quantité non numérique | « Les valeurs des frais doivent être numériques » ✔ |
+| R4 | Ajout d'un frais hors forfait | Ligne créée ✔ |
+| R5 | Frais daté de plus d'un an | « dépassé de plus de 1 an » ✔ |
+| R6 | `/listefrais` sans session | Redirection 302 vers `/accueil` ✔ |
+| R7 | Suppression du frais d'un autre visiteur | HTTP 404 ✔ |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)
@@ -1006,6 +1489,79 @@ Le document lui-même prévoit un contournement hors système (« le visiteur do
 être tenu informé par téléphone », « les documents annotés sont conservés par le
 service comptable ») : la traçabilité existe, mais sur papier.
 
+### Questions sur la phase 1
+
+**Q13. Où est stocké le barème, et pourquoi pas dans le code ?**
+Dans la table `typevehicule` (6 lignes : id, libellé, montant). Le cahier des
+charges annonce que la direction le fera évoluer. S'il était dans un `switch` du
+contrôleur, chaque changement de tarif imposerait une modification du code, un
+test et un redéploiement. En base, c'est un `UPDATE` d'une ligne, sans toucher à
+l'application.
+
+**Q14. Comment garantis-tu qu'une fiche déjà saisie n'est pas recalculée ?**
+Par **historisation** : la colonne `lignefraisforfait.montantUnitaire` enregistre
+le tarif appliqué **au moment de la saisie**. Les écrans lisent ce montant-là,
+jamais le barème courant. Concrètement, si la direction porte demain le tarif à
+0,80 €, mes fiches de juin resteront à 0,62 € parce que c'est ce qui est écrit
+sur leurs lignes. La preuve est au § 9.6 : après changement de véhicule, les
+fiches `CL`, `VA` et `RB` sont restées à 0,62 € et seule la fiche `CR` est passée
+à 0,67 €.
+
+**Q15. Le barème est en base, mais `'KM'` est écrit dans le code : n'est-ce pas
+contradictoire ?**
+Non, et c'est un arbitrage assumé. Ce que le cahier des charges veut éviter,
+c'est que les **valeurs** du barème soient figées dans le code — elles sont en
+base. `'KM'` n'est pas un tarif : c'est l'identifiant du type de frais dont le
+montant dépend du véhicule. C'est une information de structure, qui ne change
+pas quand les tarifs changent. Elle est déclarée **une seule fois**, dans la
+constante `PdoGsb::ID_FRAIS_KILOMETRIQUE`. L'alternative serait une colonne
+booléenne `fraisforfait.estKilometrique` : plus pure, mais elle ajoute une
+colonne à une table existante pour décrire un fait qui ne variera jamais.
+
+**Q16. Que se passe-t-il pour un visiteur qui n'a pas déclaré son véhicule ?**
+Il est remboursé au tarif historique de 0,62 €/km, exactement comme avant la
+phase 1. Techniquement, la requête fait un `LEFT JOIN` sur `typevehicule` et un
+`coalesce` : si la jointure ne ramène rien, on retombe sur `fraisforfait.KM`.
+C'est important : **aucun visiteur ne se retrouve avec un tarif à zéro** parce
+qu'il n'a pas encore rempli le formulaire.
+
+**Q17. Si un visiteur change de véhicule le 10 du mois, que devient sa fiche en
+cours ?**
+Elle est mise à jour. La règle codée est : seules les fiches à l'état `CR`
+(saisie en cours) suivent le nouveau tarif. Une fiche en cours est un brouillon,
+pas un historique. Sans cette règle, un visiteur qui déclare son véhicule le 10
+serait remboursé au mauvais tarif pour tout le mois sans pouvoir le corriger.
+Le filtre est dans le `WHERE` de la requête : `AND fichefrais.idEtat = 'CR'`.
+
+**Q18. Pourquoi une transaction dans `majTypeVehiculeVisiteur()` ?**
+Parce que l'opération comporte deux écritures : mettre à jour le véhicule du
+visiteur, puis répercuter le tarif sur ses fiches en cours. Si la seconde
+échouait, on aurait un visiteur avec un véhicule déclaré mais une fiche restée
+à l'ancien tarif — une incohérence silencieuse. `beginTransaction()` /
+`commit()`, avec `rollBack()` dans le `catch`, garantit « les deux, ou aucune ».
+
+**Q19. Y a-t-il un risque de N+1 dans ton code ?**
+Non, et c'est délibéré. Deux endroits auraient pu en produire :
+(a) `creeNouvellesLignesFrais()` — la requête qui récupère les montants
+unitaires est faite **une fois avant la boucle** ; une version naïve aurait
+interrogé la base à chaque tour (6 requêtes au lieu de 10) ;
+(b) la répercussion sur les fiches en cours — c'est un `UPDATE … INNER JOIN`,
+donc **1 requête quel que soit le nombre de fiches**, au lieu d'une lecture
+suivie d'un `UPDATE` par fiche.
+
+**Q20. Pourquoi ne pas avoir mis `DEFAULT 0` sur `montantUnitaire` ?**
+Parce qu'une insertion qui oublierait le montant passerait alors sans bruit et
+produirait une ligne remboursée **zéro euro** — une erreur invisible en
+production. Avec `NOT NULL` sans valeur par défaut, MySQL en mode strict refuse
+l'insertion : l'erreur apparaît immédiatement, en développement.
+
+**Q21. Comment as-tu vérifié que le script de création complète et la base
+migrée donnent bien le même schéma ?**
+J'ai créé une base jetable à partir de `sql/bd_gsb.sql`, puis comparé les deux
+schémas avec `mysqldump --no-data` et `diff`. Aucune différence de structure.
+Sans cette vérification, un camarade qui installerait le projet de zéro
+obtiendrait une base subtilement différente de la mienne.
+
 ### Glossaire
 
 | Terme | Définition |
@@ -1026,6 +1582,13 @@ service comptable ») : la traçabilité existe, mais sur papier.
 | **Transaction** | Groupe d'opérations SQL validé (`COMMIT`) ou annulé (`ROLLBACK`) en bloc, pour éviter les états intermédiaires incohérents. |
 | **Migration** | Script versionné faisant évoluer le schéma de la base d'une version à la suivante. Ici : les fichiers `sql/00X_*.sql`. |
 | **Historisation** | Enregistrer la valeur d'une donnée au moment d'un événement, pour qu'un changement futur du référentiel ne modifie pas le passé. Sujet central de la phase 1. |
+| **Référentiel** | Table de valeurs de référence, partagée et destinée à évoluer (ici `typevehicule`, `fraisforfait`). S'oppose aux données historisées, qui ne bougent plus. |
+| **DDL / DML** | DDL = instructions qui modifient la *structure* (`CREATE`, `ALTER`) ; DML = instructions qui modifient les *données* (`INSERT`, `UPDATE`, `DELETE`). Sous MySQL, une transaction protège le DML, pas le DDL. |
+| **LEFT JOIN** | Jointure qui conserve toutes les lignes de la table de gauche, même sans correspondance à droite (les colonnes de droite valent alors NULL). Un `INNER JOIN` les supprimerait. |
+| **COALESCE** | Fonction SQL qui renvoie son premier argument non NULL. Sert ici à appliquer un tarif de repli. |
+| **Échappement HTML** | Remplacement automatique par Twig des caractères `< > & ' "` par leur équivalent inoffensif (`&#039;`…), pour qu'une donnée saisie ne puisse pas être interprétée comme du code. Base de la protection contre les failles XSS. |
+| **XSS** | *Cross-Site Scripting* : injection de code JavaScript via une donnée saisie, exécutée dans le navigateur des autres utilisateurs. |
+| **Mode strict (MySQL)** | Configuration qui fait échouer une requête invalide au lieu de la corriger silencieusement (valeur tronquée, colonne obligatoire absente…). |
 | **Twig** | Moteur de templates de Symfony (`.html.twig`) : produit le HTML à partir de variables fournies par le contrôleur. |
 | **Fichier de routage** | `routing.yml` : associe une URL à un couple contrôleur/action. |
 | **CSRF** | *Cross-Site Request Forgery* : attaque faisant exécuter une action à un utilisateur connecté à son insu ; se contre par un jeton dans le formulaire. |

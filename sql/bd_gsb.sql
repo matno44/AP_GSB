@@ -6,6 +6,10 @@
 --
 -- Le schéma reprend exactement les noms de tables, de colonnes et d'alias
 -- attendus par Pg\GsbFraisBundle\services\PdoGsb.
+--
+-- Ce fichier est tenu à jour avec les migrations du dossier sql/ : il doit
+-- toujours produire le MÊME schéma qu'une base créée à l'origine puis migrée.
+-- Migrations intégrées ici : 001 (puissance fiscale du véhicule).
 -- ---------------------------------------------------------------------------
 
 DROP DATABASE IF EXISTS bd_gsb;
@@ -27,6 +31,16 @@ CREATE TABLE fraisforfait (
     PRIMARY KEY (id)
 ) ENGINE=InnoDB;
 
+-- --------------------------------------------------------- typevehicule
+-- Barème de remboursement kilométrique (migration 001). Stocké en base et non
+-- codé en dur : la direction peut le faire évoluer sans toucher au code.
+CREATE TABLE typevehicule (
+    id      CHAR(3)       NOT NULL,
+    libelle VARCHAR(30)   NOT NULL,
+    montant DECIMAL(5, 2) NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB;
+
 -- --------------------------------------------------------- visiteur
 CREATE TABLE visiteur (
     id           CHAR(4)     NOT NULL,
@@ -38,8 +52,13 @@ CREATE TABLE visiteur (
     cp           CHAR(5)     DEFAULT NULL,
     ville        VARCHAR(30) DEFAULT NULL,
     dateEmbauche DATE        DEFAULT NULL,
+    -- NULL tant que le visiteur n'a pas déclaré son véhicule (migration 001) ;
+    -- l'application retombe alors sur le tarif historique fraisforfait.KM.
+    idTypeVehicule CHAR(3)   DEFAULT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uk_visiteur_login (login)
+    UNIQUE KEY uk_visiteur_login (login),
+    KEY fk_visiteur_typevehicule (idTypeVehicule),
+    CONSTRAINT fk_visiteur_typevehicule FOREIGN KEY (idTypeVehicule) REFERENCES typevehicule (id)
 ) ENGINE=InnoDB;
 
 -- --------------------------------------------------------- fichefrais
@@ -64,6 +83,11 @@ CREATE TABLE lignefraisforfait (
     mois           CHAR(6) NOT NULL,
     idFraisForfait CHAR(3) NOT NULL,
     quantite       INT     NOT NULL DEFAULT 0,
+    -- Historisation (migration 001) : montant unitaire figé à la création de la
+    -- ligne, pour qu'un changement de barème ne recalcule pas les fiches
+    -- passées. Pas de valeur par défaut, volontairement : une insertion qui
+    -- l'oublierait doit échouer au lieu de produire un total à 0.
+    montantUnitaire DECIMAL(5, 2) NOT NULL,
     PRIMARY KEY (idVisiteur, mois, idFraisForfait),
     KEY fk_lff_fraisforfait (idFraisForfait),
     CONSTRAINT fk_lff_fichefrais   FOREIGN KEY (idVisiteur, mois) REFERENCES fichefrais (idVisiteur, mois) ON DELETE CASCADE,
@@ -102,6 +126,17 @@ INSERT INTO fraisforfait (id, libelle, montant) VALUES
     ('NUI', 'Nuitée Hôtel',         80.00),
     ('REP', 'Repas Restaurant',     25.00);
 
+INSERT INTO typevehicule (id, libelle, montant) VALUES
+    ('D4',  '4 CV Diesel',       0.52),
+    ('D56', '5/6 CV Diesel',     0.58),
+    ('D7',  '7 CV et + Diesel',  0.65),
+    ('E4',  '4 CV Essence',      0.62),
+    ('E56', '5/6 CV Essence',    0.67),
+    ('E7',  '7 CV et + Essence', 0.72);
+
+-- Les visiteurs sont créés sans véhicule déclaré (idTypeVehicule NULL) :
+-- c'est l'état réel de la reprise, chacun renseignera le sien via
+-- l'écran « Mon véhicule ».
 INSERT INTO visiteur (id, nom, prenom, login, mdp, adresse, cp, ville, dateEmbauche) VALUES
     ('a17', 'Andre',     'David',    'dandre',   'oppg5', '1 rue Petit',          '25000', 'Besancon',  '2000-11-13'),
     ('a55', 'Bedos',     'Christian','cbedos',   'gthe8', '3 rue Blaise Pascal',  '75008', 'Paris',     '1998-05-26'),
@@ -125,15 +160,18 @@ INSERT INTO fichefrais (idVisiteur, mois, nbJustificatifs, montantValide, dateMo
     ('a17', '202608', 3,    0.00, '2026-09-02', 'CL'),
     ('a55', '202608', 1,    0.00, '2026-09-03', 'CL');
 
-INSERT INTO lignefraisforfait (idVisiteur, mois, idFraisForfait, quantite) VALUES
-    ('a17', '202606', 'ETP', 3), ('a17', '202606', 'KM', 480),
-    ('a17', '202606', 'NUI', 4), ('a17', '202606', 'REP', 12),
-    ('a17', '202607', 'ETP', 2), ('a17', '202607', 'KM', 310),
-    ('a17', '202607', 'NUI', 2), ('a17', '202607', 'REP', 8),
-    ('a17', '202608', 'ETP', 1), ('a17', '202608', 'KM', 225),
-    ('a17', '202608', 'NUI', 3), ('a17', '202608', 'REP', 9),
-    ('a55', '202608', 'ETP', 0), ('a55', '202608', 'KM', 120),
-    ('a55', '202608', 'NUI', 1), ('a55', '202608', 'REP', 4);
+-- Le montant unitaire est historisé sur la ligne (migration 001). Les fiches
+-- de démonstration sont antérieures au barème par véhicule : elles portent
+-- donc le tarif kilométrique historique de 0,62 €/km.
+INSERT INTO lignefraisforfait (idVisiteur, mois, idFraisForfait, quantite, montantUnitaire) VALUES
+    ('a17', '202606', 'ETP', 3, 110.00), ('a17', '202606', 'KM', 480, 0.62),
+    ('a17', '202606', 'NUI', 4,  80.00), ('a17', '202606', 'REP', 12, 25.00),
+    ('a17', '202607', 'ETP', 2, 110.00), ('a17', '202607', 'KM', 310, 0.62),
+    ('a17', '202607', 'NUI', 2,  80.00), ('a17', '202607', 'REP',  8, 25.00),
+    ('a17', '202608', 'ETP', 1, 110.00), ('a17', '202608', 'KM', 225, 0.62),
+    ('a17', '202608', 'NUI', 3,  80.00), ('a17', '202608', 'REP',  9, 25.00),
+    ('a55', '202608', 'ETP', 0, 110.00), ('a55', '202608', 'KM', 120, 0.62),
+    ('a55', '202608', 'NUI', 1,  80.00), ('a55', '202608', 'REP',  4, 25.00);
 
 INSERT INTO lignefraishorsforfait (idVisiteur, mois, libelle, date, montant) VALUES
     ('a17', '202606', 'Péage autoroute A36',        '2026-06-08',  18.40),
