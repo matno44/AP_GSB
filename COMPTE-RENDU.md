@@ -1,7 +1,7 @@
 # Compte rendu — Application GSB Frais (AP BTS SIO 2)
 
 Document vivant, enrichi à chaque phase. Toute la terminologie employée est
-définie au § 7 (glossaire).
+définie au § 11 (glossaire).
 
 | Phase | Intitulé | État |
 |-------|----------|------|
@@ -32,8 +32,24 @@ définie au § 7 (glossaire).
 | Inventaire de l'outillage | PHP 7.4.33, Composer 2.10.3, MySQL 9.5.0, Symfony CLI 5.20, extensions PHP |
 | Rédaction du présent document | `COMPTE-RENDU.md` (créé) |
 
-**Fichiers créés en phase 0 :** `COMPTE-RENDU.md` uniquement.
-**Fichiers modifiés en phase 0 :** aucun.
+### Phase 0 (suite) — après réception du cahier des charges et de ton accord
+
+| Action | Détail |
+|--------|--------|
+| Lecture du cahier des charges | `ap-gsb-web.pdf` (9 pages) — PDF scanné, pages reconstruites en images pour être lues (§ 4.1) |
+| Dépouillement des règles de gestion | forfait / hors forfait, saisie, clôture, validation, mise en paiement (§ 4.2) |
+| Relevé du cycle d'état officiel | diagramme d'états du document — **5 états** (§ 4.3) |
+| Relevé de l'annexe 1 | maquette exacte de la fiche à imprimer en phase 3 (§ 4.4) |
+| Relevé de l'annexe 2 | cas d'utilisation « Valider fiche de frais », scénario nominal + exception 4-a (§ 4.5) |
+| Confrontation document ↔ base | 5 écarts relevés, E1 à E5 (§ 4.6) |
+| Sauvegarde de la base | `mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_phase1.sql` |
+| Mise sous gestion de version | `git init` + commit initial `b2ac4b6` « État initial : reprise du projet du prédécesseur » — 78 fichiers suivis, `vendor/` et caches exclus |
+| Complément au `.gitignore` | ajout de `.DS_Store` et `/sauvegardes/` |
+
+**Fichiers créés en phase 0 :** `COMPTE-RENDU.md`,
+`sauvegardes/bd_gsb_avant_phase1.sql`, et le dépôt Git.
+**Fichiers modifiés en phase 0 :** `.gitignore` (2 lignes d'exclusion ajoutées).
+**Aucun fichier de code n'a été modifié.**
 
 ---
 
@@ -82,7 +98,7 @@ gsbProjet/
 │       │   ├── SaisirFraisController.php
 │       │   └── include/
 │       │       ├── fct.inc.php              fonctions utilitaires (dates, validation, session)
-│       │       └── class.pdogsb.inc.php     ANCIENNE version de PdoGsb — code mort (voir § 5)
+│       │       └── class.pdogsb.inc.php     ANCIENNE version de PdoGsb — code mort (voir § 8, point B11)
 │       ├── DependencyInjection/       chargement de services.yml
 │       ├── Resources/
 │       │   ├── config/routing.yml     8 routes
@@ -277,7 +293,215 @@ pas à *modifier* un calcul existant, mais à **en introduire un qui n'existe pa
 
 ---
 
-## 4. Pourquoi de cette manière (décisions de la phase 0)
+## 4. Le cahier des charges du client (`ap-gsb-web.pdf`)
+
+Document fourni après le premier passage d'audit :
+`/Volumes/LaCie Data/bts sio 2/gsbSymfony/ap-gsb-web.pdf` — 9 pages.
+**C'est le vrai cahier des charges**, celui qui contient l'annexe 1 (maquette de
+la fiche imprimée) et l'annexe 2 (cas d'utilisation « Valider fiche de frais »).
+Il lève le point B13 de l'audit initial.
+
+### 4.1 Nature du document et façon dont je l'ai lu
+
+Le PDF **ne contient pas de texte** : ses 9 pages sont des **images scannées**
+(7 images RGB compressées en Flate, avec masque de transparence). Une extraction
+de texte classique ne renvoie que le titre « AP - GSB web ».
+J'ai donc reconstruit les pages en PNG à partir des flux d'images du PDF, puis
+je les ai lues visuellement. Détail technique au § 7.4 — c'est un bon exemple à
+citer à l'oral sur la différence entre un PDF « texte » et un PDF « image ».
+
+### 4.2 Règles de gestion (transcription des pages 2 à 4)
+
+**Les frais forfaitisés.** À chaque dépense type (hôtel, repas…) correspond un
+montant forfaitaire appliqué. **Le justificatif n'est pas demandé** pour ces
+frais (les rapports de visite servent de preuve) mais doit être conservé 3 ans
+par le visiteur.
+
+**Les frais hors forfait.** Pour toute dépense en dehors du forfait (repas avec
+un spécialiste, achat de fournitures, réservation de salle…), le visiteur
+enregistre **la date, le montant et le libellé**. Il doit fournir au service
+comptable **une facture acquittée**. Citation exacte :
+> « Le système doit produire doit lui indiquer le nombre de justificatifs pris
+> en compte dans le remboursement. »
+
+**Saisie.** Après authentification, les visiteurs saisissent les quantités de
+frais forfaitisés et les frais hors forfait du mois écoulé. Ils ont accès en
+modification **tout au long du mois** et peuvent ajouter ou supprimer.
+> « Les frais saisis peuvent remonter jusqu'à un an en arrière. »
+
+➡️ C'est exactement ce qu'implémente `estDateDepassee()` dans `fct.inc.php`.
+La règle du prédécesseur est donc conforme au cahier des charges.
+
+**Clôture.** La fiche est clôturée au dernier jour du mois, selon **deux**
+modalités :
+1. « À la première saisie pour le mois N par le visiteur, sa fiche du mois
+   précédent est clôturée si elle ne l'est pas » → **déjà implémenté** par
+   `PdoGsb::creeNouvellesLignesFrais()` (§ 6.1).
+2. « Au début de la campagne de validation des fiches par le service comptable,
+   **un script est lancé qui clôture toutes les fiches non clôturées** du mois
+   qui va être traité » → **reste à faire** (commande console, phase 5).
+
+**Validation.** Entre le **10 et le 20** du mois suivant, le service
+comptabilité opère une validation :
+- il contrôle que les frais forfaitisés sont conformes (nombre de jours
+  cohérent avec les congés, distance kilométrique plausible) ;
+- en cas d'incohérence, contact téléphonique avec le visiteur, puis
+  correction des valeurs — citation : « Les valeurs sont corrigées en
+  conséquence **sans que ne soit conservée trace de la modification** » ;
+- pour les frais hors forfait, le comptable s'appuie sur les factures reçues au
+  plus tard le 10 ;
+- « Un frais non validé est **supprimé**. Le visiteur doit être tenu informé de
+  cette suppression par les comptables. **On n'enregistrera pas la raison du
+  refus** mais les documents annotés sont conservés par le service comptable. »
+- les éléments reçus après le 10 sont **reportés sur le mois suivant**.
+
+**Mise en paiement.** Faite au **20 du mois suivant** la saisie.
+
+**Consultation.** « Les visiteurs doivent pouvoir consulter sur l'année écoulée,
+pour chaque mois, le montant du remboursement effectué et le nombre de
+prestations pris en compte. »
+
+### 4.3 Le cycle de vie de la fiche (page 3 du cahier des charges)
+
+Le diagramme d'états du document est sans ambiguïté — **cinq états** :
+
+```
+   ●
+   │
+   ▼
+┌────────┐ [Fin de mois]  ┌──────────┐
+│ Créée  │───────────────►│ Clôturée │
+└────────┘   /Clôturer    └────┬─────┘
+                               │ [Frais saisis, pièces envoyées]
+                               │ /Traiter les pièces, contrôler frais hors forfait
+                               ▼
+                          ┌──────────┐
+                          │ Validée  │
+                          └────┬─────┘
+                               │ /Mettre en paiement
+                               ▼
+                       ┌──────────────────┐
+                       │ Mise en paiement │
+                       └────────┬─────────┘
+                                │ [Paiement effectué]
+                                ▼
+                         ┌────────────┐
+                         │ Remboursée │──► ●
+                         └────────────┘
+```
+
+➡️ **Confirme le point B4** : la table `etat` n'a que 4 lignes et son `VA` est
+libellé « Validée **et** mise en paiement ». Le cahier des charges sépare
+clairement « Validée » (action du comptable, étape 9 du cas d'utilisation) de
+« Mise en paiement » (le 20 du mois). Il **faudra ajouter un état**.
+
+### 4.4 Annexe 1 — la fiche de remboursement à produire en PDF (page 5)
+
+Maquette exacte du document à générer en phase 3 :
+
+```
+                          ┌─────────────┐
+                          │  logo gsb   │
+                          └─────────────┘
+ ┌───────────────────────────────────────────────────────────┐
+ │        REMBOURSEMENT DE FRAIS ENGAGES                     │
+ ├───────────────────────────────────────────────────────────┤
+ │  Visiteur    NRD/125-01      Jamy LEPLAT AUFRAY           │
+ │  Mois        Decembre 2010                                │
+ │                                                           │
+ │  ┌──────────────────┬──────────┬─────────────────┬───────┐│
+ │  │ Frais Forfaitaires│ Quantité │ Montant unitaire│ Total ││
+ │  ├──────────────────┼──────────┼─────────────────┼───────┤│
+ │  │ Nuitée           │        9 │           80.00 │ 630.00││
+ │  │ Repas Midi       │       12 │           29.00 │ 348.00││
+ │  │ Véhicule         │      750 │            0.67 │ 502.50││
+ │  ├──────────────────┴──────────┴─────────────────┴───────┤│
+ │  │                     Autres Frais                      ││
+ │  ├──────────────┬────────────────────────────┬───────────┤│
+ │  │     Date     │          Libellé           │  Montant  ││
+ │  ├──────────────┼────────────────────────────┼───────────┤│
+ │  │  18/12/2010  │ Repas Représentation       │    156.00 ││
+ │  │  22/12/2010  │ Achat Fleuriste Soirée …   │    120.30 ││
+ │  └──────────────┴────────────────────────────┴───────────┘│
+ │                        ┌──────────────┬──────────┐        │
+ │                        │ TOTAL 12/2010│  1756.80 │        │
+ │                        └──────────────┴──────────┘        │
+ └───────────────────────────────────────────────────────────┘
+
+                          Fait à Paris, le 7 janvier 2011
+                          Vu l'agent comptable
+                          [signature manuscrite]
+```
+
+Quatre enseignements majeurs pour les phases 1 et 3 :
+
+1. **La colonne « Montant unitaire » figure sur la fiche imprimée.** Le tarif
+   appliqué doit donc être *connu et restituable fiche par fiche*, y compris des
+   années plus tard. C'est l'argument décisif en faveur de l'historisation
+   demandée en phase 1 (point B2) : sans elle, réimprimer une fiche de 2010 en
+   2026 afficherait le barème de 2026.
+2. **La ligne « Véhicule » porte un montant unitaire de 0,67 €** — c'est
+   exactement le tarif « 5/6 CV Essence » du barème de la phase 1. Le cahier des
+   charges montre donc noir sur blanc que le prix unitaire kilométrique dépend
+   du visiteur et s'imprime sur sa fiche.
+3. **Le total général additionne forfait + hors forfait** :
+   630.00 + 348.00 + 502.50 + 156.00 + 120.30 = 1756.80. L'application ne sait
+   calculer **aucun** de ces montants aujourd'hui (point B1).
+4. **Le matricule affiché est `NRD/125-01`**, pas l'identifiant `a17` de la
+   table `visiteur` (voir écart E1 ci-dessous).
+
+### 4.5 Annexe 2 — cas d'utilisation « Valider fiche de frais » (page 6)
+
+| Rubrique | Contenu du document |
+|----------|---------------------|
+| Acteur déclencheur | **Comptable** |
+| Pré-conditions | Utilisateur Comptable authentifié · toutes les fiches du mois qui vient de s'achever sont clôturées par un script · le comptable dispose de tous les éléments pour évaluer la conformité des frais forfaitisés |
+| Post-conditions | Néant |
+
+Scénario nominal (recopié à l'identique) :
+
+1. L'utilisateur comptable demande à valider les fiches de frais
+2. Le système propose de choisir le visiteur et le mois concernés
+3. L'utilisateur sélectionne les informations et valide
+4. Le système affiche le détail de la fiche de frais – frais forfaitisés et hors forfait
+5. L'utilisateur actualise les informations des frais forfaitisés
+6. Le système indique que la modification a été prise en compte et affiche les informations actualisées
+7. L'utilisateur demande le refus des lignes de frais hors forfait non valides
+8. L'utilisateur valide la fiche
+9. Le système passe la fiche à l'état « Validée » et met à jour la date de modification de la fiche
+
+Exception **4-a** : « Aucune fiche de frais n'existe, le système affiche
+*"Pas de fiche de frais pour ce visiteur ce mois"*. Retour au 2. »
+
+Le document précise aussi (page 4) :
+> « Avant toute chose, établir une maquette de l'UI (en html) de votre
+> application de validation. **Faire valider cette maquette par le client (Moi)
+> avant de vous lancer dans le développement.** »
+
+➡️ Le point d'arrêt de la phase 4 est donc bien une exigence du client, pas une
+consigne pédagogique ajoutée. Je m'y arrêterai.
+
+### 4.6 Écarts entre le cahier des charges et la base existante
+
+Nouveaux points relevés grâce au document, à trancher avant les phases 1 et 3.
+
+| # | Écart | Conséquence |
+|---|-------|-------------|
+| **E1** | L'annexe 1 affiche un **matricule** au format `NRD/125-01`. La table `visiteur` n'a qu'un `id CHAR(4)` (`a17`) et aucune colonne matricule. | Phase 3 : soit on imprime `a17` en l'assumant, soit on ajoute une colonne `matricule`. **Je proposerai d'imprimer l'id existant** : ajouter une colonne qu'aucune donnée ne remplit n'apporterait rien, et le cahier des charges ne définit pas la règle de construction du matricule. À confirmer. |
+| **E2** | Les libellés de l'annexe (`Nuitée`, `Repas Midi`, `Véhicule`) ne sont pas ceux de la table `fraisforfait` (`Nuitée Hôtel`, `Repas Restaurant`, `Frais Kilométrique`, `Forfait Etape`). L'annexe ne montre que **3** lignes, la base en a **4**. | Phase 3 : j'imprimerai les libellés **de la base**, et les 4 lignes. L'annexe est un exemple de rendu, pas une liste exhaustive — et inventer une table de correspondance de libellés serait une complexité gratuite, non demandée. |
+| **E3** | **Incohérence arithmétique dans l'annexe elle-même** : la ligne Nuitée indique 9 × 80.00 = **630.00**, alors que 9 × 80 = 720. Le total général (1756.80) est calculé avec 630.00, donc c'est bien 630 qui « fait foi » dans le document. | Aucune : c'est une erreur de saisie du client dans son exemple. Je calcule `quantité × montant unitaire`. **À signaler à l'oral** : savoir repérer une incohérence dans la spécification est un point apprécié. |
+| **E4** | Le cahier des charges décrit la consultation « sur l'année écoulée » du montant remboursé **et du nombre de prestations**. La consultation existante (`ListeFraisController`) affiche mois par mois, sans notion d'année glissante ni de total. | Hors des 5 phases demandées. Je le note comme reste à faire, je ne l'implémente pas sans instruction. |
+| **E5** | Le cahier des charges mentionne l'archive `gsbFrais.zip` ; le dossier contient `codeGsbSymfony.zip`. | Simple différence de nom, même contenu (le bundle du prédécesseur). Sans conséquence. |
+
+**Confirmation du point B7 :** le cahier des charges liste bien, parmi les tâches
+déjà validées par le prédécesseur, la « création d'un script de génération de
+données aléatoires pour remplir la base à des fins de tests ». **Ce script
+n'existe pas dans l'archive livrée.** Le constat de l'audit est donc confirmé
+par le document lui-même : il manque une livraison annoncée.
+
+---
+
+## 5. Pourquoi de cette manière (décisions de la phase 0)
 
 ### Décision 0.1 — Travailler dans `gsbProjet/` et non dans `GsbFraisBundle/`
 - **Problème :** deux copies du même bundle coexistent.
@@ -322,18 +546,18 @@ pas à *modifier* un calcul existant, mais à **en introduire un qui n'existe pa
   (`visiteur` / `comptable`) et une fonction `estComptable($session)` dans
   `fct.inc.php`, exactement dans le style de `estConnecte()`.
 - **Je signale l'arbitrage :** c'est moins « propre » que le composant Security
-  officiel, et un jury peut poser la question. La réponse est préparée au § 7.
+  officiel, et un jury peut poser la question. La réponse est préparée au § 11.
 
 ---
 
-## 5. Logique des boucles et des algorithmes
+## 6. Logique des boucles et des algorithmes
 
 **La phase 0 ne contient aucune boucle : je n'ai écrit aucun code.**
 En revanche j'ai lu les boucles existantes, et trois d'entre elles
 conditionnent les phases suivantes. Je les documente ici parce que je vais
 devoir m'y raccrocher.
 
-### 5.1 `PdoGsb::creeNouvellesLignesFrais()` — création de fiche + clôture N-1
+### 6.1 `PdoGsb::creeNouvellesLignesFrais()` — création de fiche + clôture N-1
 
 *Fichier :* `src/Pg/GsbFraisBundle/services/PdoGsb.php` (l. 219-246)
 
@@ -366,7 +590,7 @@ POUR CHAQUE idFrais DANS lesIdFrais
   4 types. C'est un N+1 de principe, sans gravité ici (N = 4, fixe), mais
   **à ne pas reproduire** dans les phases 3 et 5 où N = nombre de fiches du mois.
 
-### 5.2 `PdoGsb::getLesMoisDisponibles()` — boucle `while` sur le curseur
+### 6.2 `PdoGsb::getLesMoisDisponibles()` — boucle `while` sur le curseur
 
 *Fichier :* `PdoGsb.php` (l. 288-308)
 
@@ -390,7 +614,7 @@ TANT QUE laLigne n'est pas null
   `count($lesCles) > 0` et affiche un sélecteur vide. Déjà géré.
 - **Coût :** 1 requête, N itérations (N = nombre de mois du visiteur).
 
-### 5.3 `PdoGsb::getLesFraisHorsForfait()` — boucle `for` avec modification en place
+### 6.3 `PdoGsb::getLesFraisHorsForfait()` — boucle `for` avec modification en place
 
 *Fichier :* `PdoGsb.php` (l. 66-80)
 
@@ -409,9 +633,9 @@ POUR i DE 0 À count(lesLignes)-1
 
 ---
 
-## 6. Erreurs rencontrées
+## 7. Erreurs rencontrées
 
-### 6.1 `head` détourné par un script Perl
+### 7.1 `head` détourné par un script Perl
 - **Message exact :**
   `Unknown option: 1` / `Unknown option: 0` / `Usage: head [-options] <url>...`
 - **Ce que je faisais :** `find . -maxdepth 3 … | head -100`
@@ -425,7 +649,7 @@ POUR i DE 0 À count(lesLignes)-1
   commande tapée, lancer `which -a <commande>` pour voir toutes les versions
   présentes dans le `PATH`.
 
-### 6.2 `mysqladmin ping` → accès refusé
+### 7.2 `mysqladmin ping` → accès refusé
 - **Message exact :**
   `mysqladmin: connect to server at 'localhost' failed`
   `error: 'Access denied for user 'devakwabanm'@'localhost' (using password: NO)'`
@@ -439,19 +663,52 @@ POUR i DE 0 À count(lesLignes)-1
 - **Pour ne pas le refaire :** distinguer les deux familles d'erreurs MySQL —
   « Can't connect » = serveur/socket ; « Access denied » = identifiants.
 
-### 6.3 `curl … | head -8` → `(23) Failed writing body`
+### 7.3 `curl … | head -8` → `(23) Failed writing body`
 - **Message exact :** `curl: (23) Failed writing body`
 - **Cause réelle :** `head` ferme le tuyau après 8 lignes ; `curl` continue
   d'écrire et reçoit un `SIGPIPE`. C'est un effet de bord normal du test, pas un
   problème de l'application — la réponse HTTP était bien `200 OK`.
 - **Correction :** aucune nécessaire.
 
+### 7.4 Le cahier des charges ne contient pas de texte
+- **Message exact :**
+  `pdftoppm is not installed. Install poppler-utils (e.g. brew install poppler …)`
+  puis, après extraction manuelle : 4 flux de contenu ne contenant que
+  `A P - G S B   w e b`.
+- **Ce que je faisais :** lire `ap-gsb-web.pdf` pour récupérer l'annexe 1.
+- **Cause réelle :** deux causes superposées. (a) L'outil de rendu `poppler`
+  n'est pas installé sur le poste. (b) Surtout : **ce PDF est un document
+  scanné**. Ses 9 pages ne sont pas du texte mais 7 images ; le seul texte réel
+  du fichier est son titre. Toute extraction de texte était donc vouée à
+  l'échec, quel que soit l'outil.
+- **Correction :** j'ai reconstruit les pages en PNG à partir des flux d'images
+  du PDF. Chaque image est compressée en `FlateDecode` avec
+  `/DecodeParms << /Predictor 15 /Colors 3 /Columns … >>`. Le prédicteur 15 est
+  **le prédicteur PNG** : une fois décompressées, les données sont déjà au
+  format « ligne de balayage PNG » (un octet de filtre, puis les pixels RGB).
+  Il suffit donc de les réemballer dans un en-tête PNG (`IHDR` / `IDAT` /
+  `IEND`) — aucune conversion de pixels n'est nécessaire.
+- **Pourquoi ça marche :** le format PDF a emprunté au format PNG son algorithme
+  de prédiction ; les deux partagent exactement la même disposition d'octets.
+- **Pour ne pas le refaire :** avant de vouloir extraire le texte d'un PDF,
+  vérifier qu'il en contient. 1,8 Mo pour 9 pages, c'est le poids d'un scan,
+  pas d'un document texte (le support CERTA fait 1,3 Mo pour plus de 850 lignes
+  de texte réel).
+- **Erreur de conception de ma part :** mon premier extracteur sélectionnait les
+  flux sur la seule présence des opérateurs `Tj`/`TJ`. Ces deux octets
+  apparaissent par hasard dans des données d'image compressées : la sortie a été
+  noyée sous des milliers de caractères binaires. **Le premier jet était mauvais
+  parce que je filtrais sur un indice trop faible.** Le second filtre exige à la
+  fois les opérateurs `BT`/`ET` (début et fin de bloc de texte) *et* un taux de
+  caractères imprimables supérieur à 92 % : il a isolé immédiatement les 4 vrais
+  flux de texte — et montré qu'ils étaient vides.
+
 *Aucune erreur applicative n'a été rencontrée : le test de fumée est passé du
-premier coup (voir § 8).*
+premier coup (voir § 9).*
 
 ---
 
-## 7. Ce qui ne fonctionne pas / limites / points bloquants
+## 8. Ce qui ne fonctionne pas / limites / points bloquants
 
 Classés par criticité pour la suite du projet.
 
@@ -478,10 +735,14 @@ La phase 5 demande 5 états : Créée → Clôturée → **Validée** → **Mise
 paiement** → Remboursée. La table `etat` n'en contient que 4, et son `VA` est
 libellé « Validée **et** mise en paiement » : deux étapes du cahier des charges
 sont fusionnées en une seule ligne.
-**Impact :** phase 5. Il faudra trancher — ajouter un 5ᵉ état (`MP`) et
-re-libeller `VA`, ou conserver 4 états. **Je ne décide pas seul**, je poserai la
-question au début de la phase 5, parce que `VA` est déjà utilisé par des données
-existantes et par `getLesFichesValidees()`.
+**✔ Confirmé par le cahier des charges** (§ 4.3) : son diagramme d'états montre
+sans ambiguïté 5 états, « Validée » et « Mise en paiement » étant séparés par
+une transition « /Mettre en paiement » déclenchée le 20 du mois.
+**Impact :** phase 5. Il faudra ajouter un 5ᵉ état (`MP`) et re-libeller `VA` en
+« Validée ». **Je ne le ferai pas sans ton accord**, parce que `VA` est déjà
+porté par une donnée existante (fiche `a17`/202607) et par
+`getLesFichesValidees()` : c'est une modification de **données**, pas seulement
+de schéma.
 
 ### 🟠 B5 — `sql/bd_gsb.sql` est destructeur
 Le script commence par `DROP DATABASE IF EXISTS bd_gsb`. Le relancer efface tout.
@@ -494,7 +755,7 @@ lancerai jamais `bd_gsb.sql` sans te le demander.
 Aucun historique, aucun retour arrière possible, et je ne peux pas te montrer un
 `diff` propre de ce que je modifie.
 **Impact :** toutes les phases, et la soutenance (un jury apprécie un historique
-de commits). **Proposition au § 9.**
+de commits). **Proposition au § 10.**
 
 ### 🟠 B7 — Le script de génération de données aléatoires est absent
 L'énoncé indique que le prédécesseur en a livré un. Recherche exhaustive dans
@@ -510,7 +771,7 @@ d'en écrire un en phase 3, sous forme de commande console.
 d'authentification compare en SQL (`where login=:log and mdp=:md`).
 **Impact :** sécurité. C'est conforme au sujet d'origine, donc je ne le change
 pas sans ton accord, mais **un jury posera la question** : la réponse est
-préparée au § 12. Si tu veux, la phase 5 est le bon moment pour passer à
+préparée au § 11. Si tu veux, la phase 5 est le bon moment pour passer à
 `password_hash()` (le comptable serait alors créé directement en haché).
 
 ### 🟡 B9 — Pas de protection CSRF sur les formulaires
@@ -539,14 +800,23 @@ Une photo de facture prise au téléphone dépasse souvent 2 Mo.
 **Impact :** phase 2. Soit on fixe la taille max à 2 Mo côté application (et on
 l'assume), soit on relève la valeur dans `php.ini`. À décider en phase 2.
 
-### 🟡 B13 — L'annexe 1 du cahier des charges n'est pas dans le dossier
-Les deux documents fournis (`gsbSymfonyV1.0.pdf` / `.docx`) sont le **support
-pédagogique CERTA « Application GSB_FRAIS avec Symfony2 »** (auteur Patrice
-Grand, février 2013), pas le cahier des charges du client.
-**Impact :** phase 3. Je me baserai sur la description que tu as donnée
-(en-tête GSB, matricule + nom, mois, tableau forfaitisé, tableau hors forfait,
-total, « Fait à Paris, le … / Vu l'agent comptable »). **Si tu as le PDF de
-l'annexe 1, donne-le-moi avant la phase 3.**
+### ✅ B13 — LEVÉ : le cahier des charges a été fourni
+À l'audit initial, seuls `gsbSymfonyV1.0.pdf` / `.docx` étaient présents — le
+**support pédagogique CERTA** (Patrice Grand, février 2013), pas le cahier des
+charges du client. Le document `ap-gsb-web.pdf` a depuis été fourni : il
+contient l'annexe 1 (maquette de la fiche) et l'annexe 2 (cas d'utilisation).
+Dépouillé au § 4. **Ce point n'est plus bloquant.**
+
+### 🟠 B15 — Le matricule de l'annexe 1 n'existe pas en base
+Voir écart E1 (§ 4.6) : l'annexe imprime `NRD/125-01`, la base ne connaît que
+`a17`. **Impact :** phase 3 — cosmétique, mais visible sur le document produit.
+
+### 🟡 B16 — Le nombre de justificatifs n'est jamais alimenté
+Le cahier des charges exige que « le système indique le nombre de justificatifs
+pris en compte dans le remboursement ». La colonne `fichefrais.nbJustificatifs`
+existe, la méthode `PdoGsb::majNbJustificatifs()` existe — mais **aucun
+contrôleur ne l'appelle** : la valeur reste figée à celle du jeu de données.
+**Impact :** phase 2, où l'ajout d'un justificatif devra l'alimenter.
 
 ### 🟡 B14 — Incohérences mineures de documentation
 - `README.md` documente la route `pg_gsb_frais_validerfraishorsforfait` alors
@@ -557,18 +827,18 @@ l'annexe 1, donne-le-moi avant la phase 3.**
 
 ---
 
-## 8. Comment tester (état actuel, avant toute modification)
+## 9. Comment tester (état actuel, avant toute modification)
 
 Procédure vérifiée le jour de l'audit. **Tout est déjà installé et fonctionnel.**
 
-### 8.1 Pré-requis à vérifier
+### 9.1 Pré-requis à vérifier
 
 ```bash
 php -v                 # doit afficher 7.4.x
 mysql -u root -e "select version();"   # doit répondre (9.5.0 ici)
 ```
 
-### 8.2 Lancer l'application
+### 9.2 Lancer l'application
 
 ```bash
 cd "/Volumes/LaCie Data/bts sio 2/gsbSymfony/gsbProjet"
@@ -576,7 +846,7 @@ php -S 127.0.0.1:8000 -t web web/app_dev.php
 ```
 Puis ouvrir <http://127.0.0.1:8000/accueil>.
 
-### 8.3 Scénarios et résultats attendus
+### 9.3 Scénarios et résultats attendus
 
 | # | Action | Jeu de données | Résultat attendu |
 |---|--------|----------------|------------------|
@@ -593,7 +863,7 @@ Puis ouvrir <http://127.0.0.1:8000/accueil>.
 | T11 | Contrôle d'accès | se déconnecter puis appeler `/listefrais` | Redirection vers `/accueil` |
 | T12 | Contrôle d'appartenance | connecté `cbedos`, appeler `/supprimerfraishorsforfait/1` (frais de `dandre`) | **Erreur 404** « Frais hors forfait introuvable », le frais de `dandre` est intact |
 
-### 8.4 Résultat du test de fumée automatisé (audit)
+### 9.4 Résultat du test de fumée automatisé (audit)
 
 | Requête | Réponse obtenue |
 |---------|-----------------|
@@ -606,18 +876,24 @@ nécessaire pour démarrer la phase 1.**
 
 ---
 
-## 9. Proposition pour la suite (en attente de ton accord)
+## 10. Proposition pour la suite (en attente de ton accord)
 
-Rien de ce qui suit n'a été exécuté.
+### 10.1 Filet de sécurité — ✅ FAIT
 
-### 9.1 Ce que je propose de faire *maintenant* (2 minutes, réversible)
+| # | Commande exécutée | Résultat vérifié |
+|---|-------------------|------------------|
+| P1 | `git init` + `git add -A` + commit | Commit `b2ac4b6`, **78 fichiers suivis**. Contrôlé : `vendor/`, `bin/`, `app/cache/*`, `app/logs/*` et `parameters.yml` sont bien exclus (seuls les deux `.gitkeep` sont suivis, volontairement). Corrige B6. |
+| P2 | `mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_phase1.sql` | 9,4 Ko, 6 instructions `INSERT` (une par table), **0 instruction `DROP DATABASE`**. |
 
-| # | Commande | Pourquoi |
-|---|----------|----------|
-| P1 | `cd gsbProjet && git init && git add . && git commit -m "État initial : reprise du projet du prédécesseur"` | Corrige B6. Donne un point de retour avant que je touche à quoi que ce soit, permet de te montrer des `diff` propres, et c'est valorisé à l'oral. Le `.gitignore` existant exclut déjà `vendor/`, `app/cache`, `app/logs` et `parameters.yml`. |
-| P2 | `mysqldump -u root bd_gsb > sauvegardes/bd_gsb_avant_phase1.sql` | Sauvegarde **non destructive** de la base avant la première migration. Purement en lecture sur la base. |
+> **Pourquoi `--add-drop-database=FALSE` :** par défaut, avec `--databases`,
+> `mysqldump` place un `DROP DATABASE IF EXISTS` en tête du fichier produit. Une
+> sauvegarde qui commence par détruire la base est un piège : rejouée par
+> erreur, elle fait perdre l'état courant au lieu de le restaurer. L'option
+> retire cette ligne.
+> **Restauration :** `mysql -u root < sauvegardes/bd_gsb_avant_phase1.sql`
+> — à ne lancer qu'en connaissance de cause, elle écrase le contenu des tables.
 
-### 9.2 Ce que je n'installe pas avant la phase concernée
+### 10.2 Ce que je n'installe pas avant la phase concernée
 
 | Phase | Besoin | Dépendance envisagée | Justification que je te détaillerai le moment venu |
 |-------|--------|----------------------|-----------------------------------------------------|
@@ -626,19 +902,22 @@ Rien de ce qui suit n'a été exécuté.
 | 3 | Jeu de données volumineux | **aucune** | Commande console maison (corrige B7). |
 | 5 | Rôles / comptable | **aucune** | Session + `fct.inc.php`, dans le style de l'existant (décision 0.4). |
 
-### 9.3 Questions ouvertes à trancher (pas bloquantes pour démarrer)
+### 10.3 Questions ouvertes à trancher (aucune ne bloque la phase 1)
 
-1. **B4 — cycle d'état :** ajoute-t-on un 5ᵉ état « Mise en paiement » (`MP`) et
-   re-libelle-t-on `VA` en « Validée » ? (Ça modifie une ligne de `etat` déjà
-   référencée par la fiche `a17`/202607.) → à trancher en phase 5.
-2. **B13 — annexe 1 :** as-tu le PDF du cahier des charges avec la maquette de
-   la fiche imprimée ? → à fournir avant la phase 3.
-3. **B8 — mots de passe :** on garde le clair (conforme au sujet) ou on hache ?
-   → à trancher en phase 5.
+1. **B4 — cycle d'état :** ajouter un 5ᵉ état « Mise en paiement » (`MP`) et
+   re-libeller `VA` en « Validée ». Le cahier des charges l'impose (§ 4.3), mais
+   cela touche une donnée existante. → décision en **phase 5**.
+2. **B15 / E1 — matricule :** imprimer l'id `a17` sur la fiche PDF, ou ajouter
+   une colonne `matricule` à `visiteur` ? → décision en **phase 3**.
+3. **B8 — mots de passe :** garder le clair (conforme au sujet d'origine) ou
+   passer à `password_hash()` ? → décision en **phase 5**, au moment de créer le
+   compte comptable.
+4. **B12 — taille des justificatifs :** plafonner à 2 Mo (limite PHP actuelle)
+   ou relever `upload_max_filesize` ? → décision en **phase 2**.
 
 ---
 
-## 10. Préparation à l'oral — phase 0
+## 11. Préparation à l'oral — phase 0
 
 **Q1. Pourquoi y a-t-il deux dossiers `GsbFraisBundle` ?**
 Parce qu'un *bundle* Symfony n'est pas une application. L'archive du professeur
@@ -704,6 +983,28 @@ performance. C'est le point que je surveille pour la suite.
 Oui, vérifié : `GET /accueil` → 200, connexion `dandre`/`oppg5` → 302 +
 session, `GET /listefrais` → fiche de septembre 2026 affichée avec son état et
 sa date de modification.
+
+**Q11. Pourquoi faut-il historiser le tarif kilométrique plutôt que de le lire
+dans la table des barèmes au moment de l'affichage ?**
+Parce que l'annexe 1 du cahier des charges imprime une colonne « Montant
+unitaire » sur chaque fiche. Une fiche de décembre 2010 doit rester imprimable
+à l'identique aujourd'hui. Si le montant est lu dans le référentiel au moment de
+l'affichage, tout changement de barème réécrit le passé : les fiches déjà
+validées et déjà remboursées changeraient de total. On enregistre donc le tarif
+**appliqué** sur la ligne de frais au moment de la saisie — c'est ce qu'on
+appelle historiser une donnée.
+
+**Q12. Le cahier des charges impose-t-il vraiment de ne garder aucune trace des
+corrections du comptable ?**
+Oui, c'est écrit noir sur blanc : « Les valeurs sont corrigées en conséquence
+sans que ne soit conservée trace de la modification », et pour les refus : « On
+n'enregistrera pas la raison du refus ». Je l'applique parce que c'est la
+spécification du client. **Je signale cependant que c'est discutable** : sans
+journal des modifications, un visiteur ne peut pas vérifier pourquoi son
+remboursement a baissé, et l'entreprise n'a aucune traçabilité en cas de litige.
+Le document lui-même prévoit un contournement hors système (« le visiteur doit
+être tenu informé par téléphone », « les documents annotés sont conservés par le
+service comptable ») : la traçabilité existe, mais sur papier.
 
 ### Glossaire
 
