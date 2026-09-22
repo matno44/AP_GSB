@@ -1060,6 +1060,34 @@ passé du premier coup (voir § 9).*
   sur un disque interne ; sur support amovible ou avant une démonstration,
   toujours la copie.
 
+### 7.8 J'ai réécrit sans le vouloir les fins de ligne de trois fichiers
+- **Symptôme :** après le premier commit de la phase 1, `git show --stat`
+  annonçait **946 lignes modifiées dans `PdoGsb.php`**, alors que je n'y avais
+  ajouté qu'environ 190 lignes. Idem pour deux templates (61 et 59 lignes
+  modifiées pour 3 lignes ajoutées).
+- **Cause réelle :** les fichiers du prédécesseur datent de 2013 et ont été
+  écrits sous Windows : leurs lignes se terminent par **CRLF** (`\r\n`). Mes
+  scripts de modification ouvraient les fichiers en mode texte
+  (`open(f, encoding='utf8')`), ce qui convertit silencieusement les CRLF en
+  LF à la lecture ; à la réécriture, tout le fichier repartait en LF.
+  Git voyait donc **chaque ligne comme modifiée**.
+- **Pourquoi c'est grave ici :** ce n'est pas un problème de fonctionnement —
+  PHP se moque des fins de ligne, et l'application marchait. C'est un problème
+  de **relecture** : un diff de 946 lignes rend impossible de voir ce qui a
+  réellement changé, pour moi comme pour un correcteur. Et cela réécrit le
+  fichier du prédécesseur, ce que la consigne interdit.
+- **Correction :** restauration des CRLF sur les trois fichiers concernés
+  (`PdoGsb.php`, `listefraisforfait.html.twig`, `saisirfraisforfait.html.twig`),
+  en mode binaire, puis `git commit --amend`. Le diff par rapport au code
+  d'origine est retombé à **+218 / −8 lignes**, ce qui correspond exactement à
+  mon travail. Contrôle effectué : les trois fichiers avaient bien 100 % de
+  lignes CRLF à l'origine (379/379, 23/23, 26/26), la restauration est donc
+  exacte et non approximative.
+- **Pour ne pas le refaire :** ouvrir les fichiers en mode binaire (`'rb'` /
+  `'wb'`) quand on les modifie par script, ou vérifier
+  `git diff --stat` après chaque modification — un diff disproportionné par
+  rapport au travail réel est le signal d'alerte.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
