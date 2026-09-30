@@ -203,6 +203,7 @@ CREATE OR REPLACE VIEW v_compte AS
 --    atteindre aucun autre écran avant de l'avoir fait.
 --
 --    Mot de passe initial : AdminGsb2026!
+--    Mot de passe modifié par l'administrateur : AdminGsb2026?
 --    L'empreinte ci-dessous a été produite par password_hash($mdp,
 --    PASSWORD_BCRYPT). La lire ne permet pas de retrouver le mot de passe ;
 --    c'est le commentaire au-dessus qui le divulgue, pas la colonne.
