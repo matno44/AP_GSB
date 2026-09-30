@@ -45,7 +45,8 @@ CREATE TABLE comptable (
 -- La valeur stockée est l'empreinte, pas le mot de passe : même en lisant la
 -- base, on ne peut pas retrouver « comptable26 ».
 INSERT INTO comptable (id, nom, prenom, login, mdp) VALUES
-    ('c01', 'Valette', 'Marie', 'mvalette', '$2y$10$TF7Ljwa95mygt.ProOl86OrlrWrk8TA2IBT6hc4cQHbG5Ho2C8gFy');
+    ('c01', 'Valette', 'Marie', 'mvalette', '$2y$10$TF7Ljwa95mygt.ProOl86OrlrWrk8TA2IBT6hc4cQHbG5Ho2C8gFy'),
+    ('c02', 'test', 'test', 'test', '$2y$10$pK0WJqMg2ha7ZFhVER/IOepbGwmZtkKmLIYLidytdiKsgY70f6jaC');
 
 -- --------------------------------------------------------------------------
 -- 2) Le cinquième état

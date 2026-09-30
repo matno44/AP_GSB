@@ -13,6 +13,9 @@ class SaisirFraisController extends ControleurGsb
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
+        }
         $idVisiteur = $session->get('id');
         $mois = getMois(date("d/m/Y"));
         $pdo = $this->get('pg_gsb_frais.pdo');
@@ -39,6 +42,9 @@ class SaisirFraisController extends ControleurGsb
         $session = $request->getSession();
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
+        }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
         }
         $this->verifierJeton($request, 'frais_hors_forfait');
         $idVisiteur = $session->get('id');
@@ -77,6 +83,9 @@ class SaisirFraisController extends ControleurGsb
         $session = $request->getSession();
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
+        }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
         }
         $this->verifierJeton($request, 'suppression_frais');
         $idVisiteur = $session->get('id');

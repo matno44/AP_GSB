@@ -76,6 +76,23 @@ function estComptable($session){
     return $session->get('role') === 'comptable';
 }
 /**
+ * Indique si l'utilisateur connecté est un visiteur médical
+
+ * Pendant de estComptable(). Les écrans « mes fiches », « ma saisie » et
+ * « mon véhicule » travaillent tous sur l'id en session en le tenant pour
+ * un id de visiteur : un comptable qui les atteint par leur URL faisait
+ * chercher — et pire, créer — une fiche de frais au nom d'un identifiant
+ * absent de la table visiteur, ce qui violait la clé étrangère
+ * fk_fichefrais_visiteur. Le menu ne propose jamais ces liens à un
+ * comptable, mais masquer un lien n'est pas contrôler un accès : la règle
+ * doit être appliquée côté serveur.
+
+ * @return vrai ou faux
+ */
+function estVisiteur($session){
+    return $session->get('role') === 'visiteur';
+}
+/**
  * Traduit un mois au format aaaamm en libellé français
 
  * Exemple : "202609" devient "Septembre 2026".

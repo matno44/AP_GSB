@@ -19,6 +19,9 @@ class VehiculeController extends ControleurGsb
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
+        }
 
         return $this->rendreFormulaire($request, array(), null);
     }
@@ -28,6 +31,9 @@ class VehiculeController extends ControleurGsb
         $session = $request->getSession();
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
+        }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
         }
         $this->verifierJeton($request, 'vehicule');
         $idVisiteur = $session->get('id');

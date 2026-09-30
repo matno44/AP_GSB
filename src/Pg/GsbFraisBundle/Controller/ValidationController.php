@@ -1,7 +1,7 @@
 <?php
 namespace Pg\GsbFraisBundle\Controller;
 
-require_once __DIR__.'/include/fct.inc.php';
+require_once __DIR__ . '/include/fct.inc.php';
 
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -31,7 +31,8 @@ class ValidationController extends ControleurGsb
         if (!estComptable($session)) {
             return new Response(
                 'Cette page est réservée au service comptable.',
-                Response::HTTP_FORBIDDEN);
+                Response::HTTP_FORBIDDEN
+            );
         }
 
         return null;
@@ -50,18 +51,18 @@ class ValidationController extends ControleurGsb
 
         if ($request->isMethod('POST')) {
             $idVisiteur = $request->request->get('lstVisiteur');
-            $mois = $request->request->get('lstMois');
+            $mois       = $request->request->get('lstMois');
             // Redirection plutôt que rendu direct : l'adresse de la fiche
             // devient partageable, et un rafraîchissement ne repostera pas
             // le formulaire.
             return $this->redirect($this->generateUrl('pg_gsb_frais_validationfiche',
-                array('idVisiteur' => $idVisiteur, 'mois' => $mois)));
+                                                      array('idVisiteur' => $idVisiteur, 'mois' => $mois)));
         }
 
         return $this->render('PgGsbFraisBundle:Validation:choix.html.twig',
-            array('lesvisiteurs' => $pdo->getLesVisiteurs(),
-                'lesmois' => $this->construireListeMois(),
-                'levisiteur' => null, 'lemois' => null, 'message' => null));
+                             array('lesvisiteurs' => $pdo->getLesVisiteurs(),
+                                   'lesmois'      => $this->construireListeMois(),
+                                   'levisiteur'   => null, 'lemois' => null, 'message' => null));
     }
 
     /**
@@ -89,19 +90,19 @@ class ValidationController extends ControleurGsb
             return $refus;
         }
         $this->verifierJeton($request, 'validation_corriger');
-        $pdo = $this->get('pg_gsb_frais.pdo');
+        $pdo     = $this->get('pg_gsb_frais.pdo');
         $laFiche = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
         // On ne corrige que ce qui est encore corrigeable : une fiche déjà
         // validée, mise en paiement ou remboursée ne se retouche pas.
         if (!is_array($laFiche) || $laFiche['idEtat'] !== 'CL') {
             return $this->rendreFiche($idVisiteur, $mois,
-                array('erreur', "Cette fiche n'est plus modifiable."));
+                                      array('erreur', "Cette fiche n'est plus modifiable."));
         }
 
         $lesFrais = $request->request->get('lesFrais');
         if (!lesQteFraisValides($lesFrais)) {
             return $this->rendreFiche($idVisiteur, $mois,
-                array('erreur', 'Les quantités doivent être des nombres entiers positifs.'));
+                                      array('erreur', 'Les quantités doivent être des nombres entiers positifs.'));
         }
         // Aucune trace de la valeur précédente n'est conservée : c'est la règle
         // du cahier des charges (« sans que ne soit conservée trace de la
@@ -110,7 +111,7 @@ class ValidationController extends ControleurGsb
         $pdo->majFraisForfait($idVisiteur, $mois, $lesFrais);
 
         return $this->rendreFiche($idVisiteur, $mois,
-            array('confirmation', 'Les frais forfaitisés ont été actualisés.'));
+                                  array('confirmation', 'Les frais forfaitisés ont été actualisés.'));
     }
 
     /**
@@ -126,11 +127,11 @@ class ValidationController extends ControleurGsb
             return $refus;
         }
         $this->verifierJeton($request, 'validation_refuser');
-        $pdo = $this->get('pg_gsb_frais.pdo');
+        $pdo     = $this->get('pg_gsb_frais.pdo');
         $laFiche = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
         if (!is_array($laFiche) || $laFiche['idEtat'] !== 'CL') {
             return $this->rendreFiche($idVisiteur, $mois,
-                array('erreur', "Cette fiche n'est plus modifiable."));
+                                      array('erreur', "Cette fiche n'est plus modifiable."));
         }
         // La ligne doit bien appartenir à CETTE fiche : sans ce contrôle, un
         // identifiant modifié dans le formulaire supprimerait le frais d'un
@@ -150,12 +151,12 @@ class ValidationController extends ControleurGsb
         $pdo->recalculerNbJustificatifs($idVisiteur, $mois);
 
         return $this->rendreFiche($idVisiteur, $mois, array('confirmation',
-            'Le frais « '.$laLigne['libelle'].' » a été refusé et supprimé. '
-            .'Pensez à en informer le visiteur : le système ne le fait pas.'));
+                                                            'Le frais « ' . $laLigne['libelle'] . ' » a été refusé et supprimé. '
+                                                                . 'Pensez à en informer le visiteur : le système ne le fait pas.'));
     }
 
     /**
-     * Étapes 8 et 9 : le comptable valide la fiche, le système la passe à
+     * Étapes 8 et 9 : le comptable valide la fiche, le système la passe �
      * l'état « Validée » et met à jour sa date de modification.
      */
     public function validerAction(Request $request, $idVisiteur, $mois)
@@ -171,12 +172,12 @@ class ValidationController extends ControleurGsb
         // même si deux comptables valident la même fiche au même instant.
         if (!$pdo->validerFicheFrais($idVisiteur, $mois)) {
             return $this->rendreFiche($idVisiteur, $mois, array('erreur',
-                "Cette fiche n'a pas pu être validée : elle doit être à l'état clôturé."));
+                                                                "Cette fiche n'a pas pu être validée : elle doit être à l'état clôturé."));
         }
 
         return $this->rendreFiche($idVisiteur, $mois, array('confirmation',
-            'La fiche a été validée. Elle passe à l\'état « Validée » et '
-            .'n\'est plus modifiable.'));
+                                                            "La fiche a été validée. Elle passe à l'état « Validée » et "
+                                                                . "n'est plus modifiable."));
     }
 
     /**
@@ -186,9 +187,9 @@ class ValidationController extends ControleurGsb
      */
     private function rendreFiche($idVisiteur, $mois, $message)
     {
-        $pdo = $this->get('pg_gsb_frais.pdo');
+        $pdo        = $this->get('pg_gsb_frais.pdo');
         $leVisiteur = $pdo->getVisiteur($idVisiteur);
-        $lesInfos = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
+        $lesInfos   = $pdo->getLesInfosFicheFrais($idVisiteur, $mois);
 
         // EXCEPTION 4-a du cas d'utilisation : « Aucune fiche de frais
         // n'existe, le système affiche "Pas de fiche de frais pour ce visiteur
@@ -196,34 +197,34 @@ class ValidationController extends ControleurGsb
         // sélection conservée, plutôt qu'une page d'erreur séparée.
         if (!is_array($leVisiteur) || !is_array($lesInfos)) {
             return $this->render('PgGsbFraisBundle:Validation:choix.html.twig',
-                array('lesvisiteurs' => $pdo->getLesVisiteurs(),
-                    'lesmois' => $this->construireListeMois(),
-                    'levisiteur' => $idVisiteur, 'lemois' => $mois,
-                    'message' => array('erreur',
-                        'Pas de fiche de frais pour ce visiteur ce mois')));
+                                 array('lesvisiteurs' => $pdo->getLesVisiteurs(),
+                                       'lesmois'      => $this->construireListeMois(),
+                                       'levisiteur'   => $idVisiteur, 'lemois' => $mois,
+                                       'message'      => array('erreur',
+                                                               'Pas de fiche de frais pour ce visiteur ce mois')));
         }
 
-        $lesFraisForfait = $pdo->getLesFraisForfait($idVisiteur, $mois);
+        $lesFraisForfait     = $pdo->getLesFraisForfait($idVisiteur, $mois);
         $lesFraisHorsForfait = $pdo->getLesFraisHorsForfait($idVisiteur, $mois);
         // Les totaux sont calculés ici et non dans le gabarit : en Twig, une
         // variable affectée par {% set %} à l'intérieur d'une boucle n'existe
         // plus après elle. Additionner dans la vue donnerait silencieusement 0.
-        $totalForfait = totalDesLignes($lesFraisForfait, 'montant');
-        $totalHorsForfait = totalDesLignes($lesFraisHorsForfait, 'montant');
+        $totalForfait        = totalDesLignes($lesFraisForfait, 'montant');
+        $totalHorsForfait    = totalDesLignes($lesFraisHorsForfait, 'montant');
 
         return $this->render('PgGsbFraisBundle:Validation:fiche.html.twig',
-            array('levisiteur' => $leVisiteur,
-                'totalforfait' => $totalForfait,
-                'totalhorsforfait' => $totalHorsForfait,
-                'totalgeneral' => $totalForfait + $totalHorsForfait,
-                'lemois' => $mois,
-                'moislettres' => moisEnLettres($mois),
-                'lesinfos' => $lesInfos,
-                'datemodif' => dateAnglaisVersFrancais($lesInfos['dateModif']),
-                'modifiable' => ($lesInfos['idEtat'] === 'CL'),
-                'lesfraisforfait' => $lesFraisForfait,
-                'lesfraishorsforfait' => $lesFraisHorsForfait,
-                'message' => $message));
+                             array('levisiteur'          => $leVisiteur,
+                                   'totalforfait'        => $totalForfait,
+                                   'totalhorsforfait'    => $totalHorsForfait,
+                                   'totalgeneral'        => $totalForfait + $totalHorsForfait,
+                                   'lemois'              => $mois,
+                                   'moislettres'         => moisEnLettres($mois),
+                                   'lesinfos'            => $lesInfos,
+                                   'datemodif'           => dateAnglaisVersFrancais($lesInfos['dateModif']),
+                                   'modifiable'          => ($lesInfos['idEtat'] === 'CL'),
+                                   'lesfraisforfait'     => $lesFraisForfait,
+                                   'lesfraishorsforfait' => $lesFraisHorsForfait,
+                                   'message'             => $message));
     }
 
     /**
@@ -240,12 +241,53 @@ class ValidationController extends ControleurGsb
     private function construireListeMois()
     {
         $lesMois = array();
-        $mois = getMois(date('d/m/Y'));
+        $mois    = getMois(date('d/m/Y'));
         for ($i = 0; $i < 12; ++$i) {
             $lesMois[$mois] = moisEnLettres($mois);
-            $mois = moisPrecedent($mois);
+            $mois           = moisPrecedent($mois);
         }
 
         return $lesMois;
+    }
+
+    /**
+     * Tableau récapitulatif : nombre de fiches en cours, à valider et
+     * validées pour chaque visiteur.
+     */
+    public function recapAction(Request $request)
+    {
+        $refus = $this->refuserSiPasComptable($request);
+        if ($refus !== null) {
+            return $refus;
+        }
+        $pdo       = $this->get('pg_gsb_frais.pdo');
+        $lesLignes = $pdo->getRecapFiches();
+
+        $recap = array();
+        foreach ($lesLignes as $uneLigne) {
+            $id = $uneLigne['idvisiteur'];
+            if (!isset($recap[$id])) {
+                $recap[$id] = array(
+                    'nom'        => $uneLigne['nom'],
+                    'prenom'     => $uneLigne['prenom'],
+                    'nbEnCours'  => 0,
+                    'nbAValider' => 0,
+                    'nbValidees' => 0,
+                );
+            }
+            switch ($uneLigne['idEtat']) {
+                case 'CR':
+                    $recap[$id]['nbEnCours']++;
+                    break;
+                case 'CL':
+                    $recap[$id]['nbAValider']++;
+                    break;
+                default:  // VA, MP, RB
+                    $recap[$id]['nbValidees']++;
+            }
+        }
+
+        return $this->render('PgGsbFraisBundle:Validation:recap.html.twig',
+                             array('recap' => $recap));
     }
 }

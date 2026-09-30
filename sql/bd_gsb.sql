@@ -159,8 +159,9 @@ INSERT INTO fraisforfait (id, libelle, montant) VALUES
 -- « comptable26 ». La valeur stockée est l'empreinte produite par
 -- password_hash() : la lire ne permet pas de retrouver le mot de passe.
 INSERT INTO comptable (id, nom, prenom, login, mdp) VALUES
-    ('c01', 'Valette', 'Marie', 'mvalette', '$2y$10$TF7Ljwa95mygt.ProOl86OrlrWrk8TA2IBT6hc4cQHbG5Ho2C8gFy');
-
+    ('c01', 'Valette', 'Marie', 'mvalette', '$2y$10$TF7Ljwa95mygt.ProOl86OrlrWrk8TA2IBT6hc4cQHbG5Ho2C8gFy'),
+    ('c02', 'test', 'test', 'test', '$2y$10$pK0WJqMg2ha7ZFhVER/IOepbGwmZtkKmLIYLidytdiKsgY70f6jaC');
+    
 INSERT INTO typevehicule (id, libelle, montant) VALUES
     ('D4',  '4 CV Diesel',       0.52),
     ('D56', '5/6 CV Diesel',     0.58),

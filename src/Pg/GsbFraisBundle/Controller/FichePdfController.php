@@ -1,11 +1,11 @@
 <?php
 namespace Pg\GsbFraisBundle\Controller;
 
-require_once __DIR__.'/include/fct.inc.php';
+require_once __DIR__ . '/include/fct.inc.php';
 
+use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
-use Symfony\Component\HttpFoundation\BinaryFileResponse;
 use Symfony\Component\HttpFoundation\ResponseHeaderBag;
 
 /**
@@ -34,7 +34,8 @@ class FichePdfController extends ControleurGsb
         $pdf = $this->get('pg_gsb_frais.fiche_pdf')->genererFiche($idVisiteur, $mois);
         if ($pdf === null) {
             throw $this->createNotFoundException(
-                'Pas de fiche de frais pour ce visiteur ce mois');
+                'Pas de fiche de frais pour ce visiteur ce mois'
+            );
         }
         $nom = $this->get('pg_gsb_frais.fiche_pdf')->nomFichier($idVisiteur, $mois);
 
@@ -43,8 +44,9 @@ class FichePdfController extends ControleurGsb
         $reponse = new Response($pdf);
         $reponse->headers->set('Content-Type', 'application/pdf');
         $reponse->headers->set('Content-Disposition',
-            $reponse->headers->makeDisposition(
-                ResponseHeaderBag::DISPOSITION_INLINE, $nom));
+                               $reponse->headers->makeDisposition(
+                                   ResponseHeaderBag::DISPOSITION_INLINE, $nom
+                               ));
 
         return $reponse;
     }
@@ -77,7 +79,8 @@ class FichePdfController extends ControleurGsb
             // l'existence d'un export mensuel n'a rien de confidentiel.
             return new Response(
                 'Seul le service comptable peut imprimer toutes les fiches',
-                Response::HTTP_FORBIDDEN);
+                Response::HTTP_FORBIDDEN
+            );
         }
 
         // L'archive peut peser plusieurs dizaines de mégaoctets : on l'écrit
@@ -89,21 +92,23 @@ class FichePdfController extends ControleurGsb
         // unlink() de la ligne d'échec porterait sur un chemin inexistant.
         // On garde donc le chemin tel quel ; l'extension vue par l'utilisateur
         // vient de l'en-tête Content-Disposition, plus bas.
+        set_time_limit(120);
         $cheminZip = tempnam(sys_get_temp_dir(), 'gsb_fiches_');
-        $nbFiches = $this->get('pg_gsb_frais.fiche_pdf')
-            ->genererArchiveMois($mois, 'CL', $cheminZip);
+        $nbFiches  = $this->get('pg_gsb_frais.fiche_pdf')
+                          ->genererArchiveMois($mois, 'CL', $cheminZip);
         if ($nbFiches == 0) {
             if (is_file($cheminZip)) {
                 unlink($cheminZip);
             }
             throw $this->createNotFoundException(
-                'Aucune fiche clôturée pour le mois '.$mois);
+                'Aucune fiche clôturée pour le mois ' . $mois
+            );
         }
 
         $reponse = new BinaryFileResponse($cheminZip);
         $reponse->headers->set('Content-Type', 'application/zip');
         $reponse->setContentDisposition(ResponseHeaderBag::DISPOSITION_ATTACHMENT,
-            'fiches_'.$mois.'.zip');
+                                        'fiches_' . $mois . '.zip');
         // Le fichier temporaire est effacé une fois la réponse envoyée.
         $reponse->deleteFileAfterSend(true);
 

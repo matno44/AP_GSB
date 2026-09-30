@@ -13,6 +13,9 @@ class ListeFraisController extends ControleurGsb
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
         }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
+        }
         $idVisiteur = $session->get('id');
         $pdo = $this->get('pg_gsb_frais.pdo');
         $lesMois = $pdo->getLesMoisDisponibles($idVisiteur);

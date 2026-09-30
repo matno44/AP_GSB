@@ -1,0 +1,31 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Récapitulatif des fiches par visiteur</h2>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Visiteur</th>
+                <th>En cours</th>
+                <th>À valider</th>
+                <th>Validées</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for id, unRecap in recap %}
+                <tr>
+                    <td>{{ unRecap.nom }} {{ unRecap.prenom }}</td>
+                    <td>{{ unRecap.nbEnCours }}</td>
+                    <td>{{ unRecap.nbAValider }}</td>
+                    <td>{{ unRecap.nbValidees }}</td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p><a href="{{ path('pg_gsb_frais_validation') }}">Retour au choix visiteur/mois</a></p>
+</div>
+{% endblock %}
+{% endblock %}

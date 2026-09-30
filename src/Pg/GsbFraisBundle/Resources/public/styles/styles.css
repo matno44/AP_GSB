@@ -5,6 +5,31 @@
    #contenu, .corpsForm, .piedForm, .listeLegere, .qteForfait, .encadre, .erreur
    --------------------------------------------------------------------------- */
 
+:root {
+    /* -----------------------------------------------------------------
+       Charte graphique GSB. Toute couleur de marque de l'application est
+       definie ICI et nulle part ailleurs : pour changer la charte, il
+       suffit de modifier ce bloc.
+       Les couleurs a valeur semantique (succes, erreur, avertissement)
+       sont volontairement hors charte, plus bas dans le fichier.
+       ----------------------------------------------------------------- */
+    --gsb-principale:       #711D1B; /* en-tetes, titres, boutons d'action, elements actifs */
+    --gsb-principale-hover: #442818; /* etat hover/actif des elements principaux */
+    --gsb-texte:            #442818; /* texte principal sur fond clair */
+    --gsb-accent:           #9B592A; /* focus, boutons et texte secondaires, separateurs de tableau */
+    --gsb-bordure:          #BC9558; /* bordures de cadres, champs, separateurs neutres */
+    --gsb-fond-clair:       #FFE7AB; /* en-tetes de tableau, bandeaux, mise en avant legere */
+
+    /* Le fond de page reprend --gsb-fond-clair (role "bandeaux") : aucune
+       couleur hors charte n'est inventee. Les cartes blanches s'en detachent
+       par leur bordure --gsb-bordure, et les en-tetes de tableau en
+       --gsb-fond-clair se lisent sur le blanc des cartes, pas sur le fond. */
+    --gsb-fond-page:        #FFE7AB;
+
+    /* Blanc : neutre de surface, hors charte. */
+    --gsb-surface:          #fff;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -13,13 +38,13 @@ body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
-    color: #23303a;
-    background: #eef2f5;
+    color: var(--gsb-texte);
+    background: var(--gsb-fond-page);
 }
 
 /* ------------------------------------------------------------------ entête */
 
-#page { background: #fff; border-bottom: 3px solid #0b5c8f; }
+#page { background: var(--gsb-surface); border-bottom: 3px solid var(--gsb-principale); }
 
 #entete {
     display: flex;
@@ -36,7 +61,7 @@ body {
     margin: 0;
     font-size: 1.5em;
     font-weight: 600;
-    color: #0b5c8f;
+    color: var(--gsb-principale);
 }
 
 /* -------------------------------------------------------------- menu gauche */
@@ -46,8 +71,8 @@ body {
     width: 230px;
     margin: 1.5em 0 1.5em 1.5em;
     padding: 1em;
-    background: #fff;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 6px;
 }
 
@@ -56,8 +81,8 @@ body {
     padding-bottom: .75em;
     font-size: 1em;
     font-weight: 600;
-    color: #0b5c8f;
-    border-bottom: 1px solid #e3eaef;
+    color: var(--gsb-principale);
+    border-bottom: 1px solid var(--gsb-bordure);
 }
 
 #menuList { margin: 0; padding: 0; list-style: none; }
@@ -67,12 +92,12 @@ body {
 .smenu a {
     display: block;
     padding: .5em .75em;
-    color: #23303a;
+    color: var(--gsb-texte);
     text-decoration: none;
     border-radius: 4px;
 }
 
-.smenu a:hover, .smenu a:focus { background: #0b5c8f; color: #fff; }
+.smenu a:hover, .smenu a:focus { background: var(--gsb-principale); color: var(--gsb-surface); }
 
 /* ----------------------------------------------------------------- contenu */
 
@@ -80,14 +105,14 @@ body {
     overflow: hidden;
     margin: 1.5em 1.5em 1.5em 270px;
     padding: 1.25em 1.5em;
-    background: #fff;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 6px;
 }
 
 #contenu + #contenu { margin-top: -.5em; }
 
-h2 { margin-top: 0; font-size: 1.25em; color: #0b5c8f; }
+h2 { margin-top: 0; font-size: 1.25em; color: var(--gsb-principale); }
 h3 { font-size: 1.05em; }
 
 /* ---------------------------------------------------------------- formulaires */
@@ -102,47 +127,51 @@ input[type="text"], input[type="password"], select {
     padding: .4em .5em;
     font: inherit;
     color: inherit;
-    background: #fff;
-    border: 1px solid #b9c7d2;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
 input[type="text"]:focus, input[type="password"]:focus, select:focus {
-    outline: 2px solid #0b5c8f;
+    outline: 2px solid var(--gsb-accent);
     outline-offset: 1px;
 }
 
 fieldset {
     margin: 0 0 1em;
     padding: 1em 1.25em;
-    border: 1px solid #d3dde5;
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
-legend { padding: 0 .5em; font-weight: 600; color: #0b5c8f; }
+legend { padding: 0 .5em; font-weight: 600; color: var(--gsb-principale); }
 
 .corpsForm p { margin: .6em 0; }
 
 .piedForm {
     padding-top: .75em;
-    border-top: 1px solid #e3eaef;
+    border-top: 1px solid var(--gsb-bordure);
 }
 
 input[type="submit"], input[type="reset"] {
     padding: .5em 1.25em;
     font: inherit;
     font-weight: 600;
-    color: #fff;
-    background: #0b5c8f;
+    color: var(--gsb-surface);
+    background: var(--gsb-principale);
     border: 0;
     border-radius: 4px;
     cursor: pointer;
 }
 
-input[type="reset"] { color: #23303a; background: #dfe7ed; }
+input[type="reset"] {
+    color: var(--gsb-accent);
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
+}
 
-input[type="submit"]:hover { background: #08476e; }
-input[type="reset"]:hover  { background: #ccd8e1; }
+input[type="submit"]:hover { background: var(--gsb-principale-hover); }
+input[type="reset"]:hover  { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
 
 /* -------------------------------------------------------------------- tables */
 
@@ -156,16 +185,16 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     padding: .5em 0;
     font-weight: 600;
     text-align: left;
-    color: #0b5c8f;
+    color: var(--gsb-principale);
 }
 
 .listeLegere th, .listeLegere td {
     padding: .5em .75em;
     text-align: left;
-    border-bottom: 1px solid #e3eaef;
+    border-bottom: 1px solid var(--gsb-accent);
 }
 
-.listeLegere th { background: #f4f7f9; font-weight: 600; }
+.listeLegere th { background: var(--gsb-fond-clair); font-weight: 600; }
 
 .listeLegere td.qteForfait, .listeLegere th.montant, .listeLegere td:nth-child(3) {
     text-align: right;
@@ -177,8 +206,8 @@ input[type="reset"]:hover  { background: #ccd8e1; }
 
 .encadre {
     padding: .25em 1em 1em;
-    background: #f7fafc;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-fond-clair);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
@@ -187,7 +216,7 @@ input[type="reset"]:hover  { background: #ccd8e1; }
 .erreur ul {
     margin: 0 0 1em;
     padding: .75em 1em .75em 2.25em;
-    color: #8a1c1c;
+    color: #B3261E;
     background: #fdecec;
     border: 1px solid #f3c2c2;
     border-radius: 4px;
@@ -198,7 +227,7 @@ input[type="reset"]:hover  { background: #ccd8e1; }
 .legendeTableau {
     margin: .5em 0 0;
     font-size: .85em;
-    color: #55606a;
+    color: var(--gsb-accent);
 }
 
 /* ------------------------------------------------------- justificatifs */
@@ -241,19 +270,19 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     display: inline-block;
     padding: .5em 1.25em;
     font-weight: 600;
-    color: #23303a;
+    color: var(--gsb-accent);
     text-decoration: none;
-    background: #dfe7ed;
-    border: 0;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
-.boutonSecondaire:hover { background: #ccd8e1; }
+.boutonSecondaire:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
 
 input[type="submit"].boutonRefus {
     padding: .3em .8em;
     font-size: .9em;
     font-weight: 600;
-    color: #8a1c1c;
+    color: #B3261E;
     background: #fdecec;
     border: 1px solid #f3c2c2;
 }
@@ -264,8 +293,8 @@ input[type="submit"].boutonRefus:hover { background: #f8dcdc; }
 
 .listeLegere tfoot td {
     font-weight: 700;
-    background: #f4f7f9;
-    border-top: 2px solid #0b5c8f;
+    background: var(--gsb-fond-clair);
+    border-top: 2px solid var(--gsb-principale);
 }
 
 .nombre { text-align: right; }

@@ -3,6 +3,7 @@ namespace Pg\GsbFraisBundle\Controller;
 
 use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\HttpKernel\Exception\AccessDeniedHttpException;
 
 /**
@@ -55,5 +56,22 @@ abstract class ControleurGsb extends Controller
                 'Jeton de sécurité absent ou invalide. '
                 .'Revenez à la page précédente et recommencez.');
         }
+    }
+
+    /**
+     * Refuse l'accès à un écran réservé aux visiteurs médicaux.
+     *
+     * Même choix que dans FichePdfController : une Response 403 construite à
+     * la main plutôt que createAccessDeniedException(), que le composant
+     * Security transformerait en 401 « identifiez-vous » faute de pare-feu
+     * configuré. L'utilisateur EST identifié ; il lui manque le rôle.
+     *
+     * @return Response
+     */
+    protected function refuserNonVisiteur()
+    {
+        return new Response(
+            'Cet écran est réservé aux visiteurs médicaux.',
+            Response::HTTP_FORBIDDEN);
     }
 }

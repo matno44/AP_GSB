@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img"
      aria-label="Laboratoire Galaxy-Swiss Bourdin">
   <title>Laboratoire Galaxy-Swiss Bourdin</title>
-  <circle cx="60" cy="60" r="56" fill="#0b5c8f"/>
-  <circle cx="60" cy="60" r="47" fill="none" stroke="#7fb8dd" stroke-width="2"/>
+  <circle cx="60" cy="60" r="56" fill="#711D1B"/>
+  <circle cx="60" cy="60" r="47" fill="none" stroke="#BC9558" stroke-width="2"/>
   <!-- croix pharmaceutique -->
   <path d="M52 26h16v26h26v16H68v26H52V68H26V52h26z" fill="#fff"/>
   <text x="60" y="112" text-anchor="middle" font-family="Helvetica, Arial, sans-serif"
-        font-size="15" font-weight="bold" fill="#0b5c8f">GSB</text>
+        font-size="15" font-weight="bold" fill="#711D1B">GSB</text>
 </svg>

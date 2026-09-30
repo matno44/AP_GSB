@@ -25,20 +25,20 @@
     margin: 0 1.5em 1.5em 270px;
     padding: .75em 1em;
     font-size: .9em;
-    color: #1f4a63;
-    background: #eaf3f8;
-    border: 1px dashed #9cc2d6;
+    color: var(--gsb-texte);
+    background: var(--gsb-fond-clair);
+    border: 1px dashed var(--gsb-bordure);
     border-radius: 6px;
 }
 
-.annotation strong { color: #0b5c8f; }
+.annotation strong { color: var(--gsb-principale); }
 
 .annotation ul { margin: .4em 0 0; padding-left: 1.4em; }
 
 .aValider {
     margin-top: .6em;
     padding-top: .6em;
-    border-top: 1px dashed #9cc2d6;
+    border-top: 1px dashed var(--gsb-bordure);
 }
 
 /* -------------------------------------------------------- boutons en liens */
@@ -53,16 +53,20 @@
     cursor: pointer;
 }
 
-.bouton { color: #fff; background: #0b5c8f; }
-.bouton:hover { background: #08476e; }
+.bouton { color: var(--gsb-surface); background: var(--gsb-principale); }
+.bouton:hover { background: var(--gsb-principale-hover); }
 
-.boutonSecondaire { color: #23303a; background: #dfe7ed; }
-.boutonSecondaire:hover { background: #ccd8e1; }
+.boutonSecondaire {
+    color: var(--gsb-accent);
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
+}
+.boutonSecondaire:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
 
 .boutonRefus {
     padding: .3em .8em;
     font-size: .9em;
-    color: #8a1c1c;
+    color: #B3261E;
     background: #fdecec;
     border: 1px solid #f3c2c2;
 }
@@ -106,8 +110,8 @@
 
 .listeLegere tfoot td {
     font-weight: 700;
-    background: #f4f7f9;
-    border-top: 2px solid #0b5c8f;
+    background: var(--gsb-fond-clair);
+    border-top: 2px solid var(--gsb-principale);
 }
 
 .nombre { text-align: right; }
