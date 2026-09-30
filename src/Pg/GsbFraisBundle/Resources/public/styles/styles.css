@@ -278,6 +278,15 @@ input[type="reset"]:hover  { color: var(--gsb-principale-hover); border-color: v
 }
 .boutonSecondaire:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
 
+/* Bouton d'accès à une fiche depuis le récapitulatif : plus compact que
+   .boutonSecondaire, car une même ligne peut en porter plusieurs (un par
+   mois restant à valider). */
+.lienFiche {
+    padding: .25em .7em;
+    font-size: .9em;
+    margin: .1em .25em .1em 0;
+}
+
 input[type="submit"].boutonRefus {
     padding: .3em .8em;
     font-size: .9em;

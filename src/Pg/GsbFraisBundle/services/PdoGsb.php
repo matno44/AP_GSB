@@ -19,7 +19,7 @@ class PdoGsb
          * Le barème, lui, est en base (table typevehicule) : c'est bien la valeur
          * qui n'est pas codée en dur. Reste à savoir QUELLE ligne de frais est la
          * ligne kilométrique ; cette information est structurelle (elle ne change
-         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, �
+         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, à
          * un seul endroit, plutôt que recopiée dans chaque requête.
          */
         const ID_FRAIS_KILOMETRIQUE = 'KM';

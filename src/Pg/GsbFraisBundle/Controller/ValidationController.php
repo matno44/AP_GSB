@@ -156,7 +156,7 @@ class ValidationController extends ControleurGsb
     }
 
     /**
-     * Étapes 8 et 9 : le comptable valide la fiche, le système la passe �
+     * Étapes 8 et 9 : le comptable valide la fiche, le système la passe à
      * l'état « Validée » et met à jour sa date de modification.
      */
     public function validerAction(Request $request, $idVisiteur, $mois)
@@ -273,6 +273,16 @@ class ValidationController extends ControleurGsb
                     'nbEnCours'  => 0,
                     'nbAValider' => 0,
                     'nbValidees' => 0,
+                    // Mois cliquables du récapitulatif. Compter les fiches ne
+                    // suffit pas : sans le mois, le gabarit ne peut pas
+                    // construire l'URL de la fiche, et le comptable doit
+                    // repasser par l'écran de choix pour l'ouvrir.
+                    'aValider'     => array(),
+                    // getRecapFiches() trie les mois du plus récent au plus
+                    // ancien : la première ligne rencontrée pour un visiteur
+                    // porte donc son mois le plus récent.
+                    'dernierMois'    => $uneLigne['mois'],
+                    'dernierLibelle' => moisEnLettres($uneLigne['mois']),
                 );
             }
             switch ($uneLigne['idEtat']) {
@@ -281,6 +291,7 @@ class ValidationController extends ControleurGsb
                     break;
                 case 'CL':
                     $recap[$id]['nbAValider']++;
+                    $recap[$id]['aValider'][$uneLigne['mois']] = moisEnLettres($uneLigne['mois']);
                     break;
                 default:  // VA, MP, RB
                     $recap[$id]['nbValidees']++;
