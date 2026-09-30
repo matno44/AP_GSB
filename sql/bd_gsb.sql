@@ -11,7 +11,15 @@
 -- toujours produire le MÊME schéma qu'une base créée à l'origine puis migrée.
 -- Migrations intégrées ici : 001 (puissance fiscale du véhicule),
 --                            002 (justificatifs des frais hors forfait),
---                            003 (comptable et cycle d'état complet).
+--                            003 (comptable et cycle d'état complet),
+--                            004 (administration des comptes).
+--
+-- APRÈS ce script, lancer OBLIGATOIREMENT :
+--   php app/console gsb:hacher-mots-de-passe
+-- Les mots de passe visiteur du jeu de données sont écrits en clair ci-dessous
+-- -- ils viennent du sujet et doivent rester reconnaissables à la lecture --
+-- mais la colonne attend une empreinte bcrypt, que seul PHP sait produire.
+-- Entre les deux commandes, aucun visiteur ne peut se connecter.
 -- ---------------------------------------------------------------------------
 
 DROP DATABASE IF EXISTS bd_gsb;
@@ -49,7 +57,11 @@ CREATE TABLE visiteur (
     nom          VARCHAR(30) NOT NULL,
     prenom       VARCHAR(30) NOT NULL,
     login        VARCHAR(20) NOT NULL,
-    mdp          VARCHAR(30) NOT NULL,
+    -- VARCHAR(255) depuis la migration 004 : la colonne contient une EMPREINTE
+    -- bcrypt (60 caractères) et non plus le mot de passe en clair. 255 est la
+    -- largeur recommandée par la documentation de password_hash(), pour
+    -- survivre à un changement d'algorithme par défaut dans PHP.
+    mdp          VARCHAR(255) NOT NULL,
     adresse      VARCHAR(30) DEFAULT NULL,
     cp           CHAR(5)     DEFAULT NULL,
     ville        VARCHAR(30) DEFAULT NULL,
@@ -57,6 +69,12 @@ CREATE TABLE visiteur (
     -- NULL tant que le visiteur n'a pas déclaré son véhicule (migration 001) ;
     -- l'application retombe alors sur le tarif historique fraisforfait.KM.
     idTypeVehicule CHAR(3)   DEFAULT NULL,
+    -- Désactivation logique (migration 004). 202 des 209 visiteurs ont des
+    -- fiches de frais et fk_fichefrais_visiteur est en RESTRICT : les supprimer
+    -- est impossible sans détruire leur historique comptable. On coupe donc
+    -- l'accès sans rien effacer.
+    actif          TINYINT(1) NOT NULL DEFAULT 1,
+    mdpDoitChanger TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uk_visiteur_login (login),
     KEY fk_visiteur_typevehicule (idTypeVehicule),
@@ -74,10 +92,56 @@ CREATE TABLE comptable (
     prenom VARCHAR(30)  NOT NULL,
     login  VARCHAR(20)  NOT NULL,
     mdp    VARCHAR(255) NOT NULL,
+    actif          TINYINT(1) NOT NULL DEFAULT 1,
+    mdpDoitChanger TINYINT(1) NOT NULL DEFAULT 0,
     PRIMARY KEY (id),
     UNIQUE KEY uk_comptable_login (login)
 ) ENGINE=InnoDB;
 
+-- --------------------------------------------------------- administrateur
+-- Troisième table de comptes (migration 004), pour la même raison que
+-- comptable : un administrateur n'a ni fiche de frais, ni véhicule, ni date
+-- d'embauche. Il ne gère que des comptes.
+CREATE TABLE administrateur (
+    id             CHAR(4)      NOT NULL,
+    nom            VARCHAR(30)  NOT NULL,
+    prenom         VARCHAR(30)  NOT NULL,
+    login          VARCHAR(20)  NOT NULL,
+    mdp            VARCHAR(255) NOT NULL
+                   COMMENT 'Empreinte bcrypt (password_hash)',
+    actif          TINYINT(1)   NOT NULL DEFAULT 1,
+    mdpDoitChanger TINYINT(1)   NOT NULL DEFAULT 0,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_administrateur_login (login)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------- journaladmin
+-- Traçabilité des actions d'administration (migration 004).
+--
+-- Ces actions sont les seules de l'application à ne laisser aucune trace dans
+-- les données : une désactivation ne fait que basculer un 0. Surtout,
+-- réinitialiser un mot de passe permet de se connecter à la place du titulaire
+-- -- pour un compte comptable, de valider des fiches en son nom. Sans journal,
+-- l'usurpation serait indétectable ET indémontrable.
+--
+-- idAdministrateur n'est PAS une clé étrangère : le journal doit survivre à la
+-- suppression du compte qui a agi. Une trace qu'on efface en supprimant son
+-- auteur ne prouve rien. D'où la recopie des noms.
+CREATE TABLE journaladmin (
+    id                INT          NOT NULL AUTO_INCREMENT,
+    horodatage        DATETIME     NOT NULL,
+    idAdministrateur  CHAR(4)      NOT NULL,
+    nomAdministrateur VARCHAR(61)  NOT NULL,
+    action            VARCHAR(40)  NOT NULL,
+    roleCible         VARCHAR(15)  NOT NULL,
+    idCible           CHAR(4)      NOT NULL,
+    nomCible          VARCHAR(61)  NOT NULL,
+    detail            VARCHAR(255) DEFAULT NULL,
+    PRIMARY KEY (id),
+    KEY idx_journal_horodatage (horodatage),
+    KEY idx_journal_cible (roleCible, idCible),
+    KEY idx_journal_auteur (idAdministrateur)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 -- --------------------------------------------------------- fichefrais
 CREATE TABLE fichefrais (
     idVisiteur       CHAR(4)        NOT NULL,
@@ -218,3 +282,50 @@ INSERT INTO lignefraishorsforfait (idVisiteur, mois, libelle, date, montant) VAL
     ('a17', '202607', 'Train Paris-Besançon',       '2026-07-12',  96.50),
     ('a17', '202608', 'Parking congrès de Dijon',   '2026-08-19',  24.00),
     ('a17', '202608', 'Documentation pharmacologie','2026-08-27',  57.90);
+
+-- ===========================================================================
+-- Vue de lecture unifiée des comptes (migration 004)
+--
+-- L'interface d'administration liste, filtre et pagine les trois rôles
+-- ensemble. C'est un besoin de LECTURE : une vue le satisfait sans toucher aux
+-- tables ni aux clés étrangères. Les écritures restent dirigées vers la bonne
+-- table par le code -- une vue sur une UNION n'est pas modifiable, ce qui
+-- interdit structurellement d'écrire dans la mauvaise table.
+--
+-- COLLATE explicite sur les littéraux : ils prendraient sinon la collation de
+-- CONNEXION, quand les colonnes portent celle de la BASE, et l'UNION échouerait
+-- sur « Illegal mix of collations ».
+-- ===========================================================================
+
+CREATE OR REPLACE VIEW v_compte AS
+    SELECT v.id                              AS id,
+           v.nom                             AS nom,
+           v.prenom                          AS prenom,
+           v.login                           AS login,
+           CAST('visiteur' AS CHAR(15)) COLLATE utf8mb4_unicode_ci AS role,
+           v.actif                           AS actif,
+           v.mdpDoitChanger                  AS mdpDoitChanger,
+           v.dateEmbauche                    AS dateEmbauche
+      FROM visiteur v
+    UNION ALL
+    SELECT c.id, c.nom, c.prenom, c.login,
+           CAST('comptable' AS CHAR(15)) COLLATE utf8mb4_unicode_ci, c.actif, c.mdpDoitChanger, NULL
+      FROM comptable c
+    UNION ALL
+    SELECT a.id, a.nom, a.prenom, a.login,
+           CAST('administrateur' AS CHAR(15)) COLLATE utf8mb4_unicode_ci, a.actif, a.mdpDoitChanger, NULL
+      FROM administrateur a;
+
+-- Premier administrateur. Mot de passe initial : AdminGsb2026!
+-- Il est écrit ici, donc versionné, donc connu de quiconque lit le dépôt :
+-- inévitable, il faut bien un premier compte pour entrer. D'où
+-- mdpDoitChanger = 1, qui force son remplacement dès la première connexion.
+INSERT INTO administrateur (id, nom, prenom, login, mdp, actif, mdpDoitChanger) VALUES
+    ('ad01', 'Dubois', 'Hélène', 'hdubois',
+     '$2y$10$QwXIv65G8F/Pr/w2k.hkE.CPKcJUMs1OFph2XC40CKj/zgqS/Xi2m', 1, 1);
+
+SELECT CONCAT(
+    'Base reconstruite. ',
+    (SELECT COUNT(*) FROM visiteur), ' visiteur(s) ont un mot de passe EN CLAIR. ',
+    'Lancez maintenant : php app/console gsb:hacher-mots-de-passe'
+) AS 'ACTION REQUISE';

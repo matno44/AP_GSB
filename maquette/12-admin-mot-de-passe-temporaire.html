@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Mot de passe temporaire</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Administrateur : bonjour Hélène Dubois</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="07-admin-liste-comptes.html">Gérer les comptes</a></li>
+    <li class="smenu"><a href="13-admin-journal.html">Journal d'administration</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Mot de passe réinitialisé</h2>
+
+  <div class="confirmation">
+    Le mot de passe du compte <strong>David Andre (a17)</strong> a été remplacé.
+  </div>
+
+  <div class="dialogue">
+    <h3>Mot de passe temporaire</h3>
+
+    <p>Transmettez-le à David Andre :</p>
+
+    <p><span class="motDePasseTemporaire">Kf7-mRq2-Xt9w</span></p>
+
+    <p class="avertissement" style="margin-top:0">
+      <strong>Ce mot de passe ne sera plus jamais affiché.</strong>
+      Il n'est pas stocké en clair : la base ne contient que son empreinte
+      bcrypt, et l'application elle-même serait incapable de le retrouver. Si
+      vous quittez cette page sans l'avoir noté, il faudra en générer un nouveau.
+    </p>
+
+    <p><strong>À la prochaine connexion de David Andre :</strong></p>
+    <ul>
+      <li>ce mot de passe temporaire lui donnera accès à l'application ;</li>
+      <li>
+        il sera <strong>immédiatement redirigé vers un écran de changement de
+        mot de passe</strong>, et ne pourra accéder à aucun autre écran avant de
+        l'avoir changé ;
+      </li>
+      <li>le mot de passe qu'il choisira alors n'est connu que de lui.</li>
+    </ul>
+
+    <div class="piedDialogue">
+      <a class="bouton" href="07-admin-liste-comptes.html">J'ai noté le mot de passe, retour à la liste</a>
+    </div>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Comment lire cet écran.</strong>
+  <ul>
+    <li>
+      <strong>Affiché une seule fois, et c'est une contrainte technique, pas une
+      politique.</strong> Le mot de passe est haché dès sa génération ; il
+      n'existe en clair que le temps de cette page. Un écran « revoir le mot de
+      passe » serait impossible à écrire — et c'est exactement ce qu'on veut.
+    </li>
+    <li>
+      <strong>La police à largeur fixe et l'espacement des caractères sont
+      délibérés.</strong> Ce mot de passe est recopié à la main ou dicté par
+      téléphone : il faut pouvoir distinguer <code>0</code> de <code>O</code> et
+      <code>1</code> de <code>l</code>. Le générateur exclura d'ailleurs les
+      caractères ambigus.
+    </li>
+    <li>
+      <strong>Les tirets découpent le mot de passe en groupes</strong> pour le
+      même motif : trois blocs de quatre caractères se dictent et se vérifient,
+      une suite de douze caractères non.
+    </li>
+    <li>
+      <strong>Ce mot de passe n'apparaîtra pas dans le journal d'administration.</strong>
+      Celui-ci enregistrera « réinitialisation du mot de passe de a17 par ad1 »,
+      jamais la valeur. Journaliser un mot de passe, même temporaire, reviendrait
+      à le stocker en clair dans un fichier que personne ne surveille.
+    </li>
+  </ul>
+
+  <div class="aValider">
+    <strong>Un point sur lequel j'attends ta réponse.</strong>
+    Faut-il faire <strong>expirer</strong> le mot de passe temporaire (par
+    exemple sous 48 h) ? Ma proposition : <em>pas pour cette phase</em>. Cela
+    suppose une colonne de date d'expiration et une règle de plus dans
+    l'authentification, pour un gain faible dans le contexte d'un intranet.
+    Le forçage du changement à la connexion suivante couvre déjà l'essentiel du
+    risque. Dis-moi si tu le veux quand même.
+  </div>
+</div>
+</body>
+</html>

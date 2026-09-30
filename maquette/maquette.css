@@ -121,3 +121,194 @@
 .sommaire { margin: 1.5em; }
 
 .sommaire ol { line-height: 2; }
+
+/* ===========================================================================
+   Phase 8 (hors cahier des charges) — interface d'administration
+   Ce qui suit n'existe pas encore dans l'application. Comme pour la phase 5,
+   ce bloc sera repris dans la vraie feuille de style au moment du
+   développement, une fois la maquette validée.
+   =========================================================================== */
+
+/* ------------------------------------------------------- barre de filtres */
+
+.filtres {
+    margin: 0 0 1.25em;
+    padding: .9em 1.1em;
+    background: var(--gsb-fond-clair);
+    border: 1px solid var(--gsb-bordure);
+    border-radius: 6px;
+}
+
+/* Les filtres tiennent sur une ligne et passent à la ligne si l'écran est
+   étroit, sans media query : le navigateur décide tout seul. */
+.filtres .ligneFiltres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75em 1.25em;
+    align-items: flex-end;
+    margin: 0;
+}
+
+.filtres .champFiltre { display: flex; flex-direction: column; gap: .2em; }
+
+/* Les libellés des filtres ne sont pas ceux d'un formulaire de saisie : la
+   règle globale leur impose 200px de large, ce qui casserait l'alignement. */
+.filtres .champFiltre label {
+    min-width: 0;
+    font-size: .85em;
+    color: var(--gsb-principale);
+}
+
+/* ----------------------------------------------------- badges rôle et état */
+
+.badgeRole, .badgeEtatCompte {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    white-space: nowrap;
+    border-radius: 999px;
+}
+
+.roleVisiteur      { color: #1c4966; background: #dcecf7; }
+.roleComptable     { color: #5c4310; background: #fdf3d8; }
+.roleAdministrateur{ color: #4a1d5c; background: #ecdcf7; }
+
+.compteActif     { color: #14562c; background: #ddf3e4; }
+.compteDesactive { color: #6b6b6b; background: #e8e8e8; }
+
+/* Une ligne de compte désactivé doit se distinguer au premier coup d'œil,
+   sans reposer sur la seule couleur du badge. */
+.ligneDesactivee td:not(:last-child) { opacity: .55; }
+
+/* --------------------------------------------------- actions d'une ligne */
+
+.actionsCompte {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3em;
+    align-items: center;
+}
+
+.lienAction {
+    padding: .2em .6em;
+    font-size: .85em;
+    white-space: nowrap;
+}
+
+/* Action indisponible : affichée mais inerte, pour que le comptable comprenne
+   qu'elle existe et pourquoi elle ne s'applique pas ici. */
+.actionInerte {
+    padding: .2em .6em;
+    font-size: .85em;
+    font-style: italic;
+    color: #8a8a8a;
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ pagination */
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35em;
+    align-items: center;
+    margin: 1.25em 0 0;
+    padding-top: .9em;
+    border-top: 1px solid var(--gsb-bordure);
+}
+
+.pagination a, .pagination span {
+    padding: .3em .7em;
+    font-size: .9em;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.pagination a { color: var(--gsb-accent); border: 1px solid var(--gsb-bordure); }
+.pagination a:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
+.pagination .pageCourante { color: var(--gsb-surface); background: var(--gsb-principale); font-weight: 600; }
+.pagination .inactif { color: #a8a8a8; border: 1px solid #e0e0e0; }
+.pagination .compteur { margin-left: auto; font-size: .85em; color: var(--gsb-accent); }
+
+/* ----------------------------------------- dialogue de confirmation, refus */
+
+/* Pas de fenêtre modale en JavaScript : la confirmation est une PAGE, donc
+   elle survit au rechargement, se partage par son URL et fonctionne sans JS.
+   Le contrôle côté serveur est de toute façon refait à la validation. */
+.dialogue {
+    max-width: 44em;
+    margin: 0 0 1em;
+    padding: 1.1em 1.3em;
+    background: var(--gsb-surface);
+    border: 2px solid var(--gsb-principale);
+    border-radius: 6px;
+}
+
+.dialogue h3 { margin-top: 0; color: var(--gsb-principale); }
+.dialogue ul { margin: .5em 0; padding-left: 1.4em; }
+.dialogue .piedDialogue {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6em;
+    align-items: center;
+    margin-top: 1.2em;
+    padding-top: .9em;
+    border-top: 1px solid var(--gsb-bordure);
+}
+
+.dialogueRefus { border-color: #B3261E; }
+.dialogueRefus h3 { color: #B3261E; }
+
+.blocRefus {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #B3261E;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+    border-radius: 4px;
+}
+
+.boutonDanger {
+    color: var(--gsb-surface);
+    background: #B3261E;
+    border: 1px solid #B3261E;
+}
+.boutonDanger:hover { background: #8f1e17; border-color: #8f1e17; }
+
+/* ------------------------------------------- mot de passe temporaire */
+
+/* Affiché une seule fois : il doit être lisible caractère par caractère, donc
+   en police à largeur fixe, et distinguer sans ambiguïté 0/O et 1/l/I. */
+.motDePasseTemporaire {
+    display: inline-block;
+    margin: .4em 0;
+    padding: .5em .9em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1.3em;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--gsb-principale);
+    background: var(--gsb-fond-clair);
+    border: 1px dashed var(--gsb-principale);
+    border-radius: 4px;
+}
+
+/* --------------------------------------------------------------- divers */
+
+.champObligatoire { color: #B3261E; }
+
+.aideChamp {
+    display: block;
+    margin-left: 200px;
+    font-size: .82em;
+    color: var(--gsb-accent);
+}
+
+.lectureSeule {
+    color: #6b6b6b;
+    background: #f0f0f0;
+}
+
+.journal td { font-size: .9em; }
+.journal .horodatage { white-space: nowrap; font-family: "SF Mono", Menlo, Consolas, monospace; }

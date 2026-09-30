@@ -3,7 +3,7 @@
  {% block bloc1 %} 
  <div id="contenu">
       <h2>Identification utilisateur</h2>
-      {% if message is defined %}
+      {% if message is defined and message %}
             <div class="erreur">
             <ul><li>{{ message }}</li></ul></div>
       {% endif %}

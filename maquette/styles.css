@@ -242,3 +242,70 @@ input[type="reset"]:hover  { color: var(--gsb-principale-hover); border-color: v
     max-width: 11em;
     font-size: .8em;
 }
+
+/* ------------------------------------------- partie comptable (phase 5) */
+/* Ces règles proviennent de maquette/maquette.css, validée par le client. */
+
+.etat {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    border-radius: 999px;
+}
+
+.etatCloturee { color: #5c4310; background: #fdf3d8; }
+.etatValidee  { color: #14562c; background: #ddf3e4; }
+
+.confirmation {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #14562c;
+    background: #ddf3e4;
+    border: 1px solid #a8d9ba;
+    border-radius: 4px;
+}
+
+.boutonSecondaire {
+    display: inline-block;
+    padding: .5em 1.25em;
+    font-weight: 600;
+    color: var(--gsb-accent);
+    text-decoration: none;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
+    border-radius: 4px;
+}
+.boutonSecondaire:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
+
+/* Bouton d'accès à une fiche depuis le récapitulatif : plus compact que
+   .boutonSecondaire, car une même ligne peut en porter plusieurs (un par
+   mois restant à valider). */
+.lienFiche {
+    padding: .25em .7em;
+    font-size: .9em;
+    margin: .1em .25em .1em 0;
+}
+
+input[type="submit"].boutonRefus {
+    padding: .3em .8em;
+    font-size: .9em;
+    font-weight: 600;
+    color: #B3261E;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+}
+input[type="submit"].boutonRefus:hover { background: #f8dcdc; }
+
+/* Le formulaire de refus tient dans une cellule de tableau. */
+.listeLegere td form { display: inline; margin: 0; }
+
+.listeLegere tfoot td {
+    font-weight: 700;
+    background: var(--gsb-fond-clair);
+    border-top: 2px solid var(--gsb-principale);
+}
+
+.nombre { text-align: right; }
+
+.listeLegere td input[type="text"] { width: 5em; text-align: right; }

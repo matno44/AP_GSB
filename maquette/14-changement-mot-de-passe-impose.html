@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Changement de mot de passe imposé</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="contenu" style="margin-left:1.5em">
+  <h2>Changement de mot de passe obligatoire</h2>
+
+  <div class="avertissement" style="margin-top:0">
+    Bonjour David Andre. Votre mot de passe a été réinitialisé par un
+    administrateur. <strong>Vous devez en choisir un nouveau avant de continuer.</strong>
+  </div>
+
+  <form>
+    <div class="corpsForm">
+      <fieldset>
+        <legend>Nouveau mot de passe</legend>
+        <p>
+          <label for="ancien">Mot de passe actuel <span class="champObligatoire">*</span></label>
+          <input type="password" id="ancien" name="ancien" size="30" />
+        </p>
+        <span class="aideChamp">Le mot de passe temporaire qui vous a été communiqué.</span>
+        <p>
+          <label for="nouveau">Nouveau mot de passe <span class="champObligatoire">*</span></label>
+          <input type="password" id="nouveau" name="nouveau" size="30" />
+        </p>
+        <span class="aideChamp">
+          12 caractères minimum, dont au moins une minuscule, une majuscule et un
+          chiffre. Il doit être différent du mot de passe temporaire.
+        </span>
+        <p>
+          <label for="nouveau2">Confirmation <span class="champObligatoire">*</span></label>
+          <input type="password" id="nouveau2" name="nouveau2" size="30" />
+        </p>
+      </fieldset>
+    </div>
+    <div class="piedForm">
+      <p>
+        <input type="submit" value="Changer mon mot de passe" />
+      </p>
+    </div>
+  </form>
+</div>
+
+<div class="annotation" style="margin-left:1.5em">
+  <strong>Comment lire cet écran.</strong>
+  <ul>
+    <li>
+      <strong>Il n'y a pas de menu, et c'est volontaire.</strong> L'utilisateur
+      est authentifié mais n'a accès à rien d'autre : tant que l'indicateur de
+      changement imposé est levé, chaque contrôleur le renvoie ici. Afficher un
+      menu inopérant ne ferait que suggérer une sortie qui n'existe pas.
+    </li>
+    <li>
+      <strong>Le mot de passe actuel est redemandé.</strong> Sans cela,
+      quiconque accéderait à une session ouverte pourrait s'en approprier
+      définitivement le compte.
+    </li>
+    <li>
+      <strong>Il n'y a pas de bouton « plus tard ».</strong> L'écran existe
+      précisément parce qu'un tiers — l'administrateur — connaît le mot de passe
+      en cours.
+    </li>
+    <li>
+      <strong>Cet écran sert aussi à la première connexion</strong> du compte
+      administrateur créé par le script SQL, dont le mot de passe initial est
+      écrit dans un fichier versionné et doit donc être changé immédiatement.
+    </li>
+  </ul>
+</div>
+</body>
+</html>

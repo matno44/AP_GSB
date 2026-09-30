@@ -88,3 +88,78 @@ pg_gsb_frais_validationvalider:
     defaults: { _controller: PgGsbFraisBundle:Validation:valider }
     requirements: { idVisiteur: "[A-Za-z0-9]{1,4}", mois: '\d{6}' }
     methods: [POST]
+
+# ---------------------------------------------------------------------------
+# Phase 8 (hors cahier des charges) : administration des comptes
+#
+# Toutes les routes /admin/ sont contrôlées côté serveur par
+# AdminController::refuserSiPasAdministrateur(). Le préfixe commun ne protège
+# rien par lui-même : c'est une convention de lecture, pas un pare-feu.
+#
+# Les actions d'écriture sont en POST uniquement : une action qui modifie l'état
+# ne doit pas être déclenchable par un GET, qu'une balise <img> d'un autre site
+# suffirait à provoquer.
+# ---------------------------------------------------------------------------
+pg_gsb_frais_admin:
+    path: /admin/comptes
+    defaults: { _controller: PgGsbFraisBundle:Admin:index }
+pg_gsb_frais_admincreer:
+    path: /admin/comptes/creer
+    defaults: { _controller: PgGsbFraisBundle:Admin:creer }
+    # [GET] obligatoire : sans lui cette route capturerait aussi le POST de
+    # pg_gsb_frais_adminenregistrercreation, déclarée après elle sur le même
+    # chemin, et le formulaire se réafficherait au lieu d'être enregistré.
+    methods: [GET]
+pg_gsb_frais_adminenregistrercreation:
+    path: /admin/comptes/creer
+    defaults: { _controller: PgGsbFraisBundle:Admin:enregistrerCreation }
+    methods: [POST]
+pg_gsb_frais_adminjournal:
+    path: /admin/journal
+    defaults: { _controller: PgGsbFraisBundle:Admin:journal }
+# Les routes paramétrées viennent APRÈS /admin/comptes/creer et /admin/journal :
+# sans cela « creer » serait capturé comme un {role}, et « journal » comme un
+# matricule. Le routeur retient la première route qui correspond.
+pg_gsb_frais_adminmodifier:
+    path: /admin/comptes/{role}/{id}/modifier
+    defaults: { _controller: PgGsbFraisBundle:Admin:modifier }
+    requirements: { role: 'visiteur|comptable|administrateur', id: '[A-Za-z0-9]{1,4}' }
+    methods: [GET]
+pg_gsb_frais_adminenregistrermodification:
+    path: /admin/comptes/{role}/{id}/modifier
+    defaults: { _controller: PgGsbFraisBundle:Admin:enregistrerModification }
+    requirements: { role: 'visiteur|comptable|administrateur', id: '[A-Za-z0-9]{1,4}' }
+    methods: [POST]
+pg_gsb_frais_adminconfirmer:
+    path: /admin/comptes/{role}/{id}/confirmer/{action}
+    defaults: { _controller: PgGsbFraisBundle:Admin:confirmer }
+    requirements:
+        role: 'visiteur|comptable|administrateur'
+        id: '[A-Za-z0-9]{1,4}'
+        action: 'desactiver|reactiver|supprimer'
+pg_gsb_frais_adminbasculer:
+    path: /admin/comptes/{role}/{id}/basculer
+    defaults: { _controller: PgGsbFraisBundle:Admin:basculerActif }
+    requirements: { role: 'visiteur|comptable|administrateur', id: '[A-Za-z0-9]{1,4}' }
+    methods: [POST]
+pg_gsb_frais_adminsupprimer:
+    path: /admin/comptes/{role}/{id}/supprimer
+    defaults: { _controller: PgGsbFraisBundle:Admin:supprimer }
+    requirements: { role: 'visiteur|comptable|administrateur', id: '[A-Za-z0-9]{1,4}' }
+    methods: [POST]
+pg_gsb_frais_adminreinitialiser:
+    path: /admin/comptes/{role}/{id}/reinitialiser
+    defaults: { _controller: PgGsbFraisBundle:Admin:reinitialiser }
+    requirements: { role: 'visiteur|comptable|administrateur', id: '[A-Za-z0-9]{1,4}' }
+    methods: [POST]
+
+# Changement de mot de passe imposé. Hors préfixe /admin/ : il concerne les
+# trois rôles, pas seulement les administrateurs.
+pg_gsb_frais_changermotdepasse:
+    path: /changermotdepasse
+    defaults: { _controller: PgGsbFraisBundle:MotDePasse:formulaire }
+    methods: [GET]
+pg_gsb_frais_validerchangementmotdepasse:
+    path: /changermotdepasse
+    defaults: { _controller: PgGsbFraisBundle:MotDePasse:valider }
+    methods: [POST]

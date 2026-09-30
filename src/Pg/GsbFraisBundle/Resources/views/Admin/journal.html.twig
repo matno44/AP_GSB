@@ -1,0 +1,100 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Journal d'administration</h2>
+
+    <form class="filtres" method="get" action="{{ path('pg_gsb_frais_adminjournal') }}">
+        <div class="ligneFiltres">
+            <span class="champFiltre">
+                <label for="auteur">Administrateur</label>
+                <select id="auteur" name="auteur">
+                    <option value="">Tous</option>
+                    {% for unAuteur in lesauteurs %}
+                        <option value="{{ unAuteur.idAdministrateur }}"{% if unAuteur.idAdministrateur == auteur %} selected{% endif %}>
+                            {{ unAuteur.nomAdministrateur }} ({{ unAuteur.idAdministrateur }})
+                        </option>
+                    {% endfor %}
+                </select>
+            </span>
+            <span class="champFiltre">
+                <label for="action">Action</label>
+                <select id="action" name="action">
+                    <option value="">Toutes</option>
+                    {% for uneAction in lesactions %}
+                        <option value="{{ uneAction.action }}"{% if uneAction.action == action %} selected{% endif %}>{{ uneAction.action }}</option>
+                    {% endfor %}
+                </select>
+            </span>
+            <span class="champFiltre">
+                <label for="cible">Compte visé</label>
+                <input type="text" id="cible" name="cible" size="16" value="{{ cible }}" />
+            </span>
+            <span class="champFiltre">
+                <input type="submit" value="Filtrer" />
+            </span>
+            <span class="champFiltre">
+                <a class="boutonSecondaire lienAction" href="{{ path('pg_gsb_frais_adminjournal') }}">Réinitialiser</a>
+            </span>
+        </div>
+    </form>
+
+    {% if lesentrees is empty %}
+        <p>Aucune entrée au journal ne correspond à ces critères.</p>
+    {% else %}
+    <table class="listeLegere journal">
+        <caption>{{ total }} entrée{{ total > 1 ? 's' : '' }} — les plus récentes en premier</caption>
+        <tr>
+            <th>Date et heure</th>
+            <th>Administrateur</th>
+            <th>Action</th>
+            <th>Compte visé</th>
+            <th>Détail</th>
+        </tr>
+        {% for uneEntree in lesentrees %}
+            <tr>
+                <td class="horodatage">{{ uneEntree.horodatage|date('d/m/Y H:i') }}</td>
+                <td>{{ uneEntree.nomAdministrateur }} ({{ uneEntree.idAdministrateur }})</td>
+                <td>{{ uneEntree.action }}</td>
+                <td>{{ uneEntree.idCible }} — {{ uneEntree.nomCible }}</td>
+                <td>{{ uneEntree.detail }}</td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    {% set filtres = {'auteur': auteur, 'action': action, 'cible': cible} %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="{{ path('pg_gsb_frais_adminjournal', filtres|merge({'page': page - 1})) }}">&laquo; Précédent</a>
+        {% else %}
+            <span class="inactif">&laquo; Précédent</span>
+        {% endif %}
+        {% for unePage in 1..nbpages %}
+            {% if unePage == 1 or unePage == nbpages or (unePage >= page - 2 and unePage <= page + 2) %}
+                {% if unePage == page %}
+                    <span class="pageCourante">{{ unePage }}</span>
+                {% else %}
+                    <a href="{{ path('pg_gsb_frais_adminjournal', filtres|merge({'page': unePage})) }}">{{ unePage }}</a>
+                {% endif %}
+            {% elseif unePage == 2 or unePage == nbpages - 1 %}
+                <span class="inactif">…</span>
+            {% endif %}
+        {% endfor %}
+        {% if page < nbpages %}
+            <a href="{{ path('pg_gsb_frais_adminjournal', filtres|merge({'page': page + 1})) }}">Suivant &raquo;</a>
+        {% else %}
+            <span class="inactif">Suivant &raquo;</span>
+        {% endif %}
+        <span class="compteur">Page {{ page }} sur {{ nbpages }}</span>
+    </div>
+    {% endif %}
+
+    <p class="legendeTableau">
+        Les <strong>refus</strong> sont journalisés autant que les réussites : une
+        tentative d'auto-désactivation ou une suppression refusée dit quelque chose
+        sur ce qui a été cherché. Aucun mot de passe, même temporaire, n'apparaît
+        ici.
+    </p>
+</div>
+{% endblock %}
+{% endblock %}

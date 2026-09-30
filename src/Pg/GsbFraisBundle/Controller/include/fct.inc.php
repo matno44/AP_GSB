@@ -44,7 +44,7 @@ function connecter($session, $id,$nom,$prenom){
  * @param $prenom
  * @param $role
  */
-function connecterAvecRole($session, $id, $nom, $prenom, $role){
+function connecterAvecRole($session, $id, $nom, $prenom, $role, $doitChanger = 0){
     // FIXATION DE SESSION. Avant cette ligne, l'identifiant de session ne
     // changeait pas à la connexion : un attaquant ayant réussi à imposer un
     // identifiant au navigateur de la victime AVANT qu'elle se connecte se
@@ -60,6 +60,10 @@ function connecterAvecRole($session, $id, $nom, $prenom, $role){
     $session->set('nom',$nom);
     $session->set('prenom',$prenom);
     $session->set('role',$role);
+    // Lu à chaque requête par GardeCompteListener. Valeur par défaut 0 :
+    // connecter(), qui existait avant la phase 8, continue d'ouvrir une
+    // session ordinaire sans rien savoir de cet indicateur.
+    $session->set('mdpDoitChanger', (int) $doitChanger);
 }
 /**
  * Indique si l'utilisateur connecté est un comptable
@@ -93,6 +97,102 @@ function estVisiteur($session){
     return $session->get('role') === 'visiteur';
 }
 /**
+ * Indique si l'utilisateur connecté est un administrateur (phase 8)
+
+ * Troisième rôle, distinct du visiteur et du comptable. Un administrateur ne
+ * saisit pas de frais et n'en valide pas : il ne gère que des comptes. Il
+ * n'hérite donc d'aucun droit des deux autres rôles, et estVisiteur() comme
+ * estComptable() renvoient faux pour lui — ce qui lui interdit déjà tous les
+ * écrans métier sans qu'une ligne ait été ajoutée à leurs contrôleurs.
+
+ * @return vrai ou faux
+ */
+function estAdministrateur($session){
+    return $session->get('role') === 'administrateur';
+}
+/**
+ * Indique si l'utilisateur doit changer son mot de passe avant d'aller plus loin
+
+ * Levé à la création d'un compte et à chaque réinitialisation : dans les deux
+ * cas, un tiers — l'administrateur — connaît le mot de passe en cours. Tant que
+ * l'indicateur est levé, GardeCompteListener renvoie l'utilisateur sur l'écran
+ * de changement, quelle que soit l'URL demandée.
+
+ * @return vrai ou faux
+ */
+function doitChangerMotDePasse($session){
+    return (int) $session->get('mdpDoitChanger') === 1;
+}
+/**
+ * Vérifie qu'un mot de passe respecte les règles minimales
+
+ * 12 caractères et trois familles de caractères. Le seuil est volontairement
+ * plus haut que les 8 caractères des mots de passe d'origine : ceux-là étaient
+ * générés par le jeu de données du sujet, pas choisis par des humains.
+
+ * Les messages énoncent la règle complète plutôt que la seule condition violée,
+ * pour éviter à l'utilisateur une succession d'allers-retours.
+
+ * @param $mdp le mot de passe en clair
+ * @return un tableau de messages d'erreur, vide si le mot de passe convient
+ */
+function valideMotDePasse($mdp){
+    $lesErreurs = array();
+    if (strlen($mdp) < 12) {
+        $lesErreurs[] = 'Le mot de passe doit comporter au moins 12 caractères.';
+    }
+    if (!preg_match('/[a-z]/', $mdp) || !preg_match('/[A-Z]/', $mdp)
+        || !preg_match('/[0-9]/', $mdp)) {
+        $lesErreurs[] = 'Le mot de passe doit contenir au moins une minuscule, '
+            . 'une majuscule et un chiffre.';
+    }
+    return $lesErreurs;
+}
+/**
+ * Engendre un mot de passe temporaire lisible à l'oral
+
+ * Trois groupes de quatre caractères séparés par des tirets. Les caractères
+ * ambigus sont exclus de l'alphabet (0/O, 1/l/I) : ce mot de passe est recopié
+ * à la main ou dicté par téléphone, et une confusion coûterait un appel de plus.
+
+ * random_int() et non rand() : le générateur doit être cryptographiquement sûr,
+ * sinon le mot de passe devient prévisible pour qui connaît l'heure de création.
+
+ * L'alphabet contient minuscules, majuscules et chiffres, et la construction en
+ * force la présence : le mot de passe produit satisfait donc toujours
+ * valideMotDePasse().
+
+ * @return string
+ */
+function genererMotDePasseTemporaire(){
+    $minuscules = 'abcdefghijkmnpqrstuvwxyz';   // sans l ni o
+    $majuscules = 'ABCDEFGHJKLMNPQRSTUVWXYZ';   // sans I ni O
+    $chiffres   = '23456789';                   // sans 0 ni 1
+    $alphabet   = $minuscules . $majuscules . $chiffres;
+
+    // Une lettre de chaque famille d'abord, pour garantir la règle, puis on
+    // complète et on mélange : sans le mélange, les trois premiers caractères
+    // seraient toujours de la même nature.
+    $caracteres = array(
+        $minuscules[random_int(0, strlen($minuscules) - 1)],
+        $majuscules[random_int(0, strlen($majuscules) - 1)],
+        $chiffres[random_int(0, strlen($chiffres) - 1)],
+    );
+    for ($i = count($caracteres); $i < 12; $i++) {
+        $caracteres[] = $alphabet[random_int(0, strlen($alphabet) - 1)];
+    }
+    // shuffle() n'est pas sûr cryptographiquement : on mélange nous-mêmes avec
+    // random_int(), par un Fisher-Yates.
+    for ($i = count($caracteres) - 1; $i > 0; $i--) {
+        $j = random_int(0, $i);
+        $tmp = $caracteres[$i];
+        $caracteres[$i] = $caracteres[$j];
+        $caracteres[$j] = $tmp;
+    }
+    $mdp = implode('', $caracteres);
+
+    return substr($mdp, 0, 4) . '-' . substr($mdp, 4, 4) . '-' . substr($mdp, 8, 4);
+}/**
  * Traduit un mois au format aaaamm en libellé français
 
  * Exemple : "202609" devient "Septembre 2026".

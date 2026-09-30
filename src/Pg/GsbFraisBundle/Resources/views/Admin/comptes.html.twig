@@ -1,0 +1,151 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Gestion des comptes</h2>
+
+    {% if message %}
+        <div class="{{ message.type == 'confirmation' ? 'confirmation' : 'blocRefus' }}">{{ message.texte }}</div>
+    {% endif %}
+
+    {# Les filtres sont un GET : chaque état de la liste a son URL, partageable
+       et rechargeable, et la pagination n'a rien à mémoriser. #}
+    <form class="filtres" method="get" action="{{ path('pg_gsb_frais_admin') }}">
+        <div class="ligneFiltres">
+            <span class="champFiltre">
+                <label for="recherche">Nom ou matricule</label>
+                <input type="text" id="recherche" name="recherche" size="22" value="{{ recherche }}" />
+            </span>
+            <span class="champFiltre">
+                <label for="role">Rôle</label>
+                <select id="role" name="role">
+                    <option value="">Tous les rôles</option>
+                    {% for unRole in lesroles %}
+                        <option value="{{ unRole }}"{% if unRole == role %} selected{% endif %}>{{ unRole|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </span>
+            <span class="champFiltre">
+                <label for="etat">État</label>
+                <select id="etat" name="etat">
+                    <option value="">Tous les états</option>
+                    <option value="actif"{% if etat == 'actif' %} selected{% endif %}>Actif</option>
+                    <option value="desactive"{% if etat == 'desactive' %} selected{% endif %}>Désactivé</option>
+                </select>
+            </span>
+            <span class="champFiltre">
+                <input type="submit" value="Filtrer" />
+            </span>
+            <span class="champFiltre">
+                <a class="boutonSecondaire lienAction" href="{{ path('pg_gsb_frais_admin') }}">Réinitialiser</a>
+            </span>
+        </div>
+    </form>
+
+    <p><a class="bouton" href="{{ path('pg_gsb_frais_admincreer') }}">Créer un compte</a></p>
+
+    {% if lescomptes is empty %}
+        <p>Aucun compte ne correspond à ces critères.</p>
+    {% else %}
+    <table class="listeLegere">
+        <caption>{{ total }} compte{{ total > 1 ? 's' : '' }} correspondant{{ total > 1 ? 's' : '' }}</caption>
+        <tr>
+            <th>Matricule</th>
+            <th>Nom et prénom</th>
+            <th>Login</th>
+            <th>Rôle</th>
+            <th>État</th>
+            <th>Actions</th>
+        </tr>
+        {% for unCompte in lescomptes %}
+            {% set estMoi = (unCompte.role == 'administrateur' and unCompte.id == moncompte) %}
+            <tr{% if unCompte.actif == 0 %} class="ligneDesactivee"{% endif %}>
+                <td>{{ unCompte.id }}</td>
+                <td>{{ unCompte.nom }} {{ unCompte.prenom }}</td>
+                <td>{{ unCompte.login }}</td>
+                <td><span class="badgeRole role{{ unCompte.role|capitalize }}">{{ unCompte.role|capitalize }}</span></td>
+                <td>
+                    <span class="badgeEtatCompte {{ unCompte.actif == 1 ? 'compteActif' : 'compteDesactive' }}">
+                        {{ unCompte.actif == 1 ? 'Actif' : 'Désactivé' }}
+                    </span>
+                    {% if unCompte.mdpDoitChanger == 1 %}
+                        <span class="badgeEtatCompte compteDesactive" title="Doit changer son mot de passe à la prochaine connexion">mdp à changer</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <span class="actionsCompte">
+                        <a class="boutonSecondaire lienAction"
+                           href="{{ path('pg_gsb_frais_adminmodifier', {'role': unCompte.role, 'id': unCompte.id}) }}">Modifier</a>
+
+                        {# Le compte de l'administrateur connecté ne porte pas les
+                           actions dangereuses. La mention remplace les boutons
+                           plutôt que de les afficher grisés sans explication. #}
+                        {% if estMoi %}
+                            <span class="actionInerte" title="Un administrateur ne peut ni se désactiver ni se supprimer lui-même">votre compte</span>
+                        {% else %}
+                            {% if unCompte.actif == 1 %}
+                                <a class="boutonSecondaire lienAction"
+                                   href="{{ path('pg_gsb_frais_adminconfirmer', {'role': unCompte.role, 'id': unCompte.id, 'action': 'desactiver'}) }}">Désactiver</a>
+                            {% else %}
+                                <a class="bouton lienAction"
+                                   href="{{ path('pg_gsb_frais_adminconfirmer', {'role': unCompte.role, 'id': unCompte.id, 'action': 'reactiver'}) }}">Réactiver</a>
+                            {% endif %}
+                            <a class="boutonRefus lienAction"
+                               href="{{ path('pg_gsb_frais_adminconfirmer', {'role': unCompte.role, 'id': unCompte.id, 'action': 'supprimer'}) }}">Supprimer</a>
+                        {% endif %}
+
+                        {# La réinitialisation modifie l'état : c'est un POST, pas
+                           un lien. Un GET serait déclenchable par une balise
+                           <img> d'un autre site. #}
+                        <form method="post" style="display:inline;margin:0"
+                              action="{{ path('pg_gsb_frais_adminreinitialiser', {'role': unCompte.role, 'id': unCompte.id}) }}">
+                            <input type="hidden" name="_token" value="{{ csrf_token('admin_reinitialiser') }}" />
+                            <input type="submit" class="boutonSecondaire lienAction"
+                                   value="Réinit. mot de passe"
+                                   onclick="return confirm('Générer un nouveau mot de passe temporaire pour {{ unCompte.prenom }} {{ unCompte.nom }} ?');" />
+                        </form>
+                    </span>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    {# Les filtres sont recopiés dans chaque lien de pagination, sinon changer de
+       page remettrait la liste à zéro. #}
+    {% set filtres = {'recherche': recherche, 'role': role, 'etat': etat} %}
+    <div class="pagination">
+        {% if page > 1 %}
+            <a href="{{ path('pg_gsb_frais_admin', filtres|merge({'page': page - 1})) }}">&laquo; Précédent</a>
+        {% else %}
+            <span class="inactif">&laquo; Précédent</span>
+        {% endif %}
+
+        {% for unePage in 1..nbpages %}
+            {# Fenêtre glissante : avec 9 pages tout tient, mais la liste doit
+               rester lisible si le nombre de comptes triple. #}
+            {% if unePage == 1 or unePage == nbpages or (unePage >= page - 2 and unePage <= page + 2) %}
+                {% if unePage == page %}
+                    <span class="pageCourante">{{ unePage }}</span>
+                {% else %}
+                    <a href="{{ path('pg_gsb_frais_admin', filtres|merge({'page': unePage})) }}">{{ unePage }}</a>
+                {% endif %}
+            {% elseif unePage == 2 or unePage == nbpages - 1 %}
+                <span class="inactif">…</span>
+            {% endif %}
+        {% endfor %}
+
+        {% if page < nbpages %}
+            <a href="{{ path('pg_gsb_frais_admin', filtres|merge({'page': page + 1})) }}">Suivant &raquo;</a>
+        {% else %}
+            <span class="inactif">Suivant &raquo;</span>
+        {% endif %}
+
+        <span class="compteur">
+            Comptes {{ (page - 1) * parpage + 1 }} à {{ min(page * parpage, total) }}
+            sur {{ total }} — page {{ page }} sur {{ nbpages }}
+        </span>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}
+{% endblock %}

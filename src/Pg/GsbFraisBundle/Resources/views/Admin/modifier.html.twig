@@ -1,0 +1,85 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Modifier le compte de {{ lecompte.prenom }} {{ lecompte.nom }}</h2>
+
+    {% include 'PgGsbFraisBundle:SaisirFrais:erreurs.html.twig' with {'leserreurs': leserreurs} %}
+
+    <div class="encadre">
+        <p>
+            Matricule : <strong>{{ lecompte.id }}</strong> &nbsp;&middot;&nbsp;
+            Rôle : <span class="badgeRole role{{ lerole|capitalize }}">{{ lerole|capitalize }}</span> &nbsp;&middot;&nbsp;
+            État :
+            <span class="badgeEtatCompte {{ lecompte.actif == 1 ? 'compteActif' : 'compteDesactive' }}">
+                {{ lecompte.actif == 1 ? 'Actif' : 'Désactivé' }}
+            </span>
+            {% if lesliaisons %}
+                &nbsp;&middot;&nbsp; Fiches de frais rattachées : <strong>{{ lesliaisons.nbFiches }}</strong>
+            {% endif %}
+        </p>
+    </div>
+
+    <form method="post" action="{{ path('pg_gsb_frais_adminenregistrermodification', {'role': lerole, 'id': lecompte.id}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_modifier') }}" />
+        <div class="corpsForm">
+
+            <fieldset>
+                <legend>Matricule</legend>
+                <p>
+                    <label for="matricule">Matricule</label>
+                    <input type="text" id="matricule" class="lectureSeule" size="10"
+                           value="{{ lecompte.id }}" readonly />
+                </p>
+                <span class="aideChamp">
+                    {% if lesliaisons and lesliaisons.nbFiches > 0 %}
+                        Non modifiable : {{ lesliaisons.nbFiches }} fiche(s) de frais,
+                        {{ lesliaisons.nbLignesForfait }} ligne(s) forfait et
+                        {{ lesliaisons.nbLignesHorsForfait }} ligne(s) hors forfait
+                        pointent sur ce matricule.
+                    {% else %}
+                        Non modifiable : le matricule est la clé primaire du compte
+                        et la cible des fiches de frais.
+                    {% endif %}
+                    {# Le champ est aussi ignoré côté serveur : le rôle et le
+                       matricule viennent de l'URL. Un attribut readonly se retire
+                       en trois clics dans un navigateur. #}
+                </span>
+            </fieldset>
+
+            {% include 'PgGsbFraisBundle:Admin:_champscompte.html.twig' %}
+
+            <fieldset>
+                <legend>Mot de passe</legend>
+                <p>
+                    <label>Mot de passe</label>
+                    {# Action séparée, avec son propre formulaire POST : un mot de
+                       passe ne se modifie pas, il se remplace. Le proposer vide au
+                       milieu de ce formulaire laisserait croire qu'on peut le
+                       laisser tel quel ou le changer au passage. #}
+                </p>
+                <span class="aideChamp" style="margin-left:0">
+                    Un mot de passe ne peut pas être relu, seulement remplacé. La
+                    réinitialisation, depuis la liste des comptes, génère un mot de
+                    passe temporaire affiché une seule fois.
+                </span>
+            </fieldset>
+
+        </div>
+        <div class="piedForm">
+            <p>
+                <input type="submit" value="Enregistrer les modifications" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Annuler</a>
+                {# L'état du compte ne se change pas ici non plus : une case à
+                   cocher perdue au milieu d'un formulaire n'est pas une
+                   confirmation explicite. #}
+                <a class="boutonRefus lienAction"
+                   href="{{ path('pg_gsb_frais_adminconfirmer', {'role': lerole, 'id': lecompte.id, 'action': lecompte.actif == 1 ? 'desactiver' : 'reactiver'}) }}">
+                    {{ lecompte.actif == 1 ? 'Désactiver ce compte' : 'Réactiver ce compte' }}
+                </a>
+            </p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% endblock %}

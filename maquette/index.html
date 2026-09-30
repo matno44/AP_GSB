@@ -54,6 +54,78 @@
       <li><a href="06-aucune-fiche.html">Aucune fiche pour ce visiteur ce mois</a> — exception 4-a</li>
     </ol>
 
+    <hr style="margin:2em 0;border:0;border-top:1px solid var(--gsb-bordure)" />
+
+    <h2>Phase 8 — Interface d'administration <em>(hors cahier des charges)</em></h2>
+
+    <p>
+      Extension personnelle, <strong>hors du cahier des charges initial</strong> :
+      gérer les comptes visiteurs, comptables et administrateurs depuis une seule
+      interface. Le besoin métier est simple — aujourd'hui, créer un visiteur ou
+      couper l'accès d'un salarié qui a quitté l'entreprise suppose d'écrire du
+      SQL à la main dans la base de production.
+    </p>
+
+    <h3>Les quatre écrans demandés</h3>
+    <ol start="7">
+      <li><a href="07-admin-liste-comptes.html">Liste des comptes</a> — pagination, filtres rôle et état, recherche</li>
+      <li><a href="08-admin-creer-compte.html">Créer un compte</a> — rôle, identifiants, informations métier</li>
+      <li><a href="09-admin-modifier-compte.html">Modifier un compte</a></li>
+      <li><a href="10-admin-confirmer-desactivation.html">Confirmation de désactivation</a></li>
+    </ol>
+
+    <h3>Écrans complémentaires</h3>
+    <p style="margin-top:-.5em">
+      Non listés dans ta demande d'étape 2, mais exigés par les fonctionnalités
+      de l'étape 3. Ils introduisent des comportements nouveaux qu'il vaut mieux
+      valider maintenant qu'après codage.
+    </p>
+    <ol start="11">
+      <li><a href="11-admin-suppression-refusee.html">Suppression refusée</a> — compte ayant des données liées</li>
+      <li><a href="12-admin-mot-de-passe-temporaire.html">Mot de passe temporaire</a> — affiché une seule fois</li>
+      <li><a href="13-admin-journal.html">Journal d'administration</a> — traçabilité</li>
+      <li><a href="14-changement-mot-de-passe-impose.html">Changement de mot de passe imposé</a> — côté utilisateur</li>
+    </ol>
+
+    <div class="annotation" style="margin:1.5em 0 0">
+      <strong>Décisions déjà actées à l'étape 1</strong>, que la maquette applique :
+      <ul>
+        <li>
+          <strong>Modèle de données — option B.</strong> Les tables
+          <code>visiteur</code> et <code>comptable</code> sont conservées, une
+          table <code>administrateur</code> est ajoutée, chacune reçoit une
+          colonne <code>actif</code>. La liste unifiée de l'écran 07 est une vue
+          SQL. <code>fk_fichefrais_visiteur</code> garde ainsi tout son sens.
+        </li>
+        <li>
+          <strong>Mots de passe visiteur migrés en bcrypt.</strong> Les 209 mots
+          de passe actuels sont en clair dans un <code>VARCHAR(30)</code> ; ils
+          seront hachés sans que personne ne perde le sien.
+        </li>
+        <li>
+          <strong>L'état du compte est revérifié à chaque requête</strong>, pas
+          seulement à la connexion : une session déjà ouverte est donc coupée.
+        </li>
+        <li>
+          <strong>Un visiteur désactivé est masqué</strong> de la liste
+          déroulante du comptable, mais reste atteignable par le récapitulatif :
+          son historique n'est jamais perdu.
+        </li>
+      </ul>
+
+      <div class="aValider">
+        <strong>Cinq points restent à trancher</strong>, chacun rappelé en bas de
+        l'écran concerné :
+        <ul>
+          <li>écran 07 — le <strong>matricule</strong> est-il modifiable ? (ma proposition : non)</li>
+          <li>écran 07 — faut-il une <strong>règle renforcée</strong> pour supprimer un comptable ou un administrateur ?</li>
+          <li>écran 10 — <strong>un seul gabarit</strong> de confirmation pour désactiver, réactiver et supprimer, ou un écran par action ?</li>
+          <li>écran 12 — le mot de passe temporaire doit-il <strong>expirer</strong> ? (ma proposition : pas dans cette phase)</li>
+          <li>écran 13 — le <strong>motif</strong> doit-il être obligatoire ? (ma proposition : facultatif mais proposé)</li>
+        </ul>
+      </div>
+    </div>
+
     <div class="annotation" style="margin:1.5em 0 0">
       <strong>Trois points sur lesquels j'attends une réponse explicite du client.</strong>
       Ils sont rappelés en bas des écrans concernés.

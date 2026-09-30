@@ -1,0 +1,105 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Créer un compte</h2>
+
+    {% include 'PgGsbFraisBundle:SaisirFrais:erreurs.html.twig' with {'leserreurs': leserreurs} %}
+
+    <p>Les champs marqués <span class="champObligatoire">*</span> sont obligatoires.</p>
+
+    {# Le choix du rôle est un formulaire GET DISTINCT, et non un champ du
+       formulaire de création. Changer de rôle change les champs affichés : le
+       faire en soumettant le formulaire de création déclencherait sa validation
+       et afficherait des erreurs sur des champs encore vides. Ici, changer de
+       rôle est une simple navigation — et elle fonctionne sans JavaScript. #}
+    <form class="filtres" method="get" action="{{ path('pg_gsb_frais_admincreer') }}">
+        <div class="ligneFiltres">
+            <span class="champFiltre">
+                <label for="role">Rôle du compte à créer</label>
+                <select id="role" name="role">
+                    {% for unRole in lesroles %}
+                        <option value="{{ unRole }}"{% if unRole == saisie.role %} selected{% endif %}>{{ unRole|capitalize }}</option>
+                    {% endfor %}
+                </select>
+            </span>
+            <span class="champFiltre">
+                <input type="submit" class="boutonSecondaire" value="Changer de rôle" />
+            </span>
+        </div>
+    </form>
+
+    <form method="post" action="{{ path('pg_gsb_frais_adminenregistrercreation') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('admin_creer') }}" />
+        {# Le rôle retenu est réémis ici : c'est lui qui décide de la table de
+           destination, et le sélecteur ci-dessus appartient à un autre formulaire. #}
+        <input type="hidden" name="role" value="{{ saisie.role }}" />
+        <div class="corpsForm">
+
+            <fieldset>
+                <legend>Rôle retenu : {{ saisie.role|capitalize }}</legend>
+                <span class="aideChamp" style="margin-left:0">
+                    Détermine la table de destination et les écrans accessibles.
+                    Les informations métier ci-dessous ne concernent que les
+                    visiteurs.
+                </span>
+            </fieldset>
+
+            <fieldset>
+                <legend>Matricule</legend>
+                <p>
+                    <label for="matricule">Matricule</label>
+                    <input type="text" id="matricule" class="lectureSeule" size="24"
+                           value="attribué automatiquement" readonly />
+                </p>
+                <span class="aideChamp">
+                    <strong>Généré par l'application à l'enregistrement</strong> :
+                    préfixe du rôle suivi d'un numéro (<code>v001</code> pour un
+                    visiteur, <code>c001</code> pour un comptable,
+                    <code>ad01</code> pour un administrateur). Le laisser à la
+                    main exposait à un doublon sur la clé primaire, y compris
+                    entre deux administrateurs travaillant au même instant.
+                    Définitif : les fiches de frais s'y rattachent.
+                </span>
+            </fieldset>
+
+            {% include 'PgGsbFraisBundle:Admin:_champscompte.html.twig' %}
+
+            <fieldset>
+                <legend>Mot de passe</legend>
+                <p>
+                    <label for="mdp">Mot de passe <span class="champObligatoire">*</span></label>
+                    <input type="password" id="mdp" name="mdp" size="30" autocomplete="new-password" />
+                </p>
+                <span class="aideChamp">
+                    12 caractères minimum, dont au moins une minuscule, une
+                    majuscule et un chiffre. Stocké haché (bcrypt) : il ne sera
+                    jamais réaffiché, ni écrit dans les journaux.
+                </span>
+                <p>
+                    <label for="mdp2">Confirmation <span class="champObligatoire">*</span></label>
+                    <input type="password" id="mdp2" name="mdp2" size="30" autocomplete="new-password" />
+                </p>
+                <p>
+                    <label for="forcerChangement">Changement imposé</label>
+                    <input type="checkbox" id="forcerChangement" name="forcerChangement" value="1" checked />
+                    obliger l'utilisateur à changer son mot de passe à la première connexion
+                </p>
+                <span class="aideChamp">
+                    Coché par défaut : c'est vous qui choisissez ce premier mot de
+                    passe, le laisser en place signifierait qu'un tiers le connaît
+                    durablement.
+                </span>
+            </fieldset>
+
+        </div>
+        <div class="piedForm">
+            <p>
+                <input type="submit" value="Créer le compte" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Annuler</a>
+            </p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% endblock %}

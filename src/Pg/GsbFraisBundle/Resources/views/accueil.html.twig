@@ -4,7 +4,9 @@
      <div id="infosUtil">
          <h3>
             {% if app.session.get('nom') %}
-                {% if app.session.get('role') == 'comptable' %}Comptable{% else %}Visiteur{% endif %} :
+                {% if app.session.get('role') == 'administrateur' %}Administrateur
+                {%- elseif app.session.get('role') == 'comptable' %}Comptable
+                {%- else %}Visiteur{% endif %} :
                 bonjour {{ app.session.get('prenom') }} {{ app.session.get('nom') }}
             {% endif %}
         </h3>
@@ -13,7 +15,14 @@
            lien ne protège rien : chaque contrôleur refait le contrôle côté
            serveur. Le menu ne fait qu'éviter de proposer l'inutile. #}
         <ul id="menuList">
-        {% if app.session.get('role') == 'comptable' %}
+        {% if app.session.get('role') == 'administrateur' %}
+	   <li class="smenu">
+              <a href="{{path('pg_gsb_frais_admin')}}" title="Gérer les comptes de l'application">Gérer les comptes</a>
+           </li>
+           <li class="smenu">
+              <a href="{{path('pg_gsb_frais_adminjournal')}}" title="Historique des actions d'administration">Journal d'administration</a>
+           </li>
+        {% elseif app.session.get('role') == 'comptable' %}
 	   <li class="smenu">
               <a href="{{path('pg_gsb_frais_validation')}}" title="Valider les fiches de frais">Valider les fiches de frais</a>
            </li>
@@ -43,11 +52,30 @@
 {% block body %}
     {% block bloc1 %}
         <div id="contenu">
+            {# Message de confirmation déposé par MotDePasseController après un
+               changement réussi : il doit être vu, l'utilisateur venant d'être
+               redirigé depuis un autre écran. #}
+            {% for unMessage in app.session.flashbag.get('confirmation') %}
+                <div class="confirmation">{{ unMessage }}</div>
+            {% endfor %}
             <h2>Bienvenue sur l'intranet GSB</h2>
-            <p>
-                Utilisez le menu pour saisir votre fiche de frais du mois en cours
-                ou pour consulter vos fiches précédentes.
-            </p>
+            {% if app.session.get('role') == 'administrateur' %}
+                <p>
+                    Utilisez le menu pour créer, modifier, désactiver ou réactiver
+                    les comptes des visiteurs médicaux, des comptables et des
+                    administrateurs.
+                </p>
+            {% elseif app.session.get('role') == 'comptable' %}
+                <p>
+                    Utilisez le menu pour valider les fiches de frais des visiteurs
+                    ou pour imprimer celles du mois.
+                </p>
+            {% else %}
+                <p>
+                    Utilisez le menu pour saisir votre fiche de frais du mois en cours
+                    ou pour consulter vos fiches précédentes.
+                </p>
+            {% endif %}
         </div>
     {% endblock %}
 {% endblock %}

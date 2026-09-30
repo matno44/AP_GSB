@@ -1,0 +1,211 @@
+{# Gabarit UNIQUE pour les trois actions sensibles : désactivation, réactivation
+   et suppression. Le titre et la liste des conséquences changent, la structure
+   non. Trois écrans recopiés auraient fini par divulguer des formulations
+   divergentes de la même règle.
+
+   C'est une PAGE et non un confirm() JavaScript : elle a son URL, survit à un
+   rechargement et fonctionne sans JS. Un confirm() vit dans le navigateur, qui
+   n'est pas de notre côté — et le contrôle est de toute façon refait côté
+   serveur à l'exécution. #}
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+{% set nomComplet = lecompte.prenom ~ ' ' ~ lecompte.nom %}
+<div id="contenu">
+
+{% if laction == 'supprimer' %}
+    <h2>Supprimer définitivement un compte</h2>
+{% elseif laction == 'reactiver' %}
+    <h2>Réactiver un compte</h2>
+{% else %}
+    <h2>Désactiver un compte</h2>
+{% endif %}
+
+{# ------------------------------------------------- cas 1 : action refusée #}
+{% if blocage %}
+    <div class="dialogue dialogueRefus">
+        <h3>Opération impossible</h3>
+        <div class="blocRefus">{{ blocage }}</div>
+
+        {% if laction == 'supprimer' and lesliaisons and lesliaisons.nbFiches > 0 %}
+            <p><strong>Ce qui se rattache à {{ nomComplet }} ({{ lecompte.id }}) :</strong></p>
+            <table class="listeLegere">
+                <tr>
+                    <th>Donnée rattachée</th>
+                    <th class="nombre">Nombre</th>
+                    <th>Conséquence d'une suppression</th>
+                </tr>
+                <tr>
+                    <td>Fiches de frais</td>
+                    <td class="nombre">{{ lesliaisons.nbFiches }}</td>
+                    <td>dont <strong>{{ lesliaisons.nbFichesValidees }} déjà validée(s), mise(s) en paiement ou remboursée(s)</strong></td>
+                </tr>
+                <tr>
+                    <td>Lignes de frais forfaitisés</td>
+                    <td class="nombre">{{ lesliaisons.nbLignesForfait }}</td>
+                    <td>effacées en cascade, sans confirmation supplémentaire</td>
+                </tr>
+                <tr>
+                    <td>Lignes de frais hors forfait</td>
+                    <td class="nombre">{{ lesliaisons.nbLignesHorsForfait }}</td>
+                    <td>effacées en cascade</td>
+                </tr>
+                <tr>
+                    <td>Justificatifs déposés</td>
+                    <td class="nombre">{{ lesliaisons.nbJustificatifs }}</td>
+                    <td>fichiers laissés orphelins sur le disque</td>
+                </tr>
+            </table>
+
+            <p>
+                Supprimer ce compte détruirait l'historique de remboursements déjà
+                validés par la comptabilité. Ce sont des pièces justificatives :
+                elles doivent être conservées, même après le départ du salarié.
+            </p>
+            <p>
+                <strong>Si l'objectif est d'empêcher {{ nomComplet }} de se connecter</strong>,
+                c'est la désactivation qu'il faut utiliser : elle atteint ce
+                résultat sans rien détruire, et reste réversible.
+            </p>
+
+            <div class="piedDialogue">
+                {# Le refus propose une issue. Un écran qui dirait seulement
+                   « impossible » pousserait à contourner — typiquement à
+                   supprimer les fiches d'abord, ce qui déclencherait justement la
+                   cascade décrite ci-dessus. #}
+                <a class="bouton" href="{{ path('pg_gsb_frais_adminconfirmer', {'role': lerole, 'id': lecompte.id, 'action': 'desactiver'}) }}">Désactiver ce compte à la place</a>
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Retour à la liste</a>
+            </div>
+        {% else %}
+            <div class="piedDialogue">
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Retour à la liste</a>
+            </div>
+        {% endif %}
+    </div>
+
+{# --------------------------------------- cas 2 : suppression physique permise #}
+{% elseif laction == 'supprimer' %}
+    <div class="dialogue dialogueRefus">
+        <h3>Supprimer définitivement le compte de {{ nomComplet }} ({{ lecompte.id }}) ?</h3>
+        <p><strong>Cette opération est irréversible.</strong></p>
+        <ul>
+            <li>La ligne du compte sera effacée de la base.</li>
+            <li>
+                {% if lerole == 'visiteur' %}
+                    Ce visiteur n'a <strong>aucune fiche de frais</strong> : rien
+                    d'autre ne sera détruit.
+                {% else %}
+                    Aucune donnée métier n'est rattachée à ce compte.
+                {% endif %}
+            </li>
+            <li>
+                Le journal d'administration <strong>conservera la trace</strong> de
+                cette suppression, ainsi que le nom du compte supprimé.
+            </li>
+            <li>
+                Si vous souhaitez seulement empêcher la connexion, préférez la
+                désactivation : elle est réversible.
+            </li>
+        </ul>
+
+        <form method="post" action="{{ path('pg_gsb_frais_adminsupprimer', {'role': lerole, 'id': lecompte.id}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('admin_supprimer') }}" />
+            <p>
+                <label for="motif">Motif (facultatif)</label>
+                <input type="text" id="motif" name="motif" size="50" maxlength="255" />
+            </p>
+            <div class="piedDialogue">
+                {# Un form et non un lien : une action qui modifie l'état ne doit
+                   pas être atteignable en GET, qu'une balise <img> d'un autre site
+                   suffirait à déclencher. Le jeton anti-CSRF voyage avec. #}
+                <input type="submit" class="boutonDanger" value="Supprimer définitivement" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Annuler</a>
+            </div>
+        </form>
+    </div>
+
+{# ------------------------------------------------------ cas 3 : réactivation #}
+{% elseif laction == 'reactiver' %}
+    <div class="dialogue">
+        <h3>Réactiver le compte de {{ nomComplet }} ({{ lecompte.id }}) ?</h3>
+        <p><strong>Ce qui va se passer :</strong></p>
+        <ul>
+            <li>{{ nomComplet }} pourra de nouveau se connecter à l'application.</li>
+            <li>Son mot de passe est inchangé : c'est toujours le sien.</li>
+            {% if lerole == 'visiteur' %}
+                <li>
+                    Il réapparaîtra dans la liste déroulante de l'écran de
+                    validation du comptable.
+                </li>
+            {% endif %}
+        </ul>
+        <form method="post" action="{{ path('pg_gsb_frais_adminbasculer', {'role': lerole, 'id': lecompte.id}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('admin_basculer') }}" />
+            <p>
+                <label for="motif">Motif (facultatif)</label>
+                <input type="text" id="motif" name="motif" size="50" maxlength="255" />
+            </p>
+            <div class="piedDialogue">
+                <input type="submit" value="Confirmer la réactivation" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Annuler</a>
+            </div>
+        </form>
+    </div>
+
+{# ----------------------------------------------------- cas 4 : désactivation #}
+{% else %}
+    <div class="dialogue">
+        <h3>Désactiver le compte de {{ nomComplet }} ({{ lecompte.id }}) ?</h3>
+
+        <p><strong>Ce qui va se passer :</strong></p>
+        <ul>
+            <li>{{ nomComplet }} ne pourra plus se connecter à l'application.</li>
+            <li>
+                S'il est connecté en ce moment, sa session sera coupée
+                <strong>à sa requête suivante</strong> : l'état du compte est
+                revérifié à chaque page, pas seulement à la connexion.
+            </li>
+            {% if lesliaisons %}
+                <li>
+                    Ses <strong>{{ lesliaisons.nbFiches }} fiche(s) de frais</strong>
+                    (dont {{ lesliaisons.nbFichesValidees }} déjà validée(s) ou
+                    remboursée(s)), ses
+                    <strong>{{ lesliaisons.nbLignesForfait }} ligne(s) de frais forfaitisés</strong>,
+                    ses <strong>{{ lesliaisons.nbLignesHorsForfait }} ligne(s) hors forfait</strong>
+                    et ses {{ lesliaisons.nbJustificatifs }} justificatif(s)
+                    <strong>restent intacts</strong> et consultables par le comptable.
+                </li>
+                <li>
+                    Il disparaît de la liste déroulante de l'écran de validation,
+                    mais conserve ses lignes et ses boutons « Ouvrir la fiche »
+                    dans le récapitulatif du comptable.
+                </li>
+            {% else %}
+                <li>Aucune donnée métier n'est rattachée à ce compte.</li>
+            {% endif %}
+            <li>
+                <strong>L'opération est réversible</strong> : le compte pourra être
+                réactivé à tout moment, sans perte.
+            </li>
+        </ul>
+
+        <p><strong>Aucune donnée ne sera supprimée.</strong></p>
+
+        <form method="post" action="{{ path('pg_gsb_frais_adminbasculer', {'role': lerole, 'id': lecompte.id}) }}">
+            <input type="hidden" name="_token" value="{{ csrf_token('admin_basculer') }}" />
+            <p>
+                <label for="motif">Motif (facultatif)</label>
+                <input type="text" id="motif" name="motif" size="50" maxlength="255"
+                       placeholder="départ de l'entreprise, congé sabbatique…" />
+            </p>
+            <div class="piedDialogue">
+                <input type="submit" class="boutonDanger" value="Confirmer la désactivation" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_admin') }}">Annuler</a>
+            </div>
+        </form>
+    </div>
+{% endif %}
+
+</div>
+{% endblock %}
+{% endblock %}

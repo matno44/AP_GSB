@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Confirmer la désactivation</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Administrateur : bonjour Hélène Dubois</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="07-admin-liste-comptes.html">Gérer les comptes</a></li>
+    <li class="smenu"><a href="13-admin-journal.html">Journal d'administration</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Désactiver un compte</h2>
+
+  <div class="dialogue">
+    <h3>Désactiver le compte de David Andre (a17) ?</h3>
+
+    <p><strong>Ce qui va se passer :</strong></p>
+    <ul>
+      <li>David Andre ne pourra plus se connecter à l'application.</li>
+      <li>
+        S'il est connecté en ce moment, sa session sera coupée
+        <strong>à sa requête suivante</strong> : l'état du compte est revérifié
+        à chaque page, pas seulement à la connexion.
+      </li>
+      <li>
+        Ses <strong>4 fiches de frais</strong> (dont 3 déjà validées ou
+        remboursées), ses <strong>16 lignes de frais forfaitisés</strong>, ses
+        <strong>5 lignes hors forfait</strong> et ses justificatifs
+        <strong>restent intacts</strong> et consultables par le comptable.
+      </li>
+      <li>
+        Il disparaît de la liste déroulante de l'écran de validation, mais
+        conserve ses lignes et ses boutons « Ouvrir la fiche » dans le
+        récapitulatif du comptable.
+      </li>
+      <li>
+        <strong>L'opération est réversible</strong> : le compte pourra être
+        réactivé à tout moment, sans perte.
+      </li>
+    </ul>
+
+    <p><strong>Aucune donnée ne sera supprimée.</strong></p>
+
+    <div class="piedDialogue">
+      <form style="display:inline;margin:0">
+        <input type="submit" class="boutonDanger" value="Confirmer la désactivation" />
+      </form>
+      <a class="boutonSecondaire" href="07-admin-liste-comptes.html">Annuler</a>
+    </div>
+  </div>
+
+  <div class="avertissement">
+    <strong>Variante « dernier administrateur actif ».</strong>
+    Si le compte visé est le dernier administrateur actif, cet écran n'affiche
+    pas de bouton de confirmation mais le refus suivant :
+    <em>« Impossible de désactiver ce compte : il est le dernier administrateur
+    actif. Sans lui, plus personne ne pourrait gérer les comptes de
+    l'application. Créez ou réactivez d'abord un autre administrateur. »</em>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Comment lire cet écran.</strong>
+  <ul>
+    <li>
+      <strong>La confirmation est une page, pas une fenêtre JavaScript.</strong>
+      Elle a donc sa propre URL, survit à un rechargement et fonctionne avec JS
+      désactivé. Un <code>confirm()</code> ne protège rien : il vit dans le
+      navigateur, qui n'est pas de notre côté.
+    </li>
+    <li>
+      <strong>L'écran chiffre les conséquences au lieu de les résumer.</strong>
+      « 4 fiches dont 3 validées, 16 lignes forfait, 5 hors forfait » se lit et
+      se vérifie ; « ses données seront conservées » ne s'évalue pas. Ces
+      nombres sont comptés en base au moment de l'affichage.
+    </li>
+    <li>
+      <strong>Le bouton de confirmation est un <code>form</code>, pas un lien.</strong>
+      Une action qui modifie l'état ne doit pas être atteignable en GET : sinon
+      une simple balise <code>&lt;img&gt;</code> sur un autre site suffirait à
+      la déclencher. Le formulaire portera le jeton anti-CSRF.
+    </li>
+    <li>
+      <strong>La règle du dernier administrateur est vérifiée au moment de la
+      confirmation</strong>, pas seulement à l'affichage : entre les deux, un
+      autre administrateur a pu être désactivé dans un onglet voisin.
+    </li>
+  </ul>
+
+  <div class="aValider">
+    <strong>Un point sur lequel j'attends ta réponse.</strong>
+    Cet écran sert aussi à la <strong>réactivation</strong> et à la
+    <strong>suppression physique</strong> (cas <em>Morel Inès</em>, sans donnée
+    liée), avec le même gabarit et un texte adapté. Préfères-tu un écran distinct
+    par action ? Ma proposition : un seul gabarit, le titre et la liste des
+    conséquences changeant selon l'action — moins de code, et une formulation
+    forcément homogène.
+  </div>
+</div>
+</body>
+</html>

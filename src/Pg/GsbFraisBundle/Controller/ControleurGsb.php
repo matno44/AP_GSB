@@ -74,4 +74,20 @@ abstract class ControleurGsb extends Controller
             'Cet écran est réservé aux visiteurs médicaux.',
             Response::HTTP_FORBIDDEN);
     }
+
+    /**
+     * Refuse l'accès à un écran réservé aux administrateurs (phase 8).
+     *
+     * Le message ne dit pas ce que contient l'écran refusé : inutile de
+     * renseigner un curieux sur l'existence et le contenu d'une interface
+     * d'administration.
+     *
+     * @return Response
+     */
+    protected function refuserNonAdministrateur()
+    {
+        return new Response(
+            'Cet écran est réservé aux administrateurs.',
+            Response::HTTP_FORBIDDEN);
+    }
 }

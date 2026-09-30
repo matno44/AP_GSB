@@ -1,0 +1,52 @@
+{# Hérite de layout et NON de accueil : cet écran ne doit afficher aucun menu.
+   L'utilisateur est authentifié mais n'a accès à rien d'autre tant qu'il n'a pas
+   changé son mot de passe — proposer un menu inopérant suggérerait une sortie
+   qui n'existe pas. #}
+{% extends "PgGsbFraisBundle::layout.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu" style="margin-left:1.5em">
+    <h2>Changement de mot de passe obligatoire</h2>
+
+    <div class="avertissement" style="margin-top:0">
+        Bonjour {{ app.session.get('prenom') }} {{ app.session.get('nom') }}.
+        Votre mot de passe a été défini ou réinitialisé par un administrateur.
+        <strong>Vous devez en choisir un nouveau avant de continuer.</strong>
+    </div>
+
+    {% include 'PgGsbFraisBundle:SaisirFrais:erreurs.html.twig' with {'leserreurs': leserreurs} %}
+
+    <form method="post" action="{{ path('pg_gsb_frais_validerchangementmotdepasse') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('changer_mot_de_passe') }}" />
+        <div class="corpsForm">
+            <fieldset>
+                <legend>Nouveau mot de passe</legend>
+                <p>
+                    <label for="ancien">Mot de passe actuel <span class="champObligatoire">*</span></label>
+                    <input type="password" id="ancien" name="ancien" size="30" autocomplete="current-password" />
+                </p>
+                <span class="aideChamp">Celui qui vous a été communiqué.</span>
+                <p>
+                    <label for="nouveau">Nouveau mot de passe <span class="champObligatoire">*</span></label>
+                    <input type="password" id="nouveau" name="nouveau" size="30" autocomplete="new-password" />
+                </p>
+                <span class="aideChamp">
+                    12 caractères minimum, dont au moins une minuscule, une
+                    majuscule et un chiffre. Doit être différent de l'actuel.
+                </span>
+                <p>
+                    <label for="nouveau2">Confirmation <span class="champObligatoire">*</span></label>
+                    <input type="password" id="nouveau2" name="nouveau2" size="30" autocomplete="new-password" />
+                </p>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+            <p>
+                <input type="submit" value="Changer mon mot de passe" />
+                <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_deconnexion') }}">Se déconnecter</a>
+            </p>
+        </div>
+    </form>
+</div>
+{% endblock %}
+{% endblock %}

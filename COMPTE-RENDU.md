@@ -166,6 +166,42 @@ changeait pas à la connexion.
 | Invalidation à la déconnexion | `Controller/include/fct.inc.php` *(modifié)* | `$session->invalidate()` remplace `$session->clear()` |
 | Durcissement de la session | `app/config/config.yml` *(modifié)* | `use_strict_mode: true` et `cookie_httponly: true` |
 
+### Phase 8 (hors cahier des charges) — Interface d'administration des comptes
+
+**Extension personnelle. Rien de cette phase ne figure au cahier des charges.**
+
+**Le besoin métier.** Jusqu'ici, aucun écran ne permettait de créer un compte ni
+d'en couper l'accès. Embaucher un visiteur médical, ou fermer le compte d'un
+salarié parti, supposait d'écrire du SQL à la main dans la base de production.
+C'est à la fois hors de portée d'un gestionnaire et dangereux : un `DELETE` mal
+ciblé sur `visiteur` détruit, par cascade, des fiches de frais déjà remboursées.
+Un intranet qui gère 209 comptes ne peut pas dépendre d'un accès `mysql` et de
+la prudence de celui qui le tape.
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration du schéma | `sql/004_administration_comptes.sql` *(nouveau)* | `actif` et `mdpDoitChanger` sur `visiteur` et `comptable`, `visiteur.mdp` en `VARCHAR(255)`, tables `administrateur` et `journaladmin`, vue `v_compte`, premier administrateur |
+| Hachage des mots de passe | `Command/HacherMotsDePasseCommand.php` *(nouveau)* | `gsb:hacher-mots-de-passe` — convertit les 209 mots de passe visiteur en clair en empreintes bcrypt ; idempotente |
+| Rôle administrateur | `Controller/include/fct.inc.php` *(modifié)* | `estAdministrateur()`, `doitChangerMotDePasse()`, `valideMotDePasse()`, `genererMotDePasseTemporaire()` ; `connecterAvecRole()` pose `mdpDoitChanger` en session |
+| Authentification à trois tables | `Controller/HomeController.php` *(modifié)* | `authentifier()` boucle sur les trois rôles ; le motif de déconnexion forcée est affiché |
+| Contrôle du compte à chaque requête | `EventListener/GardeCompteListener.php` *(nouveau)* | Compte désactivé ou supprimé → session invalidée ; changement de mot de passe imposé → tous les écrans bloqués |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | 22 méthodes ajoutées ; `getInfosVisiteur()` passe à `password_verify()` ; `getLesVisiteurs()` masque les désactivés |
+| Interface | `Controller/AdminController.php` *(nouveau)* | Liste paginée et filtrée, création, modification, désactivation/réactivation, suppression, réinitialisation, journal |
+| Changement imposé | `Controller/MotDePasseController.php` *(nouveau)* | Écran commun aux trois rôles |
+| Garde de rôle | `Controller/ControleurGsb.php` *(modifié)* | `refuserNonAdministrateur()` |
+| Gabarits | `Resources/views/Admin/` *(6 nouveaux)*, `MotDePasse/changer.html.twig` *(nouveau)*, `accueil.html.twig` *(modifié)* | Menu et écrans par rôle |
+| Routes | `Resources/config/routing.yml` *(modifié)* | 12 routes ; écriture en POST uniquement |
+| Maquette validée | `maquette/07-` à `14-*.html` *(8 nouveaux)* | Validée par le client avant développement |
+| Script de reconstruction | `sql/bd_gsb.sql` *(modifié)* | Tenu en phase avec la migration 004 (décision 1.7) |
+
+**Quatre décisions prises avec le client avant d'écrire une ligne** (étape de
+conception, § Décisions 8.1 à 8.4) : modèle de données à trois tables plutôt
+qu'une table unifiée, migration des mots de passe visiteur en bcrypt, contrôle
+de l'état du compte à chaque requête et non à la seule connexion, visiteur
+désactivé masqué de la liste du comptable. Une cinquième a été demandée en cours
+de route : **le matricule est généré par l'application**, plus saisi.
+
+
 ---
 
 ## 2. Cartographie du projet
@@ -1469,6 +1505,284 @@ fonctionne en HTTP : l'activer rendrait la connexion impossible en local. Je
 l'ai donc laissé désactivé et je le signale comme un réglage à basculer au
 déploiement (limite L36).
 
+### Phase 8
+
+### Décision 8.1 — Trois tables de comptes, et non une table `utilisateur` unifiée
+
+C'est la décision structurante de la phase, et j'ai présenté les deux options au
+client avant de toucher au schéma.
+
+**L'option écartée : une table `utilisateur` avec une colonne `role`.** Elle est
+séduisante — un seul point d'authentification, un seul `actif` à contrôler, et
+un `UNIQUE(login)` qui règle définitivement l'unicité du login. Je l'ai
+néanmoins écartée pour deux raisons mesurées, pas supposées :
+
+1. **Elle sacrifie `fk_fichefrais_visiteur`.** Cette clé étrangère garantit
+   aujourd'hui, *au niveau du moteur*, qu'une fiche de frais appartient à un
+   visiteur réel. Repointée vers `utilisateur.id`, elle accepterait d'attacher
+   une fiche à un comptable ou à un administrateur. Et la base ne pourrait plus
+   l'interdire : un `CHECK` MySQL ne sait pas consulter la colonne `role` d'une
+   *autre* ligne, il faudrait un déclencheur. On échangerait une intégrité
+   garantie par le moteur contre une intégrité garantie par du code — un mauvais
+   échange, d'autant que le projet venait justement de corriger un bug causé par
+   l'absence de cette garantie côté PHP (`estVisiteur()`, phase 6 de l'historique
+   Git).
+2. **La surface de réécriture est réelle et chiffrée : 11 méthodes de `PdoGsb`
+   interrogent la table `visiteur`** (78 occurrences) — `getInfosVisiteur`,
+   `getVisiteur`, `getLesVisiteurs`, `getTypeVehiculeVisiteur`,
+   `getTarifKilometrique`, `getLesMontantsUnitairesApplicables`,
+   `majTypeVehiculeVisiteur`, `getLesFichesDuMois`, `getLesFichesValidees`,
+   `getRecapFiches`, `genererVisiteursDeTest`. Cela contredit frontalement la
+   consigne « pas de réécriture de l'existant ».
+
+**L'option retenue :** conserver `visiteur` et `comptable`, ajouter
+`administrateur`, et une colonne `actif` sur chacune. Le besoin « une seule
+interface » est un besoin de **lecture** : la vue `v_compte` le satisfait
+entièrement, par une `UNION` des trois tables. Les écritures restent dirigées
+vers la bonne table par le code — et une vue portant sur une `UNION` n'est pas
+modifiable, ce qui **interdit structurellement** d'écrire dans la mauvaise.
+Aucune des 11 méthodes n'a eu à être touchée : `actif` a une valeur par défaut,
+les requêtes existantes continuent de fonctionner à l'identique.
+
+C'est aussi la ligne déjà tenue et justifiée par la migration 003 pour le
+comptable : un administrateur n'a ni fiche de frais, ni véhicule, ni date
+d'embauche.
+
+**Le prix payé, et il est réel.** L'unicité du login ne peut pas être garantie
+par la base : aucune contrainte `UNIQUE` ne couvre trois tables. Le contrôle est
+donc applicatif (`PdoGsb::loginExiste()`, qui interroge la vue). En cas de
+doublon, `HomeController::authentifier()` essaie les rôles dans l'ordre et le
+premier trouvé l'emporterait silencieusement. C'est la limite L37.
+
+**Une troisième voie, que je mentionne par honnêteté** : sortir l'authentification
+des tables métier, dans un `compte(login, mdp, role, actif)` que les trois tables
+référenceraient. C'est le modèle structurellement juste — il donne l'unicité du
+login *et* préserve les clés étrangères métier. Je ne l'ai pas retenu ici : il
+impose de retoucher les deux points d'authentification et de reprendre 210
+lignes, pour un bénéfice qui, à cette échelle, se réduit à l'unicité du login.
+
+### Décision 8.2 — Désactivation logique par défaut, suppression physique en exception
+
+**Les chiffres mesurés avant de décider : 202 des 209 visiteurs ont au moins une
+fiche de frais. Seuls 7 sont physiquement supprimables.**
+
+`fk_fichefrais_visiteur` est en `NO ACTION`, c'est-à-dire `RESTRICT`. Quatre
+conséquences, dans l'ordre de gravité croissante :
+
+1. **Le cas normal, c'est l'échec.** `DELETE FROM visiteur WHERE id='a17'` lève
+   `Cannot delete or update a parent row: a foreign key constraint fails`. Pour
+   202 visiteurs sur 209, un bouton « supprimer » ne peut structurellement pas
+   marcher. Une interface qui le proposerait quand même mentirait.
+2. **Le contournement est catastrophique.** La tentation, devant cette erreur,
+   est de supprimer d'abord les fiches. Or `lignefraisforfait` et
+   `lignefraishorsforfait` sont en **`ON DELETE CASCADE`** depuis `fichefrais` :
+   supprimer les fiches d'un visiteur **efface en silence toutes ses lignes de
+   frais**. Une seule requête, et l'historique comptable disparaît — y compris
+   des fiches à `VA`, `MP` ou `RB`, c'est-à-dire **des montants déjà validés,
+   mis en paiement ou remboursés**.
+3. **Les justificatifs deviennent orphelins.** Les fichiers sur disque ne sont
+   nettoyés que par le code PHP. Une cascade côté base laisse les PDF et les
+   images sans plus rien qui les référence (c'est la logique de la décision 2.9,
+   prise à rebours).
+4. **C'est une destruction de pièces comptables.** Un remboursement de frais est
+   une écriture justifiée. Et le besoin réel n'est *jamais* « faire
+   disparaître » : c'est **« empêcher de se connecter »**. Un départ en retraite
+   ne doit rien effacer.
+
+D'où `actif TINYINT(1) NOT NULL DEFAULT 1`. `DEFAULT 1` : les 210 comptes
+existants restent actifs, aucune reprise de données n'est nécessaire.
+
+**La suppression physique n'est pas supprimée du produit**, elle est conditionnée :
+proposée seulement si `compterDonneesLiees()` renvoie zéro fiche, et le contrôle
+est **refait à l'exécution** — une fiche peut naître entre l'affichage de la
+confirmation et le clic. Quand c'est refusé, l'écran chiffre le refus (« 4 fiches
+dont 3 déjà validées, 16 lignes forfait, 5 hors forfait, 3 justificatifs ») et
+**propose la désactivation**. Un écran qui dirait seulement « impossible »
+pousserait à contourner, c'est-à-dire exactement au scénario 2 ci-dessus.
+
+### Décision 8.3 — L'état du compte est revérifié à chaque requête, dans un écouteur
+
+Contrôler `actif` dans les seules méthodes d'authentification empêche de **se**
+connecter, mais ne met pas dehors l'utilisateur **déjà** connecté : sa session
+reste valide et il continue de travailler. L'affirmation « un compte désactivé ne
+peut plus se connecter » serait alors fausse pour lui, et la désactivation
+n'aurait pas d'effet avant sa prochaine déconnexion.
+
+Le contrôle est donc refait à chaque requête, par `GardeCompteListener` branché
+sur `kernel.request`. **Un écouteur et non une méthode appelée dans chaque
+contrôleur** : il y a huit contrôleurs, et un neuvième oublierait le contrôle.
+Ici le passage est obligatoire, y compris pour du code écrit après cette phase.
+
+Trois détails qui ont demandé de l'attention :
+
+- **`priority: -10`**, pour passer *après* le routeur. Sans cela `_route` n'est
+  pas encore renseigné et la liste blanche des routes autorisées ne peut pas
+  fonctionner.
+- **`isMasterRequest()`**, pour ne pas laisser une sous-requête produire une
+  redirection qui remplacerait la réponse en préparation.
+- **Les routes commençant par `_` sont ignorées** (`_wdt`, `_profiler`,
+  `_error`). La barre de débogage est chargée par une requête distincte, qui est
+  bien une requête principale : sans ce test, elle était redirigée et
+  disparaissait.
+
+Le coût est une requête SQL par requête HTTP authentifiée, sur une clé primaire.
+C'est le prix de l'effet immédiat, et il a été accepté en connaissance de cause.
+
+Le service reçoit **le conteneur** et non `pg_gsb_frais.pdo` : `PdoGsb` ouvre sa
+connexion dans son constructeur, et l'injecter ferait ouvrir une connexion sur
+chaque requête, y compris celles où personne n'est connecté et où l'écouteur n'a
+rien à faire.
+
+### Décision 8.4 — Mots de passe visiteur migrés en bcrypt, sans que personne perde le sien
+
+La base livrée stocke les mots de passe visiteur **en clair** dans un
+`VARCHAR(30)` (8 caractères utilisés au maximum). C'était la limite B8, signalée
+à l'audit et laissée en place en phase 5 (décision 5.2) pour ne pas casser
+l'existant. Cette phase la lève, parce qu'une interface qui crée des comptes et
+réinitialise des mots de passe ne peut pas décemment écrire du clair en base.
+
+**Le point à comprendre : bcrypt n'existe pas en SQL.** MySQL n'offre que
+`SHA2()` et `MD5()`, inutilisables pour un mot de passe — un condensat sans grain
+de sel ni coût se casse par dictionnaire. Le script SQL ne peut donc faire que la
+moitié du travail : élargir la colonne en `VARCHAR(255)`. Le hachage est fait par
+la commande `gsb:hacher-mots-de-passe`, à lancer immédiatement après. **Entre les
+deux, aucun visiteur ne peut se connecter** — le script l'affiche en clair à la
+fin de son exécution, par un `SELECT` de message.
+
+**Et personne ne perd son mot de passe** : on les possède en clair, la commande
+les hache tels quels. `mdpDoitChanger` reste donc à 0 pour ces 209 comptes — le
+visiteur garde *son* mot de passe, que personne d'autre n'a choisi ; rien ne
+justifie de lui imposer un changement, et le faire pour 209 comptes d'un coup
+transformerait une migration invisible en incident.
+
+La commande est **idempotente** : elle ne traite que les lignes dont la valeur ne
+commence pas par `$2` — le préfixe de toute empreinte bcrypt. La relancer ne
+re-hache pas une empreinte déjà produite, ce qui rendrait le compte
+définitivement inaccessible. Elle vérifie en plus, avant chaque écriture, que
+l'empreinte produite valide bien le mot de passe d'origine : ce contrôle ne
+devrait jamais échouer, c'est justement pour cela qu'il doit être là.
+
+`getInfosVisiteur()` a dû changer : la comparaison sort du SQL (`and mdp=:md`)
+pour passer par `password_verify()`. C'est la seule méthode existante dont la
+logique a été modifiée dans cette phase.
+
+### Décision 8.5 — Le matricule est généré par l'application, plus saisi
+
+Demandé par le client en cours de phase, après validation de la maquette. Le
+laisser à la main exposait à deux risques :
+
+- **le doublon simple** : le matricule est la clé primaire ; un choc faisait
+  échouer l'enregistrement sur une erreur de base incompréhensible pour
+  l'administrateur ;
+- **le doublon concurrent**, plus sournois : deux administrateurs travaillant en
+  même temps peuvent très bien choisir le même numéro libre.
+
+La génération suit la convention **déjà en place** dans
+`genererVisiteursDeTest()` : un préfixe puis des chiffres, dans un `CHAR(4)`.
+`v001` pour un visiteur, `c001` pour un comptable, `ad01` pour un administrateur.
+Le préfixe `ad` sur deux chiffres plutôt que `a` sur trois : `a` est déjà occupé
+par des visiteurs du jeu d'origine (`a17`, `a55`), et `ad` se distingue sans
+ambiguïté dans le journal, où les trois familles de matricule voisinent. 99
+administrateurs suffisent.
+
+**Le point important est que la génération ne prétend pas garantir l'unicité.**
+`genererMatricule()` lit le plus grand numéro de la série et ajoute 1 : c'est une
+*proposition*. Entre ce calcul et l'insertion, un autre administrateur peut avoir
+pris le même numéro. C'est **la clé primaire qui arbitre en dernier ressort**, et
+`creerCompte()` retente avec le numéro suivant si l'insertion échoue sur la
+contrainte. La boucle est bornée à dix tentatives : au-delà, ce n'est plus une
+course mais un vrai problème, et il faut qu'il remonte.
+
+Le matricule reste **non modifiable** : il est la cible de
+`fk_fichefrais_visiteur`. Le changer obligerait à propager la nouvelle valeur
+dans `fichefrais`, `lignefraisforfait` et `lignefraishorsforfait`. Il est affiché
+en lecture seule — et **ignoré côté serveur**, le rôle et le matricule venant de
+l'URL : un attribut `readonly` se retire en trois clics dans un navigateur.
+
+### Décision 8.6 — Un journal dédié, et pourquoi il est indispensable *ici*
+
+Les actions d'administration sont **les seules de l'application à ne laisser
+aucune trace dans les données**. Une fiche validée garde son état et sa date ;
+une désactivation ne fait que basculer un `0`, et personne ne pourrait dire qui a
+coupé l'accès de qui, ni quand. Le seul témoin serait la mémoire de celui qui
+l'a fait.
+
+Surtout : **réinitialiser un mot de passe permet de se connecter à la place du
+titulaire.** Pour un compte comptable, cela signifie valider des fiches de frais
+en son nom. C'est le seul point de l'application où un utilisateur peut usurper
+l'identité d'un autre. Sans journal, l'usurpation est indétectable *et*
+indémontrable : le titulaire n'aurait aucun moyen de prouver que ce n'est pas lui.
+Le journal protège donc aussi l'administrateur, qui peut répondre de façon datée
+et vérifiable à un « je n'ai jamais pu me connecter ».
+
+Trois choix de conception :
+
+- **`idAdministrateur` n'est pas une clé étrangère**, et les noms sont
+  **recopiés** (`nomAdministrateur`, `nomCible`). Le journal doit survivre à la
+  suppression du compte concerné : une trace qu'on efface en supprimant son
+  auteur ne prouve rien. C'est vérifié au test 9.x — après suppression de `v001`,
+  la ligne « Suppression définitive / v001 / Paul Testeur » reste lisible.
+- **Les refus sont journalisés autant que les réussites.** Une tentative
+  d'auto-désactivation, ou une suppression refusée, dit quelque chose sur ce que
+  l'administrateur a cherché à faire. Ne consigner que les succès effacerait
+  justement les tentatives intéressantes.
+- **Aucun mot de passe n'y figure**, même temporaire, même haché. Une table
+  consultable depuis l'interface est une table qui finira exportée. Le journal
+  enregistre « Réinitialisation de mot de passe / v001 », jamais la valeur —
+  vérifié par requête au test.
+
+### Décision 8.7 — Les confirmations sont des pages, pas des `confirm()`
+
+Un `confirm()` JavaScript vit dans le navigateur, qui n'est pas de notre côté :
+il ne protège rien. La confirmation est donc une **page**, avec son URL, qui
+survit à un rechargement et fonctionne sans JS. Et le bouton de confirmation est
+un `<form method="post">`, pas un lien : une action qui modifie l'état ne doit
+pas être atteignable en GET, qu'une balise `<img>` d'un autre site suffirait à
+déclencher — c'est la leçon de la décision 6.5.
+
+**Un seul gabarit pour les quatre cas** (refus, suppression permise,
+réactivation, désactivation), validé comme tel par le client. Le titre et la
+liste des conséquences changent, la structure non. Quatre écrans recopiés
+auraient fini par divulguer des formulations divergentes de la même règle.
+
+Les écrans **chiffrent** les conséquences au lieu de les résumer : « 4 fiches
+dont 3 validées, 16 lignes forfait, 5 hors forfait, 3 justificatifs » se lit et
+se vérifie ; « ses données seront conservées » ne s'évalue pas. Ces nombres sont
+comptés en base au moment de l'affichage, par une requête unique à cinq
+sous-requêtes (§ 6.x).
+
+### Décision 8.8 — Le mot de passe temporaire n'existe que le temps d'une réponse
+
+La réinitialisation **rend la page directement**, sans redirection. Deux raisons :
+le mot de passe en clair ne doit pas transiter par l'URL, et il ne doit pas non
+plus être mis en session pour survivre à une redirection. Il n'existe que dans
+cette réponse HTTP, et nulle part ailleurs — il est haché dès sa génération.
+
+Un écran « revoir le mot de passe » serait donc **impossible à écrire**, et c'est
+exactement ce qu'on veut.
+
+Le générateur (`genererMotDePasseTemporaire()`) utilise `random_int()` et non
+`rand()` : le générateur doit être cryptographiquement sûr, sinon le mot de passe
+devient prévisible pour qui connaît l'heure de création. `shuffle()` n'étant pas
+sûr non plus, le mélange est un Fisher-Yates écrit à la main avec `random_int()`.
+L'alphabet **exclut les caractères ambigus** (`0`/`O`, `1`/`l`/`I`) et le résultat
+est découpé en trois groupes de quatre : ce mot de passe est recopié à la main ou
+dicté par téléphone, et trois blocs de quatre se vérifient là où une suite de
+douze ne se vérifie pas.
+
+### Décision 8.9 — Le rôle administrateur n'hérite d'aucun droit métier
+
+Un administrateur gère des comptes ; il ne saisit pas de frais et n'en valide
+pas. `estVisiteur()` et `estComptable()` renvoient donc faux pour lui — ce qui
+lui **interdit déjà tous les écrans métier sans qu'une ligne ait été ajoutée à
+leurs contrôleurs**. C'est le même effet que celui constaté en phase 5 avec
+`estComptable()`, écrite dès la phase 2 (décision 2.6) : une règle d'accès posée
+tôt et formulée par rôle se paie une fois.
+
+Vérifié au test : un administrateur reçoit 403 sur `/listefrais`, `/saisirfrais`,
+`/monvehicule` et `/validation`.
+
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -2078,6 +2392,195 @@ méthode et deux lignes de configuration. Tout le travail de cette phase a
 consisté à **démontrer la faille, puis à prouver qu'elle était fermée** —
 c'est-à-dire à écrire des tests, pas du code.
 
+### Phase 8
+
+### 6.21 La boucle de génération du matricule — la base arbitre, pas le calcul
+
+C'est l'algorithme le plus intéressant de la phase, parce qu'il repose sur un
+aveu : **le calcul ne peut pas garantir l'unicité**, seule la contrainte de clé
+primaire peut.
+
+```php
+for ($tentative = 0; $tentative < 10; $tentative++) {
+    $id = $this->genererMatricule($role);   // max(numéro) + 1
+    if ($id === false) { throw new RuntimeException(...); }
+    // ... liaison des paramètres ...
+    try {
+        $stmt->execute();
+        return $id;                          // réussi : on sort
+    } catch (PDOException $e) {
+        if ($e->getCode() !== '23000' || stripos($e->getMessage(), 'PRIMARY') === false) {
+            throw $e;                        // autre erreur : on ne masque rien
+        }
+        // choc sur la clé primaire : on retente avec le numéro suivant
+    }
+}
+throw new RuntimeException('Impossible d\'attribuer un matricule après 10 tentatives.');
+```
+
+**Pourquoi une boucle et pas un simple `max+1`.** Entre le `SELECT MAX(...)` et
+l'`INSERT`, un autre administrateur peut avoir inséré le même numéro. La fenêtre
+est petite mais réelle, et c'est exactement le genre de bug qui ne se reproduit
+jamais en test et se produit le jour de la démonstration. Verrouiller la table
+(`SELECT ... FOR UPDATE` sur un `MAX()`) serait disproportionné : cela
+sérialiserait toutes les créations de comptes pour un événement qui n'arrive
+presque jamais. La boucle « tente, et retente si la base refuse » est
+l'inverse : coût nul dans le cas normal, correcte dans le cas rare.
+
+**Trois détails qui comptent :**
+
+- **La boucle est bornée.** Une boucle `while (true)` qui retente indéfiniment
+  transformerait un bug en boucle infinie. Dix tentatives : au-delà, ce n'est
+  plus une course, et l'exception doit remonter.
+- **Le test sur le message, et pas seulement sur le code.** `SQLSTATE 23000`
+  couvre *toute* violation de contrainte, y compris le login en doublon. Or le
+  login a déjà été contrôlé par `loginExiste()` ; si c'est lui qui a cédé,
+  retenter un matricule ne servirait à rien et la boucle tournerait dix fois pour
+  rien avant de lever la mauvaise exception. D'où le `stripos(..., 'PRIMARY')`.
+- **La sélection de la série est isolée par le préfixe ET par la longueur.**
+
+```sql
+select max(cast(substring(id, :debut) as unsigned)) as maxi
+  from visiteur
+ where id like :motif and char_length(id) = :longueur
+```
+
+Sans le test de longueur, le motif `v%` attraperait aussi d'éventuels matricules
+à deux chiffres, et `substring()` renverrait un nombre sans rapport. Le `CAST ...
+AS UNSIGNED` est indispensable : sans lui la comparaison serait lexicographique
+et `v9` passerait pour plus grand que `v10`.
+
+### 6.22 Le comptage des données liées — une requête, cinq sous-requêtes
+
+L'écran de confirmation doit chiffrer cinq choses : fiches, fiches déjà validées,
+lignes forfait, lignes hors forfait, justificatifs. Cinq appels successifs
+auraient été cinq allers-retours pour afficher un seul écran.
+
+```sql
+select
+  (select count(*) from fichefrais where idVisiteur = :id) as nbFiches,
+  (select count(*) from fichefrais where idVisiteur = :id
+     and idEtat in ('VA','MP','RB'))                       as nbFichesValidees,
+  (select count(*) from lignefraisforfait where idVisiteur = :id)      as nbLignesForfait,
+  (select count(*) from lignefraishorsforfait where idVisiteur = :id)  as nbLignesHorsForfait,
+  (select count(*) from lignefraishorsforfait where idVisiteur = :id
+     and nomFichier is not null)                           as nbJustificatifs
+```
+
+Aucune boucle, aucun parcours PHP : cinq agrégations que le moteur fait chacune
+sur un index. C'est la même logique que la décision 2.4 (recalculer par
+agrégation plutôt qu'incrémenter) et que le § 6.7 (déléguer les totaux au SQL).
+
+Les lignes de frais sont comptées **même si `ON DELETE CASCADE` les effacerait
+automatiquement** : c'est précisément ce qu'il faut annoncer à l'administrateur.
+
+### 6.23 Le filtre de la liste — une clause construite une fois, utilisée deux fois
+
+La liste paginée a besoin de **deux** requêtes qui doivent filtrer *exactement*
+pareil : les lignes de la page, et le total pour calculer le nombre de pages. Deux
+clauses recopiées auraient fini par diverger, et la pagination aurait alors
+affiché un nombre de pages faux — un bug silencieux, qui ne se voit qu'en
+comparant les deux écrans.
+
+`construireFiltreComptes()` retourne donc la clause `WHERE` et remplit le tableau
+de paramètres par référence :
+
+```php
+$where  = ' where 1=1';
+if ($recherche !== '') {
+    $where .= ' and (nom like :recherche or prenom like :recherche
+                or login like :recherche or id like :recherche)';
+    $params[':recherche'] = '%' . $recherche . '%';
+}
+if (isset(PdoGsb::$lesTables[$role]))      { $where .= ' and role = :role';   /* … */ }
+if ($etat === 'actif' || $etat === 'desactive') { $where .= ' and actif = :actif'; /* … */ }
+```
+
+**`where 1=1`** évite d'avoir à savoir si la condition suivante est la première :
+sans lui, chaque ajout devrait tester s'il faut écrire `where` ou `and`. C'est une
+condition que l'optimiseur élimine, elle ne coûte rien.
+
+**Le même paramètre `:recherche` est lié une fois et utilisé quatre fois.** PDO
+l'accepte en mode émulé comme en mode natif, et l'utilisateur n'a pas à choisir
+dans quel champ il cherche : il tape ce qu'il a sous les yeux.
+
+**`LIMIT` et `OFFSET` sont concaténés, pas liés.** MySQL n'accepte pas de
+paramètre lié derrière `LIMIT` en requête préparée. La protection est donc le
+`(int)` avec `max()` — et elle suffit : un entier ne peut pas transporter de SQL.
+
+### 6.24 Le nom de table ne peut pas être un paramètre lié — d'où la liste blanche
+
+Plusieurs méthodes reçoivent un rôle de l'extérieur et doivent écrire dans la
+table correspondante. Or **un nom de table fait partie de la structure de la
+requête, pas de ses données** : aucun système de paramètres liés ne peut le
+prendre en charge. Concaténer le rôle reçu serait une injection SQL directe.
+
+```php
+private static $lesTables = array(
+    'visiteur' => 'visiteur', 'comptable' => 'comptable',
+    'administrateur' => 'administrateur',
+);
+private function tableDuRole($role)
+{
+    if (!isset(PdoGsb::$lesTables[$role])) {
+        throw new \InvalidArgumentException('Rôle inconnu : ' . $role);
+    }
+    return PdoGsb::$lesTables[$role];
+}
+```
+
+La valeur concaténée dans le SQL ne vient jamais de l'extérieur : elle vient du
+tableau. Ce que l'extérieur fournit ne sert qu'à **choisir une clé**, et un rôle
+hors liste lève une exception. C'est la seule façon correcte de rendre un nom de
+table dynamique. Les routes valident d'ailleurs déjà le rôle en amont
+(`requirements: { role: 'visiteur|comptable|administrateur' }`) : deux barrières,
+comme à la décision 7.2.
+
+### 6.25 La fenêtre glissante de la pagination
+
+Afficher `1..nbPages` fonctionne avec 9 pages et devient illisible avec 200. La
+boucle n'affiche donc que la première, la dernière, et deux pages de part et
+d'autre de la page courante, les trous étant matérialisés par des points de
+suspension :
+
+```twig
+{% for unePage in 1..nbpages %}
+    {% if unePage == 1 or unePage == nbpages or (unePage >= page - 2 and unePage <= page + 2) %}
+        …lien ou page courante…
+    {% elseif unePage == 2 or unePage == nbpages - 1 %}
+        <span class="inactif">…</span>
+    {% endif %}
+{% endfor %}
+```
+
+La condition `unePage == 2 or unePage == nbpages - 1` garantit qu'**un seul**
+point de suspension est émis de chaque côté, et non un par page masquée.
+
+### 6.26 L'algorithme de génération du mot de passe temporaire
+
+Trois contraintes contradictoires : le mot de passe doit être aléatoire, doit
+satisfaire la règle des trois familles de caractères, et doit être dictable.
+
+```php
+// 1. une lettre de chaque famille, pour GARANTIR la règle
+$caracteres = array($minuscules[random_int(...)], $majuscules[random_int(...)],
+                    $chiffres[random_int(...)]);
+// 2. on complète jusqu'à 12
+for ($i = count($caracteres); $i < 12; $i++) { $caracteres[] = $alphabet[random_int(...)]; }
+// 3. Fisher-Yates : sans mélange, les 3 premiers caractères seraient
+//    toujours de la même nature — une information offerte à l'attaquant
+for ($i = count($caracteres) - 1; $i > 0; $i--) {
+    $j = random_int(0, $i);
+    $tmp = $caracteres[$i]; $caracteres[$i] = $caracteres[$j]; $caracteres[$j] = $tmp;
+}
+```
+
+Tirer au hasard puis *vérifier* la règle aurait imposé une boucle de rejet de
+durée non bornée. Ici la règle est satisfaite **par construction**, et le mélange
+rétablit l'uniformité que la construction avait cassée. `shuffle()` n'est pas
+utilisé : il n'est pas cryptographiquement sûr.
+
+
 ---
 
 ## 7. Erreurs rencontrées
@@ -2570,6 +3073,152 @@ Je préfère l'écrire que de meubler cette section.
   fait. Ce qui est établi, c'est que la faille est fermée et que le
   fonctionnement normal est intact.
 
+### Phase 8
+
+### 7.24 `Illegal mix of collations` : la vue refuse d'être créée
+
+- **Message exact :**
+  `ERROR 1271 (HY000) at line 177: Illegal mix of collations for operation 'UNION'`
+- **Symptôme :** le script `004` s'arrête en plein milieu. Les `ALTER TABLE` et
+  les deux `CREATE TABLE` avaient déjà été appliqués — le DDL n'étant pas
+  transactionnel en MySQL, **la base est restée dans un état intermédiaire**.
+- **Cause réelle, et elle est double :**
+  1. J'avais écrit `CREATE TABLE administrateur (...) ENGINE=InnoDB DEFAULT
+     CHARSET=utf8mb4;` **sans `COLLATE`**. Or `DEFAULT CHARSET` sans `COLLATE` ne
+     fait pas hériter la collation de la *base* : MySQL applique la collation
+     **par défaut du jeu de caractères**, soit `utf8mb4_0900_ai_ci` en MySQL 8+.
+     La table est donc née en `utf8mb4_0900_ai_ci` quand tout le reste de
+     `bd_gsb` est en `utf8mb4_unicode_ci`. Vérifié :
+     `select collation_name … where table_name='administrateur'` →
+     `utf8mb4_0900_ai_ci`. **Omettre `CHARSET` entièrement aurait donné le bon
+     résultat** ; c'est le fait de le préciser à moitié qui a nui.
+  2. Les littéraux `CAST('visiteur' AS CHAR(15))` de la vue prennent la collation
+     de **connexion** (`utf8mb4_0900_ai_ci`), pas celle des colonnes. L'`UNION`
+     mélangeait donc deux collations même entre branches par ailleurs correctes.
+- **Correction :** `COLLATE=utf8mb4_unicode_ci` explicite sur les deux nouvelles
+  tables, et `COLLATE utf8mb4_unicode_ci` sur les trois littéraux de la vue.
+- **Ce que j'ai dû faire en plus, et c'est le vrai enseignement :** comme le
+  script avait été partiellement appliqué, le rejouer corrigé n'aurait pas donné
+  un résultat propre (les `ALTER` auraient échoué sur des colonnes déjà
+  présentes). J'ai donc **restauré la base depuis la sauvegarde prise avant la
+  migration**, puis rejoué le script corrigé en entier. Un script de migration
+  qui se veut « à jouer une seule fois » n'est fiable que si l'on peut revenir en
+  arrière : la sauvegarde préalable n'était pas une précaution de principe, elle
+  a servi.
+
+### 7.25 La restauration de ma propre sauvegarde échoue — GTID
+
+- **Message exact :**
+  `ERROR 3546 (HY000) at line 24: @@GLOBAL.GTID_PURGED cannot be changed: the added gtid set must not overlap with @@GLOBAL.GTID_EXECUTED`
+- **Symptôme :** après avoir supprimé et recréé `bd_gsb` pour la restaurer,
+  l'import du dump s'arrête ligne 24. **La base est alors vide** et le dump
+  refuse de s'appliquer : les 209 visiteurs et 206 fiches n'existent plus nulle
+  part que dans ce fichier.
+- **Cause réelle :** `mysqldump` insère par défaut une instruction
+  `SET @@GLOBAL.GTID_PURGED=…` quand le serveur a les GTID activés. Rejouer ce
+  dump sur le **même** serveur revient à lui redéclarer des transactions qu'il a
+  déjà exécutées, ce qu'il refuse. L'option `--set-gtid-purged=OFF` existe
+  exactement pour ce cas ; je ne l'avais pas utilisée.
+- **Correction :** commenter la ligne 24 du dump (`sed '24s/^/-- /'`) puis
+  réimporter. Restauration vérifiée ligne à ligne : 209 visiteurs, 206 fiches,
+  824 lignes forfait, 293 lignes hors forfait, `visiteur.mdp` de retour en
+  `varchar(30)` — l'état exact d'avant la migration.
+- **Pour ne pas le refaire :** `mysqldump --set-gtid-purged=OFF` pour toute
+  sauvegarde destinée à être rejouée sur le serveur d'origine. Et surtout : **ne
+  pas supprimer la base avant d'avoir vérifié que la sauvegarde se restaure.**
+  J'ai fait les deux dans le mauvais ordre et je suis passé à côté d'une perte de
+  données réelle.
+
+### 7.26 Le POST était traité par l'action d'affichage — routes de même chemin
+
+- **Symptôme :** le formulaire de changement de mot de passe se réaffichait
+  **sans aucun message d'erreur** au lieu d'enregistrer. HTTP 200 au lieu de 302,
+  et le mot de passe inchangé en base. Aucune trace dans les journaux : de son
+  point de vue, l'application n'avait rien fait de mal.
+- **Cause réelle :** j'avais déclaré deux routes sur le même chemin —
+  `pg_gsb_frais_changermotdepasse` (affichage) puis
+  `pg_gsb_frais_validerchangementmotdepasse` (`methods: [POST]`). La première
+  **n'avait pas de contrainte de méthode**, elle acceptait donc aussi POST ; et le
+  routeur retient la **première** route qui correspond. Le POST était donc traité
+  par `formulaireAction()`, qui se contente d'afficher le formulaire — d'où
+  l'absence d'erreur, parfaitement logique.
+- **Pourquoi je ne l'ai pas vu tout de suite :** j'ai d'abord suspecté le jeton
+  CSRF, puis la validation du mot de passe. Les deux hypothèses étaient fausses
+  et faciles à écarter : un jeton invalide aurait donné un 403, et une erreur de
+  validation aurait affiché un message. **C'est l'absence de message qui était
+  l'indice** — elle disait que le code de validation n'avait jamais été exécuté.
+- **Correction :** `methods: [GET]` sur les trois routes d'affichage concernées.
+  Le même défaut touchait `/admin/comptes/creer` et
+  `/admin/comptes/{role}/{id}/modifier`, que je n'avais pas encore testées : une
+  seule cause, trois bugs, dont deux trouvés avant d'avoir pu les rencontrer.
+- **Vérification :** `php app/console router:debug` affiche maintenant `GET` et
+  `POST` sur les trois paires. C'est le contrôle à faire systématiquement quand
+  deux routes partagent un chemin.
+
+### 7.27 Le message de déconnexion forcée n'arrivait jamais
+
+- **Symptôme :** un compte désactivé en cours de session était bien renvoyé sur
+  le formulaire de connexion (HTTP 302 correct), mais **sans aucun message** : il
+  se retrouvait dehors sans savoir pourquoi, ce qui ressemble à une panne.
+- **Cause réelle :** mon écouteur manipulait **deux poignées différentes vers la
+  session**. Il vidait celle portée par la requête (`$request->getSession()`),
+  puis écrivait le message sur celle du conteneur
+  (`$this->container->get('session')`). Rien ne garantit qu'il s'agit du même
+  objet, et le message partait donc quelque part où personne ne le relisait.
+- **Correction :** une seule poignée — celle de la requête — passée en argument à
+  `terminerSession($session, $message)`. L'ordre compte aussi : `clear()` vide
+  **tous** les sacs, flash bag compris, donc le message doit être ajouté après.
+- **Affinage ensuite :** remplacement de `clear() + migrate(true)` par
+  `invalidate()`, qui fait exactement la même chose en un appel et reprend
+  l'idiome déjà retenu à la déconnexion (décision 7.4). Vérifié après
+  changement : le message « Votre compte a été désactivé » survit bien à
+  `invalidate()`.
+
+### 7.28 Mon test de garde-fou prouvait le mauvais mécanisme
+
+- **Symptôme :** mes premiers tests des garde-fous affichaient `HTTP 403` sur les
+  POST forcés, et j'en ai d'abord conclu que le recontrôle serveur fonctionnait.
+- **Cause réelle :** le 403 venait du **jeton CSRF**, pas du garde-fou. Les pages
+  de refus n'affichent aucun formulaire — donc aucun jeton — et mon script
+  extrayait une chaîne vide. Le contrôle métier n'était jamais atteint. Le test
+  passait pour la mauvaise raison : exactement le même piège qu'au § 7.20 et au
+  § 7.5, pour la troisième fois.
+- **Correction du test :** récupérer un jeton **valide** de la bonne intention sur
+  une page où l'action est *permise* (la suppression de `v001`, qui n'a aucune
+  fiche), puis le rejouer contre une cible *interdite* (`a17`, qui a 4 fiches).
+  Les jetons sont liés à l'intention et à la session, pas à la cible : le refus
+  qui suit ne peut alors venir **que** du contrôle métier. Résultat : HTTP 302
+  avec message d'erreur, `a17` intact, ses 4 fiches et 16 lignes forfait intactes,
+  et « Suppression refusée » au journal.
+- **Ce que le test corrigé a révélé en plus :** la règle du dernier administrateur
+  n'était **jamais atteinte**, le garde-fou « pas soi-même » passant avant. J'ai
+  inversé l'ordre des deux contrôles — quand les deux s'appliquent, le motif
+  « dernier administrateur actif » est le plus utile, puisqu'il dit quoi faire
+  pour débloquer la situation.
+
+### 7.29 J'ai réintroduit le bug des fins de ligne du § 7.8
+
+- **Symptôme :** après mes ajouts, `PdoGsb.php` comptait 1048 fins de ligne CRLF
+  et 722 en LF seul, et `fct.inc.php` 381 contre 100. Fichiers **mixtes**.
+- **Cause réelle :** `PdoGsb.php` et `fct.inc.php` sont à **100 % CRLF dans
+  `HEAD`** (1095/1095 et 384/385 — vérifié par `git show HEAD:fichier`). Mes
+  scripts d'insertion écrivaient des blocs terminés par `\n`. Le § 7.8 de ce
+  compte rendu documente précisément ce piège, et je l'ai refait.
+- **Conséquence concrète :** au-delà de l'incohérence, mes motifs de
+  `str_replace` contenant `\n}` ne correspondaient plus à rien dans un fichier
+  CRLF — d'où plusieurs remplacements silencieusement à 0 occurrence, que seul
+  mon contrôle `if ($n !== 1) exit(1)` a permis de voir au lieu d'écrire un
+  fichier à moitié modifié.
+- **Correction :** normalisation en mode binaire (`str_replace("\r\n","\n")` puis
+  `("\n","\r\n")`, idempotente et sans risque de doubler un `\r` existant), puis
+  écriture des motifs suivants **avec `\r\n`**. Contrôle recommandé par le § 7.8
+  appliqué : `git diff --stat` est passé de **822 insertions / 51 suppressions**
+  à **792 / 21** — les 30 fausses suppressions étaient l'effet du mélange.
+- **Leçon :** documenter une erreur ne suffit pas à ne pas la refaire. Le
+  contrôle qui a réellement servi, c'est le `git diff --stat` après modification,
+  pas la mémoire du § 7.8.
+
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -2896,6 +3545,102 @@ configure rien (`framework.session.cookie_samesite` absent de `config.yml`), et
 Symfony 2.8 est antérieur à cette option. **Les jetons restent donc la seule
 protection**, ce qui est suffisant, mais une défense en profondeur serait
 préférable sur un déploiement réel.
+
+### ✅ B8 — LEVÉ en phase 8
+
+**B8 (mots de passe stockés en clair)** est levé. `visiteur.mdp` est passé de
+`VARCHAR(30)` en clair à `VARCHAR(255)` contenant une empreinte bcrypt, et les
+209 mots de passe existants ont été convertis sans qu'aucun visiteur perde le
+sien. Les trois tables de comptes stockent désormais des empreintes, et plus
+aucune ligne en clair ne subsiste (vérifié : `select count(*) from visiteur where
+mdp not like '$2%'` → 0).
+
+### ✅ B3 — complété en phase 8
+
+**B3 (aucune notion de rôle)** avait été levé en phase 5 avec le comptable. La
+phase 8 ajoute le troisième rôle et, surtout, **un écran pour gérer les comptes** :
+créer un visiteur ou couper un accès ne demande plus d'écrire du SQL à la main
+dans la base de production.
+
+### Limites propres à la phase 8
+
+#### 🟠 L37 — L'unicité du login n'est pas garantie par la base
+Conséquence assumée du modèle à trois tables (décision 8.1) : aucune contrainte
+`UNIQUE` ne peut couvrir `visiteur`, `comptable` et `administrateur` à la fois. Le
+contrôle est applicatif (`PdoGsb::loginExiste()`, sur la vue `v_compte`) et
+appliqué à la création comme à la modification. **Mais il reste une fenêtre de
+concurrence** : deux administrateurs créant au même instant un compte avec le même
+login passeraient tous les deux le contrôle. Le matricule, lui, est protégé par la
+clé primaire et retenté (§ 6.21) ; le login n'a pas cette filet. En cas de doublon,
+`HomeController::authentifier()` essaie administrateur, puis comptable, puis
+visiteur : **le premier trouvé l'emporterait silencieusement**, et le titulaire de
+l'autre compte perdrait l'accès sans message d'erreur. Le risque est faible (un
+seul administrateur en pratique) mais réel. La parade propre est l'option C de la
+décision 8.1 : une table `compte` portant le login, avec son `UNIQUE`.
+
+#### 🟠 L38 — La règle du « dernier administrateur actif » est inatteignable par l'interface
+Le garde-fou existe, est testé et fonctionne (§ 9.x), mais **aucun parcours normal
+ne peut l'atteindre**. Désactiver un administrateur suppose d'être soi-même un
+administrateur actif : si la cible est un autre compte, il en reste donc au moins
+un après l'opération, et le compteur n'est jamais à 1 ; si la cible est soi-même,
+c'est ce garde-fou qui répond — depuis que j'en ai inversé l'ordre avec celui de
+l'auto-désactivation (§ 7.28). Il ne sert donc aujourd'hui que de **défense en
+profondeur**, utile le jour où une désactivation par lot, ou un autre chemin,
+serait ajoutée. Je le signale plutôt que de laisser croire à une règle
+quotidiennement active.
+
+#### 🟠 L39 — Les validations de fiches ne sont pas attribuées à un comptable
+`fichefrais` ne porte pas d'`idComptable` : **aucune clé étrangère ne pointe vers
+`comptable`**. Une fiche validée garde son état et sa date, mais pas l'identité de
+celui qui l'a validée. L'exigence « les données historiques du compte restent
+consultables » est donc partiellement inapplicable à un comptable désactivé : il
+n'y a rien à rattacher. Le journal d'administration ne comble pas ce trou — il
+trace les actions d'*administration*, pas les validations. Corriger demanderait
+une colonne `idComptable` sur `fichefrais` et une reprise des 206 fiches
+existantes, hors périmètre de cette phase.
+
+#### 🟡 L40 — Une requête SQL supplémentaire par requête HTTP authentifiée
+Conséquence directe et assumée de la décision 8.3 : `GardeCompteListener` lit
+`actif` et `mdpDoitChanger` à chaque requête. C'est un `SELECT` sur clé primaire,
+négligeable à cette échelle, mais ce n'est pas gratuit. Une mise en cache courte
+(quelques secondes) réduirait le coût au prix d'un délai avant effet de la
+désactivation — compromis non retenu, l'effet immédiat étant précisément ce qui
+avait été demandé.
+
+#### 🟡 L41 — Le mot de passe temporaire n'expire pas
+Tranché avec le client : hors périmètre de cette phase. Le mot de passe temporaire
+reste valable jusqu'à son utilisation, sans limite de durée. Le forçage du
+changement à la connexion suivante couvre l'essentiel du risque, mais un mot de
+passe transmis par courriel et jamais utilisé reste indéfiniment valable. Une
+colonne de date d'expiration et une règle de plus dans l'authentification
+suffiraient à le corriger.
+
+#### 🟡 L42 — Le motif d'une action d'administration est facultatif
+Tranché avec le client. Le rendre obligatoire produirait surtout des « test » et
+des « . ». Le journal reste complet sans lui — l'action, l'auteur, la cible et
+l'horodatage sont toujours enregistrés — mais une désactivation sans motif ne dit
+pas *pourquoi* elle a eu lieu.
+
+#### 🟡 L43 — Aucune purge du journal d'administration
+`journaladmin` croît indéfiniment. Aucune rotation, aucun archivage, aucune
+suppression possible depuis l'interface — ce dernier point étant volontaire : un
+journal qu'un administrateur peut effacer ne prouve rien. Mais à long terme la
+table demande une politique de conservation, qui est une décision de gestion
+autant que technique.
+
+#### 🟡 L44 — Le changement de mot de passe n'est possible que lorsqu'il est imposé
+`MotDePasseController` redirige vers l'accueil si `mdpDoitChanger` vaut 0 : un
+utilisateur **ne peut pas changer son mot de passe de sa propre initiative**. C'est
+une lacune fonctionnelle réelle, pas un choix de sécurité. L'écran et la
+validation existent déjà ; il manque une entrée de menu et la levée de cette
+condition.
+
+#### 🟡 L45 — Pas de politique de tentatives de connexion
+Inchangé depuis l'origine, mais la phase 8 le rend plus visible : rien ne limite
+le nombre d'essais de mot de passe. bcrypt ralentit considérablement une attaque
+hors ligne, mais pas une attaque en ligne sur un login connu. Un verrouillage
+temporaire après N échecs demanderait un compteur par compte et une date de
+déverrouillage.
 
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
@@ -3565,6 +4310,151 @@ faille.
 | Connexion, écran de validation, détail d'une fiche | 200 / 200 ✔ |
 | Archive ZIP du mois | 200 ✔ |
 | POST sans jeton CSRF | **403** — la protection de la phase 6 tient toujours ✔ |
+
+### 9.33 Phase 8 — installation de la migration
+
+**Sauvegarder avant, et vérifier que la sauvegarde se restaure** (§ 7.25 : je me
+suis fait piéger exactement là) :
+
+```bash
+mysqldump -u root --set-gtid-purged=OFF bd_gsb > /tmp/bd_gsb-avant-004.sql
+```
+
+Puis, dans l'ordre, les **deux** commandes — la première ne suffit pas :
+
+```bash
+mysql -u root bd_gsb < sql/004_administration_comptes.sql
+php app/console gsb:hacher-mots-de-passe
+php app/console cache:clear --env=dev
+php app/console assets:install web
+```
+
+Le script SQL affiche lui-même le rappel :
+`Script 004 appliqué. 209 visiteur(s) ont encore un mot de passe EN CLAIR. Lancez maintenant : php app/console gsb:hacher-mots-de-passe`
+
+**Entre les deux commandes, aucun visiteur ne peut se connecter** (bcrypt n'existe
+pas en SQL, décision 8.4).
+
+Résultat attendu de la seconde :
+
+```
+209 mot(s) de passe en clair à convertir.
+209 mot(s) de passe converti(s) en empreinte bcrypt.
+Plus aucun mot de passe en clair en base.
+```
+
+Elle est idempotente — la relancer affiche `Aucun mot de passe en clair : rien à
+faire.` Un `--simuler` permet de voir ce qu'elle ferait sans rien écrire.
+
+**Contrôles d'installation :**
+
+```bash
+mysql -u root bd_gsb -e "select role, actif, count(*) from v_compte group by role, actif;"
+# administrateur 1 1 / comptable 1 1 / visiteur 1 209
+mysql -u root bd_gsb -e "select count(*) from visiteur where mdp not like '\$2%';"
+# 0  -> plus aucun mot de passe en clair
+```
+
+**Compte administrateur initial : `hdubois` / `AdminGsb2026!`** — l'application
+impose d'en changer à la première connexion.
+
+### 9.34 Phase 8 — scénarios de test
+
+Tous ont été joués sur `http://127.0.0.1:8000` et le résultat observé est indiqué.
+
+| # | Scénario | Attendu | Observé |
+|---|----------|---------|---------|
+| 1 | Connexion `hdubois` / `AdminGsb2026!` | accepté, puis **tout** écran redirige vers `/changermotdepasse` | 302 → `/changermotdepasse` depuis `/admin/comptes` ✅ |
+| 2 | Changement du mot de passe initial | 302 vers l'accueil, interface débloquée | ✅ ; `/admin/comptes` passe à 200 |
+| 3 | Liste des comptes | 211 comptes, 25 par page, 9 pages | « 211 comptes correspondants », « Comptes 1 à 25 » ✅ |
+| 4 | Filtres `?role=comptable`, `?role=administrateur`, `?recherche=Andre` | 1, 1, 1 | ✅ |
+| 5 | **Créer un visiteur** sans saisir de matricule | matricule généré | « Matricule attribué : **v001** » ✅ |
+| 6 | Le nouveau visiteur se connecte | accès bloqué jusqu'au changement de mot de passe | `/listefrais` → 302 `/changermotdepasse` ✅ |
+| 7 | Il change son mot de passe | accès rétabli | `/listefrais` → 200 ✅ |
+| 8 | **Désactiver** `v001` | confirmation chiffrée, puis `actif = 0` | ✅ ; page « Désactiver le compte de Paul Testeur (v001) ? » |
+| 9 | **Session déjà ouverte** du compte désactivé | coupée à la requête suivante | `/listefrais` → 302, message « Votre compte a été désactivé. Contactez votre administrateur. » ✅ |
+| 10 | Reconnexion du compte désactivé | refusée | 200 + « Erreur de login ou de mot de passe » ✅ |
+| 11 | **Réactiver** `v001` | `actif = 1`, reconnexion possible | ✅ 302 |
+| 12 | **Supprimer un visiteur qui a des fiches** (`a17`, 4 fiches) | refus expliqué et chiffré | « Ce visiteur a des fiches de frais rattachées », tableau « 4 fiches dont 3 déjà validées », « 16 lignes forfait », proposition de désactiver ✅ |
+| 13 | **Supprimer un visiteur sans donnée** (`v001`) | suppression réelle | « Cette opération est irréversible », « n'a aucune fiche de frais » ; 0 ligne restante ✅ |
+| 14 | **Réinitialiser** un mot de passe | temporaire affiché une seule fois | `jYBE-uYhd-dC6N`, `mdpDoitChanger = 1` ✅ |
+| 15 | Connexion avec le temporaire | acceptée, puis changement imposé | 302 puis `/listefrais` → 302 `/changermotdepasse` ✅ |
+| 16 | Ancien mot de passe après réinitialisation | refusé | 200 ✅ |
+
+### 9.35 Phase 8 — garde-fous et contrôle d'accès (le plus important)
+
+**Méthode.** Un POST refusé avec un jeton CSRF vide donne aussi un 403 : le test
+prouverait alors le jeton, pas le garde-fou (c'est l'erreur du § 7.28). Pour
+prouver le **recontrôle serveur**, on récupère un jeton **valide** de la bonne
+intention sur une page où l'action est *permise*, puis on le rejoue contre une
+cible *interdite*. Les jetons sont liés à l'intention et à la session, pas à la
+cible.
+
+| # | Scénario | Attendu | Observé |
+|---|----------|---------|---------|
+| 1 | **Visiteur** sur `/admin/comptes`, `/admin/journal`, `/admin/comptes/creer` | 403 | 403 + « Cet écran est réservé aux administrateurs. » ✅ |
+| 2 | **Comptable** sur les mêmes URL + `/admin/comptes/visiteur/a17/modifier` | 403 | 403, les quatre ✅ |
+| 3 | **Administrateur** sur `/listefrais`, `/saisirfrais`, `/monvehicule` | 403 | « Cet écran est réservé aux visiteurs médicaux. » ✅ |
+| 4 | **Administrateur** sur `/validation` | 403 | « Cette page est réservée au service comptable. » ✅ |
+| 5 | Auto-désactivation d'un administrateur | refusée | « Vous ne pouvez pas désactiver votre propre compte. » ✅ |
+| 6 | Désactivation du **dernier** administrateur actif | refusée, avec la marche à suivre | « Ce compte est le dernier administrateur actif. […] Créez ou réactivez d'abord un autre administrateur. » ✅ |
+| 7 | **Le même refus en POST, avec un jeton valide** | refus maintenu | 302 + message ; `actif` toujours à 1 ✅ |
+| 8 | **Suppression de `a17` en POST, avec un jeton valide** | refus maintenu, **données intactes** | 302 ; `a17` présent, **4 fiches et 16 lignes forfait intactes** ✅ |
+| 9 | Rôle hors liste dans l'URL (`/admin/comptes/pirate/x/modifier`) | 404 | ✅ (contrainte de route) |
+| 10 | Double désactivation | idempotente, pas de fausse entrée au journal | « Ce compte était déjà dans l'état demandé » ✅ |
+
+Les points 7 et 8 sont les plus significatifs : ils montrent que **masquer le
+bouton n'est pas la protection**. Le refus est recalculé à l'exécution, parce que
+l'état peut changer entre l'affichage de la confirmation et le clic.
+
+### 9.36 Phase 8 — traçabilité
+
+Après le parcours complet, `journaladmin` contient :
+
+```
+30/09 15:10  Création de compte                v001 Paul Testeur    rôle visiteur ; changement de mot de passe imposé
+30/09 15:10  Désactivation                     v001 Paul Testeur    test de desactivation
+30/09 15:10  Réactivation                      v001 Paul Testeur    -
+30/09 15:12  Création de compte                ad02 Julien Faure    rôle administrateur
+30/09 15:12  Désactivation                     ad01 Hélène Dubois   -
+30/09 15:12  Réactivation                      ad01 Hélène Dubois   -
+30/09 15:14  Désactivation refusée             ad01 Hélène Dubois   Ce compte est le dernier administrateur actif. […]
+30/09 15:14  Suppression refusée               a17  David Andre     Ce visiteur a des fiches de frais rattachées.
+30/09 15:14  Réinitialisation de mot de passe  v001 Paul Testeur    changement imposé à la prochaine connexion
+30/09 15:2x  Suppression définitive            v001 Paul Testeur    compte de test
+```
+
+Deux vérifications explicites :
+
+```bash
+# aucun mot de passe, même temporaire, dans le journal
+mysql -u root bd_gsb -e "select count(*) from journaladmin where detail like '%jYBE-uYhd-dC6N%';"
+# 0  ✅
+```
+
+Et la dernière ligne du journal **survit à la suppression de `v001`** : le nom
+« Paul Testeur » y est encore lisible alors que le compte n'existe plus, ce qui
+valide le choix de recopier les noms plutôt que de les référencer (décision 8.6).
+
+### 9.37 Phase 8 — non-régression (vérifiée)
+
+| Contrôle | Résultat |
+|----------|----------|
+| `dandre` / `oppg5` se connecte **après** la migration bcrypt | ✅ 302 — aucun visiteur n'a perdu son mot de passe |
+| `mvalette` / `comptable26` se connecte | ✅ 302 |
+| Volumétrie inchangée | ✅ 209 visiteurs, 206 fiches, 824 lignes forfait, 293 hors forfait — identique à avant la phase |
+| Écrans visiteur : `/saisirfrais`, `/listefrais`, `/monvehicule` | ✅ 200 |
+| Écran comptable : `/validation`, `/validation/recap` | ✅ 200 |
+| `php app/console lint:twig` sur les nouveaux gabarits | ✅ « All 8 Twig files contain valid syntax » |
+| `php -l` sur tous les fichiers PHP modifiés ou créés | ✅ aucune erreur |
+| `app/logs/dev.log` après le parcours complet | ✅ aucune erreur inattendue |
+| `sql/bd_gsb.sql` produit le même schéma qu'une base migrée | ✅ **71 colonnes identiques**, vue et 6 clés étrangères présentes (comparaison automatisée sur une base témoin) |
+| Fins de ligne des fichiers modifiés | ✅ 100 % CRLF pour `PdoGsb.php` et `fct.inc.php`, comme dans `HEAD` (§ 7.29) |
+
+**Scripts de test rejouables** : le parcours (16 scénarios) et les garde-fous
+(10 scénarios) ont été automatisés en `zsh` + `curl`. Ils extraient les jetons
+CSRF des pages, enchaînent les requêtes avec un porte-cookies par rôle, et
+vérifient l'état en base après chaque action.
 
 ---
 
