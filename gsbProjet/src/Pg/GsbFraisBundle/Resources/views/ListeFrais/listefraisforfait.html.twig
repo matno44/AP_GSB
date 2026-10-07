@@ -18,6 +18,28 @@
 	       <td class="qteForfait">{{quantite}} </td>
     {% endfor %}  
 	</tr>
+        {# Montant unitaire historisé sur la ligne : c'est le tarif qui était
+           en vigueur lors de la saisie, pas le tarif d'aujourd'hui. #}
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+	       <td class="qteForfait">{{unfrais.montantunitaire}} €</td>
+    {% endfor %}  
+	</tr>
+        <tr>
+    {% for unfrais in  lesfraisforfait %}
+	       <td class="qteForfait"><strong>{{unfrais.montant}} €</strong></td>
+    {% endfor %}  
+	</tr>
     </table>
+    <p class="legendeTableau">
+        Lignes du tableau : libellé, quantité, montant unitaire appliqué, total.
+    </p>
+    {# Impression au format de l'annexe 1 du cahier des charges. Le contrôleur
+       vérifie que le visiteur demande bien SA fiche (ou qu'il est comptable) :
+       passer un autre identifiant dans l'URL donne une 404. #}
+    <p>
+        <a href="{{ path('pg_gsb_frais_fichepdf', {'idVisiteur': app.session.get('id'), 'mois': lemois}) }}"
+           target="_blank">Imprimer cette fiche (PDF)</a>
+    </p>
    </div>
  

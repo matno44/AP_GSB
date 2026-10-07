@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Journal d'administration</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Administrateur : bonjour Hélène Dubois</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="07-admin-liste-comptes.html">Gérer les comptes</a></li>
+    <li class="smenu"><a href="13-admin-journal.html">Journal d'administration</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Journal d'administration</h2>
+
+  <form class="filtres">
+    <div class="ligneFiltres">
+      <span class="champFiltre">
+        <label for="jAdmin">Administrateur</label>
+        <select id="jAdmin" name="admin">
+          <option selected>Tous</option>
+          <option>Dubois Hélène (ad1)</option>
+          <option>Faure Julien (ad2)</option>
+        </select>
+      </span>
+      <span class="champFiltre">
+        <label for="jAction">Action</label>
+        <select id="jAction" name="action">
+          <option selected>Toutes</option>
+          <option>Création de compte</option>
+          <option>Modification de compte</option>
+          <option>Désactivation</option>
+          <option>Réactivation</option>
+          <option>Réinitialisation de mot de passe</option>
+          <option>Suppression définitive</option>
+        </select>
+      </span>
+      <span class="champFiltre">
+        <label for="jCompte">Compte visé</label>
+        <input type="text" id="jCompte" name="compte" size="14" value="" />
+      </span>
+      <span class="champFiltre">
+        <input type="submit" value="Filtrer" />
+      </span>
+    </div>
+  </form>
+
+  <table class="listeLegere journal">
+    <caption>1 284 entrées — les plus récentes en premier</caption>
+    <tr>
+      <th>Date et heure</th>
+      <th>Administrateur</th>
+      <th>Action</th>
+      <th>Compte visé</th>
+      <th>Détail</th>
+    </tr>
+    <tr>
+      <td class="horodatage">30/09/2026 14:52</td>
+      <td>Dubois Hélène (ad1)</td>
+      <td>Réinitialisation de mot de passe</td>
+      <td>a17 — Andre David</td>
+      <td>changement imposé à la prochaine connexion</td>
+    </tr>
+    <tr>
+      <td class="horodatage">30/09/2026 14:47</td>
+      <td>Dubois Hélène (ad1)</td>
+      <td>Désactivation</td>
+      <td>b13 — Bentot Pascal</td>
+      <td>départ de l'entreprise ; 3 fiches conservées</td>
+    </tr>
+    <tr>
+      <td class="horodatage">30/09/2026 11:20</td>
+      <td>Dubois Hélène (ad1)</td>
+      <td>Création de compte</td>
+      <td>z205 — Morel Inès</td>
+      <td>rôle visiteur ; véhicule non déclaré</td>
+    </tr>
+    <tr>
+      <td class="horodatage">29/09/2026 17:05</td>
+      <td>Faure Julien (ad2)</td>
+      <td>Modification de compte</td>
+      <td>a55 — Bedos Christian</td>
+      <td>véhicule : 4 CV &rarr; 5 CV</td>
+    </tr>
+    <tr>
+      <td class="horodatage">29/09/2026 16:58</td>
+      <td>Faure Julien (ad2)</td>
+      <td>Suppression refusée</td>
+      <td>a55 — Bedos Christian</td>
+      <td>2 fiches rattachées ; désactivation proposée</td>
+    </tr>
+    <tr>
+      <td class="horodatage">28/09/2026 09:12</td>
+      <td>Dubois Hélène (ad1)</td>
+      <td>Réactivation</td>
+      <td>b16 — Bioret Luc</td>
+      <td>retour de congé sabbatique</td>
+    </tr>
+    <tr>
+      <td class="horodatage">27/09/2026 15:30</td>
+      <td>Dubois Hélène (ad1)</td>
+      <td>Désactivation refusée</td>
+      <td>ad1 — Dubois Hélène</td>
+      <td>tentative d'auto-désactivation</td>
+    </tr>
+  </table>
+
+  <div class="pagination">
+    <span class="inactif">&laquo; Précédent</span>
+    <span class="pageCourante">1</span>
+    <a href="13-admin-journal.html">2</a>
+    <a href="13-admin-journal.html">3</a>
+    <a href="13-admin-journal.html">Suivant &raquo;</a>
+    <span class="compteur">Entrées 1 à 25 sur 1 284</span>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Pourquoi un journal est indispensable sur cet écran précisément.</strong>
+  <ul>
+    <li>
+      <strong>Les actions d'administration sont les seules qui ne laissent
+      aucune trace dans les données.</strong> Une fiche validée garde son état
+      et sa date. Une désactivation, elle, ne fait que basculer un
+      <code>0</code> : sans journal, personne ne peut dire <em>qui</em> a coupé
+      l'accès de David Andre, <em>quand</em>, ni <em>pourquoi</em>. Le seul
+      témoin serait la mémoire de celui qui l'a fait.
+    </li>
+    <li>
+      <strong>Un administrateur peut se donner les droits d'un autre.</strong>
+      Réinitialiser un mot de passe permet de se connecter à la place du
+      titulaire — donc, pour un compte comptable, de valider des fiches de frais
+      en son nom. C'est le seul point de l'application où un utilisateur peut
+      usurper l'identité d'un autre. Sans journal, l'usurpation est indétectable
+      <em>et</em> indémontrable ; le titulaire n'aurait aucun moyen de prouver
+      que ce n'est pas lui.
+    </li>
+    <li>
+      <strong>Le journal protège aussi l'administrateur.</strong> Devant un
+      visiteur affirmant « je n'ai jamais pu me connecter » ou « on a modifié ma
+      fiche », il fournit une réponse datée et vérifiable.
+    </li>
+    <li>
+      <strong>Les refus sont journalisés autant que les réussites.</strong> Une
+      tentative d'auto-désactivation, ou une suppression refusée, dit quelque
+      chose sur ce que l'administrateur a cherché à faire. Ne consigner que les
+      succès effacerait justement les tentatives intéressantes.
+    </li>
+    <li>
+      <strong>Jamais de mot de passe dans le journal</strong>, même temporaire,
+      même haché : une table consultable depuis l'interface est une table qui
+      finira par être exportée.
+    </li>
+  </ul>
+
+  <div class="aValider">
+    <strong>Un point sur lequel j'attends ta réponse.</strong>
+    La colonne « Détail » contient un motif libre. Faut-il le rendre
+    <strong>obligatoire</strong> à la désactivation et à la suppression ?
+    Ma proposition : <em>facultatif mais proposé</em> dans l'écran de
+    confirmation. Le rendre obligatoire produit surtout des « test » et des
+    « . » ; le proposer suffit à ce qu'il soit rempli quand il compte.
+    Le journal reste complet sans lui, l'action et sa cible étant toujours
+    enregistrées automatiquement.
+  </div>
+</div>
+</body>
+</html>

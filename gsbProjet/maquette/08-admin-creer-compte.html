@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Créer un compte</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Administrateur : bonjour Hélène Dubois</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="07-admin-liste-comptes.html">Gérer les comptes</a></li>
+    <li class="smenu"><a href="13-admin-journal.html">Journal d'administration</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Créer un compte</h2>
+
+  <p>
+    Les champs marqués <span class="champObligatoire">*</span> sont obligatoires.
+  </p>
+
+  <form>
+    <div class="corpsForm">
+
+      <fieldset>
+        <legend>Rôle</legend>
+        <p>
+          <label for="role">Rôle <span class="champObligatoire">*</span></label>
+          <select id="role" name="role">
+            <option selected>Visiteur médical</option>
+            <option>Comptable</option>
+            <option>Administrateur</option>
+          </select>
+        </p>
+        <span class="aideChamp">
+          Le rôle détermine la table de destination et les écrans accessibles.
+          Les informations métier ci-dessous ne concernent que les visiteurs.
+        </span>
+      </fieldset>
+
+      <fieldset>
+        <legend>Identifiants</legend>
+        <p>
+          <label for="login">Login <span class="champObligatoire">*</span></label>
+          <input type="text" id="login" name="login" size="30" maxlength="20" value="imorel" />
+        </p>
+        <span class="aideChamp">
+          20 caractères maximum. Doit être unique parmi <em>tous</em> les comptes,
+          visiteurs, comptables et administrateurs confondus.
+        </span>
+        <p>
+          <label for="mdp">Mot de passe <span class="champObligatoire">*</span></label>
+          <input type="password" id="mdp" name="mdp" size="30" />
+        </p>
+        <span class="aideChamp">
+          12 caractères minimum, dont au moins une minuscule, une majuscule et
+          un chiffre. Stocké haché (bcrypt) : il ne sera jamais réaffiché, ni
+          écrit dans les journaux.
+        </span>
+        <p>
+          <label for="mdp2">Confirmation <span class="champObligatoire">*</span></label>
+          <input type="password" id="mdp2" name="mdp2" size="30" />
+        </p>
+        <p>
+          <label for="forcerChangement">Changement imposé</label>
+          <input type="checkbox" id="forcerChangement" name="forcerChangement" checked />
+          obliger l'utilisateur à changer son mot de passe à la première connexion
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Identité</legend>
+        <p>
+          <label for="matricule">Matricule</label>
+          <input type="text" id="matricule" class="lectureSeule" size="24"
+                 value="attribué automatiquement" readonly />
+        </p>
+        <span class="aideChamp">
+          <strong>Généré par l'application à l'enregistrement</strong> : préfixe
+          du rôle suivi d'un numéro (<code>v001</code> pour un visiteur,
+          <code>c001</code> pour un comptable, <code>ad01</code> pour un
+          administrateur). Définitif — les fiches de frais s'y rattachent.
+        </span>
+        <p>
+          <label for="nom">Nom <span class="champObligatoire">*</span></label>
+          <input type="text" id="nom" name="nom" size="30" maxlength="30" value="Morel" />
+        </p>
+        <p>
+          <label for="prenom">Prénom <span class="champObligatoire">*</span></label>
+          <input type="text" id="prenom" name="prenom" size="30" maxlength="30" value="Inès" />
+        </p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Informations métier du visiteur</legend>
+        <p>
+          <label for="dateEmbauche">Date d'embauche</label>
+          <input type="text" id="dateEmbauche" name="dateEmbauche" size="12" maxlength="10" value="01/09/2026" />
+        </p>
+        <span class="aideChamp">Au format jj/mm/aaaa.</span>
+        <p>
+          <label for="typeVehicule">Type de véhicule</label>
+          <select id="typeVehicule" name="typeVehicule">
+            <option selected>— non déclaré —</option>
+            <option>3 CV et moins — 0,52 € / km</option>
+            <option>4 CV — 0,58 € / km</option>
+            <option>5 CV — 0,63 € / km</option>
+            <option>6 CV et plus — 0,68 € / km</option>
+          </select>
+        </p>
+        <span class="aideChamp">
+          Détermine le barème de remboursement kilométrique. Tant qu'il n'est
+          pas déclaré, l'application retombe sur le tarif historique
+          <code>fraisforfait.KM</code>. Le visiteur peut le renseigner lui-même
+          par l'écran « Mon véhicule ».
+        </span>
+        <p>
+          <label for="adresse">Adresse</label>
+          <input type="text" id="adresse" name="adresse" size="30" maxlength="30" value="" />
+        </p>
+        <p>
+          <label for="cp">Code postal</label>
+          <input type="text" id="cp" name="cp" size="8" maxlength="5" value="" />
+        </p>
+        <p>
+          <label for="ville">Ville</label>
+          <input type="text" id="ville" name="ville" size="30" maxlength="30" value="" />
+        </p>
+      </fieldset>
+
+    </div>
+    <div class="piedForm">
+      <p>
+        <input type="submit" value="Créer le compte" />
+        <a class="boutonSecondaire" href="07-admin-liste-comptes.html">Annuler</a>
+      </p>
+    </div>
+  </form>
+</div>
+
+<div class="annotation">
+  <strong>Comment lire cet écran.</strong>
+  <ul>
+    <li>
+      <strong>Le bloc « Informations métier » n'apparaît que pour un visiteur.</strong>
+      Un comptable et un administrateur n'ont ni date d'embauche, ni véhicule,
+      ni adresse — c'est la raison même pour laquelle ils vivent dans leur propre
+      table. Choisir « Comptable » ou « Administrateur » masque ce bloc.
+      <em>Sans JavaScript, le formulaire reste soumis en entier et le serveur
+      ignore simplement les champs hors sujet</em> : la validation ne dépend
+      jamais de l'affichage.
+    </li>
+    <li>
+      <strong>Le barème kilométrique est lu en base</strong> (table
+      <code>typevehicule</code>), pas codé dans la liste déroulante. Les montants
+      affichés ici sont ceux du jeu de données actuel.
+    </li>
+    <li>
+      <strong>Le matricule n'est plus saisi : l'application le génère.</strong>
+      Le laisser à la main produisait deux risques. Le premier, celui d'un
+      doublon : le matricule est la clé primaire, un choc aurait fait échouer
+      l'enregistrement sur une erreur de base incompréhensible pour
+      l'administrateur. Le second, plus sournois : deux administrateurs
+      travaillant en même temps pouvaient très bien choisir le même numéro
+      libre. La génération lit le dernier numéro de la série du rôle, ajoute 1,
+      et <strong>retente si la clé primaire refuse</strong> — c'est la base, et
+      elle seule, qui arbitre en dernier ressort.
+    </li>
+    <li>
+      <strong>L'unicité du login est vérifiée sur les trois tables.</strong>
+      C'est la limite connue du modèle retenu : aucune contrainte
+      <code>UNIQUE</code> ne peut couvrir trois tables à la fois, donc le
+      contrôle est applicatif. En cas de doublon, le formulaire revient avec
+      l'erreur et les champs conservés.
+    </li>
+    <li>
+      <strong>« Changement imposé » est coché par défaut.</strong> L'administrateur
+      saisit forcément le premier mot de passe : le laisser en place signifierait
+      qu'un tiers connaît durablement le mot de passe du titulaire.
+    </li>
+  </ul>
+</div>
+</body>
+</html>

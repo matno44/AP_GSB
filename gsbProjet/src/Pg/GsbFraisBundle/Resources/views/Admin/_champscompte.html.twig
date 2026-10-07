@@ -1,0 +1,78 @@
+{# Champs communs aux formulaires de création et de modification.
+
+   Un fragment partagé plutôt que deux copies : les règles de saisie (longueurs,
+   libellés, aides) doivent être identiques dans les deux écrans, et deux copies
+   auraient fini par divulguer des contraintes différentes de celles que le
+   contrôleur applique réellement.
+
+   Le fragment reçoit « saisie » et, si l'on est en modification, « lecompte ». #}
+
+<fieldset>
+    <legend>Identité</legend>
+    <p>
+        <label for="nom">Nom <span class="champObligatoire">*</span></label>
+        <input type="text" id="nom" name="nom" size="30" maxlength="30" value="{{ saisie.nom }}" />
+    </p>
+    <p>
+        <label for="prenom">Prénom <span class="champObligatoire">*</span></label>
+        <input type="text" id="prenom" name="prenom" size="30" maxlength="30" value="{{ saisie.prenom }}" />
+    </p>
+</fieldset>
+
+<fieldset>
+    <legend>Identifiant de connexion</legend>
+    <p>
+        <label for="login">Login <span class="champObligatoire">*</span></label>
+        <input type="text" id="login" name="login" size="30" maxlength="20" value="{{ saisie.login }}" />
+    </p>
+    <span class="aideChamp">
+        20 caractères maximum, lettres, chiffres, point, tiret ou souligné.
+        Doit être unique parmi <em>tous</em> les comptes — visiteurs, comptables
+        et administrateurs confondus.
+    </span>
+</fieldset>
+
+{# Les informations métier ne concernent que les visiteurs : un comptable et un
+   administrateur n'ont ni véhicule, ni date d'embauche, ni adresse — c'est la
+   raison même pour laquelle ils vivent dans leur propre table. #}
+{% if saisie.role == 'visiteur' %}
+<fieldset>
+    <legend>Informations métier du visiteur</legend>
+    <p>
+        <label for="dateEmbauche">Date d'embauche</label>
+        <input type="text" id="dateEmbauche" name="dateEmbauche" size="12" maxlength="10"
+               value="{{ saisie.dateEmbaucheFr }}" placeholder="jj/mm/aaaa" />
+    </p>
+    <p>
+        <label for="idTypeVehicule">Type de véhicule</label>
+        <select id="idTypeVehicule" name="idTypeVehicule">
+            <option value="">— non déclaré —</option>
+            {# Le barème est lu en base (table typevehicule) et non codé dans le
+               gabarit : la direction peut le faire évoluer sans toucher au code. #}
+            {% for unType in lestypevehicule %}
+                <option value="{{ unType.id }}"{% if unType.id == saisie.idTypeVehicule %} selected{% endif %}>
+                    {{ unType.libelle }} — {{ unType.montant }} € / km
+                </option>
+            {% endfor %}
+        </select>
+    </p>
+    <span class="aideChamp">
+        Détermine le barème de remboursement kilométrique. Tant qu'il n'est pas
+        déclaré, l'application retombe sur le tarif historique. Un changement ne
+        s'applique qu'aux fiches encore à l'état « Créée » : les lignes déjà
+        saisies conservent le tarif en vigueur au moment de leur saisie.
+    </span>
+    <p>
+        <label for="adresse">Adresse</label>
+        <input type="text" id="adresse" name="adresse" size="30" maxlength="30" value="{{ saisie.adresse }}" />
+    </p>
+    <p>
+        <label for="cp">Code postal</label>
+        <input type="text" id="cp" name="cp" size="8" maxlength="5" value="{{ saisie.cp }}" />
+    </p>
+    <p>
+        <label for="ville">Ville</label>
+        <input type="text" id="ville" name="ville" size="30" maxlength="30" value="{{ saisie.ville }}" />
+    </p>
+</fieldset>
+{% endif %}

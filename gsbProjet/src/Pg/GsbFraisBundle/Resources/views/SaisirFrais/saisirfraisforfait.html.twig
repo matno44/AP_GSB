@@ -1,18 +1,26 @@
 <div id="contenu">
       <h2>Renseigner ma fiche de frais du mois {{nummois}}-{{numannee}}</h2>
       <form action="{{path('pg_gsb_frais_saisirfrais')}}" method="POST">
+          <input type="hidden" name="_token" value="{{ csrf_token('saisie_forfait') }}" />
           <div class="corpsForm">
               <fieldset>
                 <legend>Eléments forfaitisés</legend>
+                     {# Le montant unitaire affiché est celui figé sur la ligne
+                        à la création de la fiche. Pour la ligne kilométrique,
+                        il dépend du véhicule déclaré dans « Mon véhicule ». #}
                      {% for unfrais in  lesfraisforfait %}
                          {% set idfrais = unfrais.idfrais %}
                          {% set libelle = unfrais.libelle %}
                          {% set quantite = unfrais.quantite %}
                         <p>
-                            <label for="frais_{{idfrais}}">{{libelle}}</label>
+                            <label for="frais_{{idfrais}}">{{libelle}} ({{unfrais.montantunitaire}} €)</label>
                             <input type="text" id="frais_{{idfrais}}" name="lesFrais[{{idfrais}}]" size="10" maxlength="5" value="{{quantite}}" >
                         </p>
                       {%endfor%}
+                <p class="legendeTableau">
+                    Le tarif kilométrique dépend de votre véhicule :
+                    <a href="{{ path('pg_gsb_frais_monvehicule') }}">le déclarer ou le modifier</a>.
+                </p>
               </fieldset>
           </div>
           <div class="piedForm">

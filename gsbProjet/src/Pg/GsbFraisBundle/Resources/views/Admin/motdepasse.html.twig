@@ -1,0 +1,52 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Mot de passe réinitialisé</h2>
+
+    <div class="confirmation">
+        Le mot de passe du compte <strong>{{ lecompte.prenom }} {{ lecompte.nom }}
+        ({{ lecompte.id }})</strong> a été remplacé.
+    </div>
+
+    <div class="dialogue">
+        <h3>Mot de passe temporaire</h3>
+
+        <p>Transmettez-le à {{ lecompte.prenom }} {{ lecompte.nom }} :</p>
+
+        {# Police à largeur fixe et caractères espacés : ce mot de passe est
+           recopié à la main ou dicté par téléphone. Le générateur exclut déjà les
+           caractères ambigus (0/O, 1/l/I) et découpe en trois groupes de quatre,
+           qui se dictent et se vérifient — une suite de douze caractères non. #}
+        <p><span class="motDePasseTemporaire">{{ temporaire }}</span></p>
+
+        <p class="avertissement" style="margin-top:0">
+            <strong>Ce mot de passe ne sera plus jamais affiché.</strong>
+            Il n'est pas stocké en clair : la base ne contient que son empreinte
+            bcrypt, et l'application elle-même serait incapable de le retrouver.
+            Si vous quittez cette page sans l'avoir noté, il faudra en générer un
+            nouveau.
+        </p>
+
+        <p><strong>À la prochaine connexion de {{ lecompte.prenom }} {{ lecompte.nom }} :</strong></p>
+        <ul>
+            <li>ce mot de passe temporaire lui donnera accès à l'application ;</li>
+            <li>
+                il sera <strong>immédiatement redirigé vers un écran de changement
+                de mot de passe</strong>, et ne pourra accéder à aucun autre écran
+                avant de l'avoir changé ;
+            </li>
+            <li>le mot de passe qu'il choisira alors n'est connu que de lui.</li>
+        </ul>
+
+        {# Le journal d'administration a enregistré la réinitialisation, mais PAS
+           cette valeur : une table consultable depuis l'interface est une table
+           qui finira par être exportée. #}
+
+        <div class="piedDialogue">
+            <a class="bouton" href="{{ path('pg_gsb_frais_admin') }}">J'ai noté le mot de passe, retour à la liste</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% endblock %}

@@ -5,6 +5,31 @@
    #contenu, .corpsForm, .piedForm, .listeLegere, .qteForfait, .encadre, .erreur
    --------------------------------------------------------------------------- */
 
+:root {
+    /* -----------------------------------------------------------------
+       Charte graphique GSB. Toute couleur de marque de l'application est
+       definie ICI et nulle part ailleurs : pour changer la charte, il
+       suffit de modifier ce bloc.
+       Les couleurs a valeur semantique (succes, erreur, avertissement)
+       sont volontairement hors charte, plus bas dans le fichier.
+       ----------------------------------------------------------------- */
+    --gsb-principale:       #711D1B; /* en-tetes, titres, boutons d'action, elements actifs */
+    --gsb-principale-hover: #442818; /* etat hover/actif des elements principaux */
+    --gsb-texte:            #442818; /* texte principal sur fond clair */
+    --gsb-accent:           #9B592A; /* focus, boutons et texte secondaires, separateurs de tableau */
+    --gsb-bordure:          #BC9558; /* bordures de cadres, champs, separateurs neutres */
+    --gsb-fond-clair:       #FFE7AB; /* en-tetes de tableau, bandeaux, mise en avant legere */
+
+    /* Le fond de page reprend --gsb-fond-clair (role "bandeaux") : aucune
+       couleur hors charte n'est inventee. Les cartes blanches s'en detachent
+       par leur bordure --gsb-bordure, et les en-tetes de tableau en
+       --gsb-fond-clair se lisent sur le blanc des cartes, pas sur le fond. */
+    --gsb-fond-page:        #FFE7AB;
+
+    /* Blanc : neutre de surface, hors charte. */
+    --gsb-surface:          #fff;
+}
+
 * { box-sizing: border-box; }
 
 body {
@@ -13,13 +38,13 @@ body {
     font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
     font-size: 14px;
     line-height: 1.5;
-    color: #23303a;
-    background: #eef2f5;
+    color: var(--gsb-texte);
+    background: var(--gsb-fond-page);
 }
 
 /* ------------------------------------------------------------------ entête */
 
-#page { background: #fff; border-bottom: 3px solid #0b5c8f; }
+#page { background: var(--gsb-surface); border-bottom: 3px solid var(--gsb-principale); }
 
 #entete {
     display: flex;
@@ -36,7 +61,7 @@ body {
     margin: 0;
     font-size: 1.5em;
     font-weight: 600;
-    color: #0b5c8f;
+    color: var(--gsb-principale);
 }
 
 /* -------------------------------------------------------------- menu gauche */
@@ -46,8 +71,8 @@ body {
     width: 230px;
     margin: 1.5em 0 1.5em 1.5em;
     padding: 1em;
-    background: #fff;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 6px;
 }
 
@@ -56,8 +81,8 @@ body {
     padding-bottom: .75em;
     font-size: 1em;
     font-weight: 600;
-    color: #0b5c8f;
-    border-bottom: 1px solid #e3eaef;
+    color: var(--gsb-principale);
+    border-bottom: 1px solid var(--gsb-bordure);
 }
 
 #menuList { margin: 0; padding: 0; list-style: none; }
@@ -67,12 +92,12 @@ body {
 .smenu a {
     display: block;
     padding: .5em .75em;
-    color: #23303a;
+    color: var(--gsb-texte);
     text-decoration: none;
     border-radius: 4px;
 }
 
-.smenu a:hover, .smenu a:focus { background: #0b5c8f; color: #fff; }
+.smenu a:hover, .smenu a:focus { background: var(--gsb-principale); color: var(--gsb-surface); }
 
 /* ----------------------------------------------------------------- contenu */
 
@@ -80,14 +105,14 @@ body {
     overflow: hidden;
     margin: 1.5em 1.5em 1.5em 270px;
     padding: 1.25em 1.5em;
-    background: #fff;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 6px;
 }
 
 #contenu + #contenu { margin-top: -.5em; }
 
-h2 { margin-top: 0; font-size: 1.25em; color: #0b5c8f; }
+h2 { margin-top: 0; font-size: 1.25em; color: var(--gsb-principale); }
 h3 { font-size: 1.05em; }
 
 /* ---------------------------------------------------------------- formulaires */
@@ -102,47 +127,51 @@ input[type="text"], input[type="password"], select {
     padding: .4em .5em;
     font: inherit;
     color: inherit;
-    background: #fff;
-    border: 1px solid #b9c7d2;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
 input[type="text"]:focus, input[type="password"]:focus, select:focus {
-    outline: 2px solid #0b5c8f;
+    outline: 2px solid var(--gsb-accent);
     outline-offset: 1px;
 }
 
 fieldset {
     margin: 0 0 1em;
     padding: 1em 1.25em;
-    border: 1px solid #d3dde5;
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
-legend { padding: 0 .5em; font-weight: 600; color: #0b5c8f; }
+legend { padding: 0 .5em; font-weight: 600; color: var(--gsb-principale); }
 
 .corpsForm p { margin: .6em 0; }
 
 .piedForm {
     padding-top: .75em;
-    border-top: 1px solid #e3eaef;
+    border-top: 1px solid var(--gsb-bordure);
 }
 
 input[type="submit"], input[type="reset"] {
     padding: .5em 1.25em;
     font: inherit;
     font-weight: 600;
-    color: #fff;
-    background: #0b5c8f;
+    color: var(--gsb-surface);
+    background: var(--gsb-principale);
     border: 0;
     border-radius: 4px;
     cursor: pointer;
 }
 
-input[type="reset"] { color: #23303a; background: #dfe7ed; }
+input[type="reset"] {
+    color: var(--gsb-accent);
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
+}
 
-input[type="submit"]:hover { background: #08476e; }
-input[type="reset"]:hover  { background: #ccd8e1; }
+input[type="submit"]:hover { background: var(--gsb-principale-hover); }
+input[type="reset"]:hover  { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
 
 /* -------------------------------------------------------------------- tables */
 
@@ -156,16 +185,16 @@ input[type="reset"]:hover  { background: #ccd8e1; }
     padding: .5em 0;
     font-weight: 600;
     text-align: left;
-    color: #0b5c8f;
+    color: var(--gsb-principale);
 }
 
 .listeLegere th, .listeLegere td {
     padding: .5em .75em;
     text-align: left;
-    border-bottom: 1px solid #e3eaef;
+    border-bottom: 1px solid var(--gsb-accent);
 }
 
-.listeLegere th { background: #f4f7f9; font-weight: 600; }
+.listeLegere th { background: var(--gsb-fond-clair); font-weight: 600; }
 
 .listeLegere td.qteForfait, .listeLegere th.montant, .listeLegere td:nth-child(3) {
     text-align: right;
@@ -177,8 +206,8 @@ input[type="reset"]:hover  { background: #ccd8e1; }
 
 .encadre {
     padding: .25em 1em 1em;
-    background: #f7fafc;
-    border: 1px solid #d3dde5;
+    background: var(--gsb-fond-clair);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 
@@ -187,8 +216,283 @@ input[type="reset"]:hover  { background: #ccd8e1; }
 .erreur ul {
     margin: 0 0 1em;
     padding: .75em 1em .75em 2.25em;
-    color: #8a1c1c;
+    color: #B3261E;
     background: #fdecec;
     border: 1px solid #f3c2c2;
     border-radius: 4px;
 }
+
+/* ------------------------------------------------- légende sous un tableau */
+
+.legendeTableau {
+    margin: .5em 0 0;
+    font-size: .85em;
+    color: var(--gsb-accent);
+}
+
+/* ------------------------------------------------------- justificatifs */
+
+.listeLegere .justificatif { width: 16em; }
+
+.formJustificatif {
+    margin: .35em 0 0;
+}
+
+.formJustificatif input[type="file"] {
+    max-width: 11em;
+    font-size: .8em;
+}
+
+/* ------------------------------------------- partie comptable (phase 5) */
+/* Ces règles proviennent de maquette/maquette.css, validée par le client. */
+
+.etat {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    border-radius: 999px;
+}
+
+.etatCloturee { color: #5c4310; background: #fdf3d8; }
+.etatValidee  { color: #14562c; background: #ddf3e4; }
+
+.confirmation {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #14562c;
+    background: #ddf3e4;
+    border: 1px solid #a8d9ba;
+    border-radius: 4px;
+}
+
+.boutonSecondaire {
+    display: inline-block;
+    padding: .5em 1.25em;
+    font-weight: 600;
+    color: var(--gsb-accent);
+    text-decoration: none;
+    background: var(--gsb-surface);
+    border: 1px solid var(--gsb-bordure);
+    border-radius: 4px;
+}
+.boutonSecondaire:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
+
+/* Bouton d'accès à une fiche depuis le récapitulatif : plus compact que
+   .boutonSecondaire, car une même ligne peut en porter plusieurs (un par
+   mois restant à valider). */
+.lienFiche {
+    padding: .25em .7em;
+    font-size: .9em;
+    margin: .1em .25em .1em 0;
+}
+
+input[type="submit"].boutonRefus {
+    padding: .3em .8em;
+    font-size: .9em;
+    font-weight: 600;
+    color: #B3261E;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+}
+input[type="submit"].boutonRefus:hover { background: #f8dcdc; }
+
+/* Le formulaire de refus tient dans une cellule de tableau. */
+.listeLegere td form { display: inline; margin: 0; }
+
+.listeLegere tfoot td {
+    font-weight: 700;
+    background: var(--gsb-fond-clair);
+    border-top: 2px solid var(--gsb-principale);
+}
+
+.nombre { text-align: right; }
+
+.listeLegere td input[type="text"] { width: 5em; text-align: right; }
+
+/* ------------------------------------------- administration (phase 8) */
+/* Ces règles proviennent de maquette/maquette.css, validée par le client. */
+
+/* ------------------------------------------------------- barre de filtres */
+
+.filtres {
+    margin: 0 0 1.25em;
+    padding: .9em 1.1em;
+    background: var(--gsb-fond-clair);
+    border: 1px solid var(--gsb-bordure);
+    border-radius: 6px;
+}
+
+/* Les filtres tiennent sur une ligne et passent à la ligne si l'écran est
+   étroit, sans media query : le navigateur décide tout seul. */
+.filtres .ligneFiltres {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .75em 1.25em;
+    align-items: flex-end;
+    margin: 0;
+}
+
+.filtres .champFiltre { display: flex; flex-direction: column; gap: .2em; }
+
+/* Les libellés des filtres ne sont pas ceux d'un formulaire de saisie : la
+   règle globale leur impose 200px de large, ce qui casserait l'alignement. */
+.filtres .champFiltre label {
+    min-width: 0;
+    font-size: .85em;
+    color: var(--gsb-principale);
+}
+
+/* ----------------------------------------------------- badges rôle et état */
+
+.badgeRole, .badgeEtatCompte {
+    display: inline-block;
+    padding: .15em .7em;
+    font-size: .85em;
+    font-weight: 600;
+    white-space: nowrap;
+    border-radius: 999px;
+}
+
+.roleVisiteur      { color: #1c4966; background: #dcecf7; }
+.roleComptable     { color: #5c4310; background: #fdf3d8; }
+.roleAdministrateur{ color: #4a1d5c; background: #ecdcf7; }
+
+.compteActif     { color: #14562c; background: #ddf3e4; }
+.compteDesactive { color: #6b6b6b; background: #e8e8e8; }
+
+/* Une ligne de compte désactivé doit se distinguer au premier coup d'œil,
+   sans reposer sur la seule couleur du badge. */
+.ligneDesactivee td:not(:last-child) { opacity: .55; }
+
+/* --------------------------------------------------- actions d'une ligne */
+
+.actionsCompte {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .3em;
+    align-items: center;
+}
+
+.lienAction {
+    padding: .2em .6em;
+    font-size: .85em;
+    white-space: nowrap;
+}
+
+/* Action indisponible : affichée mais inerte, pour que le comptable comprenne
+   qu'elle existe et pourquoi elle ne s'applique pas ici. */
+.actionInerte {
+    padding: .2em .6em;
+    font-size: .85em;
+    font-style: italic;
+    color: #8a8a8a;
+    white-space: nowrap;
+}
+
+/* ------------------------------------------------------------ pagination */
+
+.pagination {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .35em;
+    align-items: center;
+    margin: 1.25em 0 0;
+    padding-top: .9em;
+    border-top: 1px solid var(--gsb-bordure);
+}
+
+.pagination a, .pagination span {
+    padding: .3em .7em;
+    font-size: .9em;
+    text-decoration: none;
+    border-radius: 4px;
+}
+
+.pagination a { color: var(--gsb-accent); border: 1px solid var(--gsb-bordure); }
+.pagination a:hover { color: var(--gsb-principale-hover); border-color: var(--gsb-principale-hover); }
+.pagination .pageCourante { color: var(--gsb-surface); background: var(--gsb-principale); font-weight: 600; }
+.pagination .inactif { color: #a8a8a8; border: 1px solid #e0e0e0; }
+.pagination .compteur { margin-left: auto; font-size: .85em; color: var(--gsb-accent); }
+
+/* ----------------------------------------- dialogue de confirmation, refus */
+
+/* Pas de fenêtre modale en JavaScript : la confirmation est une PAGE, donc
+   elle survit au rechargement, se partage par son URL et fonctionne sans JS.
+   Le contrôle côté serveur est de toute façon refait à la validation. */
+.dialogue {
+    max-width: 44em;
+    margin: 0 0 1em;
+    padding: 1.1em 1.3em;
+    background: var(--gsb-surface);
+    border: 2px solid var(--gsb-principale);
+    border-radius: 6px;
+}
+
+.dialogue h3 { margin-top: 0; color: var(--gsb-principale); }
+.dialogue ul { margin: .5em 0; padding-left: 1.4em; }
+.dialogue .piedDialogue {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6em;
+    align-items: center;
+    margin-top: 1.2em;
+    padding-top: .9em;
+    border-top: 1px solid var(--gsb-bordure);
+}
+
+.dialogueRefus { border-color: #B3261E; }
+.dialogueRefus h3 { color: #B3261E; }
+
+.blocRefus {
+    margin: 0 0 1em;
+    padding: .75em 1em;
+    color: #B3261E;
+    background: #fdecec;
+    border: 1px solid #f3c2c2;
+    border-radius: 4px;
+}
+
+.boutonDanger {
+    color: var(--gsb-surface);
+    background: #B3261E;
+    border: 1px solid #B3261E;
+}
+.boutonDanger:hover { background: #8f1e17; border-color: #8f1e17; }
+
+/* ------------------------------------------- mot de passe temporaire */
+
+/* Affiché une seule fois : il doit être lisible caractère par caractère, donc
+   en police à largeur fixe, et distinguer sans ambiguïté 0/O et 1/l/I. */
+.motDePasseTemporaire {
+    display: inline-block;
+    margin: .4em 0;
+    padding: .5em .9em;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 1.3em;
+    font-weight: 700;
+    letter-spacing: .08em;
+    color: var(--gsb-principale);
+    background: var(--gsb-fond-clair);
+    border: 1px dashed var(--gsb-principale);
+    border-radius: 4px;
+}
+
+/* --------------------------------------------------------------- divers */
+
+.champObligatoire { color: #B3261E; }
+
+.aideChamp {
+    display: block;
+    margin-left: 200px;
+    font-size: .82em;
+    color: var(--gsb-accent);
+}
+
+.lectureSeule {
+    color: #6b6b6b;
+    background: #f0f0f0;
+}
+
+.journal td { font-size: .9em; }
+.journal .horodatage { white-space: nowrap; font-family: "SF Mono", Menlo, Consolas, monospace; }

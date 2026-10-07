@@ -1,0 +1,120 @@
+{# ---------------------------------------------------------------------------
+   Fiche de remboursement, reproduction de l'annexe 1 du cahier des charges.
+
+   Ce gabarit n'est JAMAIS affiché dans le navigateur : il est rendu en HTML
+   puis transformé en PDF par dompdf. D'où deux contraintes :
+   - dompdf ne comprend qu'un sous-ensemble de CSS. On reste sur des tableaux
+     et des propriétés simples ; pas de flex, pas de grid.
+   - le style est écrit ici, en ligne, et non dans styles.css : la feuille de
+     style du site est faite pour un écran, pas pour une page A4, et dompdf ne
+     va de toute façon pas la chercher.
+   --------------------------------------------------------------------------- #}
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+    @page { margin: 20mm 18mm; }
+    body { font-family: DejaVu Serif, serif; font-size: 10pt; color: #000; }
+    .logo { text-align: center; margin-bottom: 6mm; }
+    .logo img { height: 18mm; }
+    h1 {
+        font-size: 13pt; text-align: center; letter-spacing: .5pt;
+        color: #711D1B; margin: 0 0 6mm;
+        border-top: 2px solid #711D1B; border-bottom: 2px solid #711D1B;
+        padding: 2mm 0;
+    }
+    .identite td { padding: 1mm 0; }
+    .identite .libelle { width: 30mm; }
+    .identite .valeur { width: 40mm; }
+    table.frais {
+        width: 100%; border-collapse: collapse; margin-top: 6mm;
+    }
+    table.frais th, table.frais td {
+        border: 1px solid #9B592A; padding: 1.5mm 2mm;
+    }
+    table.frais th {
+        font-style: italic; color: #711D1B; background: #FFE7AB; text-align: center;
+    }
+    .titreSection {
+        font-style: italic; color: #711D1B; text-align: center;
+        border-left: 1px solid #9B592A; border-right: 1px solid #9B592A;
+        border-bottom: 1px solid #9B592A; padding: 2mm;
+    }
+    .nombre { text-align: right; }
+    .vide { border: none; padding: 2mm; }
+    table.total { width: 60%; margin: 6mm 0 0 40%; border-collapse: collapse; }
+    table.total td { border: 1px solid #9B592A; padding: 2mm; }
+    .signature { margin-top: 18mm; margin-left: 55%; }
+</style>
+</head>
+<body>
+
+{% if logo is not empty %}
+    <div class="logo"><img src="{{ logo }}" alt="gsb" /></div>
+{% endif %}
+
+<h1>REMBOURSEMENT DE FRAIS ENGAGES</h1>
+
+<table class="identite">
+    <tr>
+        <td class="libelle">Visiteur</td>
+        <td class="valeur">{{ visiteur.id }}</td>
+        <td>{{ visiteur.prenom }} {{ visiteur.nom }}</td>
+    </tr>
+    <tr>
+        <td class="libelle">Mois</td>
+        <td colspan="2">{{ moislettres }}</td>
+    </tr>
+</table>
+
+<table class="frais">
+    <tr>
+        <th style="width:40%">Frais Forfaitaires</th>
+        <th style="width:15%">Quantité</th>
+        <th style="width:25%">Montant unitaire</th>
+        <th style="width:20%">Total</th>
+    </tr>
+    {% for unFrais in lesfraisforfait %}
+    <tr>
+        <td>{{ unFrais.libelle }}</td>
+        <td class="nombre">{{ unFrais.quantite }}</td>
+        <td class="nombre">{{ unFrais.montantunitaire }}</td>
+        <td class="nombre">{{ unFrais.montant|number_format(2, '.', '') }}</td>
+    </tr>
+    {% endfor %}
+    <tr><td colspan="4" class="vide">&nbsp;</td></tr>
+    <tr><td colspan="4" class="titreSection">Autres Frais</td></tr>
+    {% if lesfraishorsforfait is empty %}
+    <tr>
+        <td colspan="4" style="text-align:center">Aucun frais hors forfait ce mois.</td>
+    </tr>
+    {% else %}
+    <tr>
+        <th>Date</th>
+        <th colspan="2">Libellé</th>
+        <th>Montant</th>
+    </tr>
+        {% for unFrais in lesfraishorsforfait %}
+    <tr>
+        <td style="text-align:center">{{ unFrais.date }}</td>
+        <td colspan="2">{{ unFrais.libelle }}</td>
+        <td class="nombre">{{ unFrais.montant }}</td>
+    </tr>
+        {% endfor %}
+    {% endif %}
+</table>
+
+<table class="total">
+    <tr>
+        <td>TOTAL {{ nummois }}/{{ numannee }}</td>
+        <td class="nombre">{{ total|number_format(2, '.', '') }}</td>
+    </tr>
+</table>
+
+<div class="signature">
+    Fait à Paris, le {{ datedujour }}<br />
+    Vu l'agent comptable
+</div>
+
+</body>
+</html>

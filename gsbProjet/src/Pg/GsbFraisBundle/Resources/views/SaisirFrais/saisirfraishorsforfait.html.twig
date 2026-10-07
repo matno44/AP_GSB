@@ -1,11 +1,13 @@
 <div id="contenu">
 <table class="listeLegere">
   	   <caption>Descriptif des éléments hors forfait
+       &ndash; {{ nbjustificatifs }} justificatif(s) pris en compte dans le remboursement &ndash;
        </caption>
              <tr>
                 <th class="date">Date</th>
 				<th class="libelle">Libellé</th>  
                 <th class="montant">Montant</th>  
+                <th class="justificatif">Justificatif</th>
                 <th class="action">&nbsp;</th>              
              </tr>
  	{% for unfrais in  lesfraishorsforfait %}
@@ -17,13 +19,42 @@
                 <td>{{date}}</td>
                 <td>{{libelle}}</td>
                 <td>{{montant}}</td>
-                <td><a href="{{path('pg_gsb_frais_supprimerfraishorsforfait',{'id' : idfrais})}}" 
-				onclick="return confirm('Voulez-vous vraiment supprimer ce frais?');">Supprimer ce frais</a></td>
+                {# Un justificatif par ligne : soit on le consulte et on peut le
+                   remplacer, soit on en dépose un. Le formulaire vise la ligne
+                   par son identifiant, et le contrôleur vérifie côté serveur
+                   qu'elle appartient bien au visiteur connecté. #}
+                <td>
+                    {% if unfrais.nomFichier %}
+                        <a href="{{path('pg_gsb_frais_consulterjustificatif',{'id' : idfrais})}}" target="_blank">{{ unfrais.nomOriginal }}</a>
+                    {% else %}
+                        <em>aucun</em>
+                    {% endif %}
+                    <form class="formJustificatif" method="post" enctype="multipart/form-data"
+                          action="{{path('pg_gsb_frais_joindrejustificatif',{'id' : idfrais})}}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('justificatif') }}" />
+                        <input type="file" name="justificatif" accept=".pdf,.jpg,.jpeg,.png" required />
+                        <input type="submit" value="{% if unfrais.nomFichier %}Remplacer{% else %}Envoyer{% endif %}" />
+                    </form>
+                </td>
+                {# Un formulaire POST, et non plus un lien : une suppression ne
+                   doit jamais être déclenchable par un simple chargement
+                   d'adresse — une balise <img> suffirait. Le jeton complète
+                   la protection. #}
+                <td>
+                    <form method="post" action="{{path('pg_gsb_frais_supprimerfraishorsforfait',{'id' : idfrais})}}"
+                          onsubmit="return confirm('Voulez-vous vraiment supprimer ce frais ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('suppression_frais') }}" />
+                        <input type="submit" class="boutonRefus" value="Supprimer ce frais" />
+                    </form>
+                </td>
              </tr>
 	{%endfor%}  
                                           
     </table>
-      <form action="{{path('pg_gsb_frais_validerfraishorsforfais')}}" method="post">
+      {# enctype indispensable : sans lui le navigateur n'envoie que le NOM du
+         fichier, pas son contenu, et $request->files reste vide. #}
+      <form action="{{path('pg_gsb_frais_validerfraishorsforfais')}}" method="post" enctype="multipart/form-data">
+      <input type="hidden" name="_token" value="{{ csrf_token('frais_hors_forfait') }}" />
       <div class="corpsForm">
          
           <fieldset>
@@ -40,6 +71,15 @@
             <p>
               <label for="txtMontantHF">Montant : </label>
               <input type="text" id="txtMontantHF" name="montant" size="10" maxlength="10" value="" />
+            </p>
+            <p>
+              <label for="fileJustificatif">Justificatif (facultatif) : </label>
+              <input type="file" id="fileJustificatif" name="justificatif" accept=".pdf,.jpg,.jpeg,.png" />
+            </p>
+            <p class="legendeTableau">
+              Formats acceptés : {{ extensions }}. Taille maximale : {{ taillemax }} Mo.
+              Un frais hors forfait n'est remboursé que sur présentation de la facture ;
+              vous pouvez la joindre plus tard, jusqu'à la clôture du mois.
             </p>
           </fieldset>
       </div>

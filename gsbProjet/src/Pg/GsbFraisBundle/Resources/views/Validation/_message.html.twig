@@ -1,0 +1,9 @@
+{# Bandeau de message, vert pour une confirmation, rouge pour une erreur.
+   Reçoit un tableau array(type, texte) ou null. #}
+{% if message is not empty %}
+    {% if message[0] == 'confirmation' %}
+        <div class="confirmation">{{ message[1] }}</div>
+    {% else %}
+        <div class="erreur"><ul><li>{{ message[1] }}</li></ul></div>
+    {% endif %}
+{% endif %}

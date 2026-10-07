@@ -3,8 +3,33 @@ parameters:
     db.name: dbname=bd_gsb
     db.user: root
     db.mdp:
+    # Dossier de stockage des justificatifs. %kernel.root_dir% vaut app/ :
+    # le dossier est donc HORS de web/ et aucun fichier n'est servi
+    # directement par le serveur web.
+    justificatifs.dossier: "%kernel.root_dir%/justificatifs"
+    # 2 Mo. Ne pas dépasser upload_max_filesize de php.ini (2M par défaut),
+    # sinon PHP écarte le fichier avant que l'application le voie.
+    justificatifs.taille_max: 2097152
+    # Logo imprimé en tête des fiches PDF. Chemin sur le disque et non URL :
+    # dompdf tourne côté serveur, sans accès réseau (isRemoteEnabled à false).
+    fiche_pdf.logo: "%kernel.root_dir%/../src/Pg/GsbFraisBundle/Resources/public/images/logo.svg"
 services:
     pg_gsb_frais.pdo:
         class: Pg\GsbFraisBundle\services\PdoGsb
         arguments: [%db.host%,%db.name%,%db.user%,%db.mdp%]
-
+    pg_gsb_frais.justificatifs:
+        class: Pg\GsbFraisBundle\services\StockageJustificatifs
+        arguments: [%justificatifs.dossier%,%justificatifs.taille_max%]
+    pg_gsb_frais.fiche_pdf:
+        class: Pg\GsbFraisBundle\services\GenerateurFichePdf
+        arguments: ['@pg_gsb_frais.pdo', '@templating', %fiche_pdf.logo%]
+    # Contrôle du compte à chaque requête (phase 8). Écouteur et non appel dans
+    # chaque contrôleur : le passage devient obligatoire, y compris pour un
+    # contrôleur écrit plus tard. Priorité négative pour passer APRÈS le routeur,
+    # sans quoi _route ne serait pas encore renseigné et la liste blanche des
+    # routes autorisées ne pourrait pas fonctionner.
+    pg_gsb_frais.garde_compte:
+        class: Pg\GsbFraisBundle\EventListener\GardeCompteListener
+        arguments: ['@service_container']
+        tags:
+            - { name: kernel.event_listener, event: kernel.request, method: onKernelRequest, priority: -10 }

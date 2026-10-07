@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Aucune fiche pour ce visiteur ce mois</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Comptable : bonjour Marie Valette</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Valider les fiches de frais</a></li>
+    <li class="smenu"><a href="02-choix-visiteur-mois.html">Imprimer les fiches du mois</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Valider les fiches de frais</h2>
+
+  <div class="erreur">
+    <ul>
+      <li>Pas de fiche de frais pour ce visiteur ce mois</li>
+    </ul>
+  </div>
+
+  <p>Choisissez le visiteur et le mois à traiter.</p>
+
+  <form>
+    <div class="corpsForm">
+      <fieldset>
+        <legend>Fiche à valider</legend>
+        <p>
+          <label for="lstVisiteur">Visiteur :</label>
+          <select id="lstVisiteur" name="lstVisiteur">
+            <option>Andre David</option>
+            <option>Bedos Christian</option>
+            <option selected>Bentot Pascal</option>
+            <option>Bioret Luc</option>
+            <option>Bunisset Francine</option>
+            <option>Cacheux Bernard</option>
+            <option>Charoze Catherine</option>
+            <option>Clepkens Christophe</option>
+            <option>Daburon François</option>
+          </select>
+        </p>
+        <p>
+          <label for="lstMois">Mois :</label>
+          <select id="lstMois" name="lstMois">
+            <option selected>08/2026</option>
+            <option>07/2026</option>
+            <option>06/2026</option>
+          </select>
+        </p>
+      </fieldset>
+    </div>
+    <div class="piedForm">
+      <p>
+        <a class="bouton" href="03-detail-fiche.html">Valider</a>
+      </p>
+    </div>
+  </form>
+</div>
+
+<div class="annotation">
+  <strong>Exception 4-a du cas d'utilisation :</strong> « Aucune fiche de frais
+  n'existe, le système affiche "Pas de fiche de frais pour ce visiteur ce mois".
+  Retour au 2. »
+  <ul>
+    <li>
+      <strong>Le message est repris mot pour mot</strong> du cahier des charges.
+    </li>
+    <li>
+      <strong>« Retour au 2 » est interprété comme un retour à l'écran de
+      choix</strong>, et non comme une page d'erreur séparée : le comptable
+      retrouve immédiatement les deux listes pour corriger sa sélection, sans
+      avoir à cliquer sur « Retour ».
+    </li>
+    <li>
+      <strong>La sélection est conservée</strong> (Bentot Pascal, 08/2026) :
+      le comptable voit ce qu'il a demandé et n'a qu'un seul des deux champs à
+      changer.
+    </li>
+    <li>
+      <strong>Le message rouge reprend la présentation des erreurs déjà
+      utilisée</strong> côté visiteur (classe <em>erreur</em> de la feuille de
+      style existante), pour ne pas introduire un troisième style de message.
+    </li>
+  </ul>
+  <div class="aValider">
+    <strong>À valider :</strong> ce cas ne devrait jamais se produire si les
+    listes déroulantes ne proposent que des couples visiteur/mois existants.
+    <em>Préférez-vous des listes filtrées (le cas n'arrive plus), ou des listes
+    complètes avec ce message (le comptable constate qu'un visiteur n'a rien
+    saisi) ?</em> La seconde option me paraît plus utile : elle rend visible
+    l'absence de saisie.
+  </div>
+</div>
+</body>
+</html>

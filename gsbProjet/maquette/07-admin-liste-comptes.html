@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Maquette — Gestion des comptes</title>
+<link href="styles.css" rel="stylesheet" type="text/css" />
+<link href="maquette.css" rel="stylesheet" type="text/css" />
+</head>
+<body>
+<div class="bandeauMaquette">
+    MAQUETTE HTML — écran non fonctionnel, données fictives. <a href="index.html">Retour au sommaire</a>
+</div>
+<div id="page">
+  <div id="entete">
+    <img src="logo.svg" id="logoGSB" alt="Laboratoire Galaxy-Swiss Bourdin" />
+    <h1>Suivi du remboursement des frais</h1>
+  </div>
+</div>
+
+<div id="menuGauche">
+  <div id="infosUtil">
+    <h3>Administrateur : bonjour Hélène Dubois</h3>
+  </div>
+  <ul id="menuList">
+    <li class="smenu"><a href="07-admin-liste-comptes.html">Gérer les comptes</a></li>
+    <li class="smenu"><a href="13-admin-journal.html">Journal d'administration</a></li>
+    <li class="smenu"><a href="01-connexion.html">Déconnexion</a></li>
+  </ul>
+</div>
+
+<div id="contenu">
+  <h2>Gestion des comptes</h2>
+
+  <form class="filtres">
+    <div class="ligneFiltres">
+      <span class="champFiltre">
+        <label for="recherche">Nom ou matricule</label>
+        <input type="text" id="recherche" name="recherche" size="22" value="" />
+      </span>
+      <span class="champFiltre">
+        <label for="filtreRole">Rôle</label>
+        <select id="filtreRole" name="role">
+          <option selected>Tous les rôles</option>
+          <option>Visiteur médical</option>
+          <option>Comptable</option>
+          <option>Administrateur</option>
+        </select>
+      </span>
+      <span class="champFiltre">
+        <label for="filtreEtat">État</label>
+        <select id="filtreEtat" name="etat">
+          <option selected>Tous les états</option>
+          <option>Actif</option>
+          <option>Désactivé</option>
+        </select>
+      </span>
+      <span class="champFiltre">
+        <label for="parPage">Par page</label>
+        <select id="parPage" name="parPage">
+          <option selected>25</option>
+          <option>50</option>
+          <option>100</option>
+        </select>
+      </span>
+      <span class="champFiltre">
+        <input type="submit" value="Filtrer" />
+      </span>
+      <span class="champFiltre">
+        <a class="boutonSecondaire lienAction" href="07-admin-liste-comptes.html">Réinitialiser</a>
+      </span>
+    </div>
+  </form>
+
+  <p>
+    <a class="bouton" href="08-admin-creer-compte.html">Créer un compte</a>
+  </p>
+
+  <table class="listeLegere">
+    <caption>211 comptes — 209 visiteurs, 1 comptable, 1 administrateur</caption>
+    <tr>
+      <th>Matricule</th>
+      <th>Nom et prénom</th>
+      <th>Login</th>
+      <th>Rôle</th>
+      <th>État</th>
+      <th>Actions</th>
+    </tr>
+
+    <tr>
+      <td>a17</td>
+      <td>Andre David</td>
+      <td>dandre</td>
+      <td><span class="badgeRole roleVisiteur">Visiteur</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="boutonSecondaire lienAction" href="10-admin-confirmer-desactivation.html">Désactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="11-admin-suppression-refusee.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+
+    <tr>
+      <td>a55</td>
+      <td>Bedos Christian</td>
+      <td>cbedos</td>
+      <td><span class="badgeRole roleVisiteur">Visiteur</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="boutonSecondaire lienAction" href="10-admin-confirmer-desactivation.html">Désactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="11-admin-suppression-refusee.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+
+    <tr class="ligneDesactivee">
+      <td>b13</td>
+      <td>Bentot Pascal</td>
+      <td>pbentot</td>
+      <td><span class="badgeRole roleVisiteur">Visiteur</span></td>
+      <td><span class="badgeEtatCompte compteDesactive">Désactivé</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="bouton lienAction" href="10-admin-confirmer-desactivation.html">Réactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="11-admin-suppression-refusee.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+
+    <tr>
+      <td>z205</td>
+      <td>Morel Inès</td>
+      <td>imorel</td>
+      <td><span class="badgeRole roleVisiteur">Visiteur</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="boutonSecondaire lienAction" href="10-admin-confirmer-desactivation.html">Désactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="10-admin-confirmer-desactivation.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+
+    <tr>
+      <td>c01</td>
+      <td>Valette Marie</td>
+      <td>mvalette</td>
+      <td><span class="badgeRole roleComptable">Comptable</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="boutonSecondaire lienAction" href="10-admin-confirmer-desactivation.html">Désactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="10-admin-confirmer-desactivation.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+
+    <tr>
+      <td>ad1</td>
+      <td>Dubois Hélène</td>
+      <td>hdubois</td>
+      <td><span class="badgeRole roleAdministrateur">Administrateur</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <span class="actionInerte" title="Un administrateur ne peut pas se désactiver lui-même">votre compte</span>
+        </span>
+      </td>
+    </tr>
+
+    <tr>
+      <td>ad2</td>
+      <td>Faure Julien</td>
+      <td>jfaure</td>
+      <td><span class="badgeRole roleAdministrateur">Administrateur</span></td>
+      <td><span class="badgeEtatCompte compteActif">Actif</span></td>
+      <td>
+        <span class="actionsCompte">
+          <a class="boutonSecondaire lienAction" href="09-admin-modifier-compte.html">Modifier</a>
+          <a class="boutonSecondaire lienAction" href="10-admin-confirmer-desactivation.html">Désactiver</a>
+          <a class="boutonSecondaire lienAction" href="12-admin-mot-de-passe-temporaire.html">Réinit. mot de passe</a>
+          <a class="boutonRefus lienAction" href="10-admin-confirmer-desactivation.html">Supprimer</a>
+        </span>
+      </td>
+    </tr>
+  </table>
+
+  <div class="pagination">
+    <span class="inactif">&laquo; Précédent</span>
+    <span class="pageCourante">1</span>
+    <a href="07-admin-liste-comptes.html">2</a>
+    <a href="07-admin-liste-comptes.html">3</a>
+    <a href="07-admin-liste-comptes.html">4</a>
+    <a href="07-admin-liste-comptes.html">5</a>
+    <a href="07-admin-liste-comptes.html">Suivant &raquo;</a>
+    <span class="compteur">Comptes 1 à 25 sur 211 — page 1 sur 9</span>
+  </div>
+</div>
+
+<div class="annotation">
+  <strong>Comment lire cet écran.</strong>
+  <ul>
+    <li>
+      <strong>Le bouton « Supprimer » n'a pas le même effet selon la ligne.</strong>
+      Pour <em>Andre David</em> et <em>Bentot Pascal</em>, qui ont des fiches de
+      frais, il mène à un <a href="11-admin-suppression-refusee.html">refus
+      expliqué</a>. Pour <em>Morel Inès</em>, embauchée ce mois-ci et qui n'a
+      encore aucune fiche, il mène à une confirmation de suppression réelle.
+      Le contrôle est fait côté serveur avant l'affichage <em>et</em> refait
+      avant l'exécution : l'état peut changer entre les deux.
+    </li>
+    <li>
+      <strong>Ligne « Dubois Hélène » : les actions dangereuses ont disparu.</strong>
+      C'est le compte de l'administrateur connecté. Il ne peut ni se désactiver
+      ni se supprimer lui-même. La mention « votre compte » remplace les boutons
+      plutôt que de les afficher grisés sans explication.
+    </li>
+    <li>
+      <strong>Un compte désactivé reste visible et modifiable</strong> (ligne
+      <em>Bentot Pascal</em>, atténuée), et son bouton devient « Réactiver ».
+      La désactivation n'est jamais un aller simple.
+    </li>
+    <li>
+      <strong>Les filtres et la recherche sont un formulaire, pas du JavaScript.</strong>
+      Le tri et la pagination se font en SQL sur la vue <code>v_compte</code> :
+      l'écran reste utilisable sans JS et chaque état de la liste a sa propre URL.
+    </li>
+  </ul>
+
+  <div class="aValider">
+    <strong>Deux points sur lesquels j'attends ta réponse.</strong>
+    <ul>
+      <li>
+        <strong>Le matricule est généré par l'application et non modifiable.</strong>
+        <em>Tranché.</em> Il n'est plus saisi à la création (écran 08) : le
+        laisser à la main exposait à un doublon sur la clé primaire, y compris
+        entre deux administrateurs travaillant simultanément. Il reste affiché
+        en lecture seule à la modification (écran 09), car c'est la cible de
+        <code>fk_fichefrais_visiteur</code> : le changer obligerait à propager
+        la nouvelle valeur dans <code>fichefrais</code>,
+        <code>lignefraisforfait</code> et <code>lignefraishorsforfait</code>.
+      </li>
+      <li>
+        <strong>Faut-il pouvoir supprimer un comptable ou un administrateur
+        sans confirmation renforcée ?</strong> Aucune clé étrangère ne pointe
+        vers ces deux tables, donc la suppression physique y est
+        <em>toujours</em> techniquement possible — mais elle efface le compte
+        qui a validé des fiches, sans que la base en garde trace. La maquette
+        les traite comme les autres ; dis-moi si tu veux une règle plus stricte.
+      </li>
+    </ul>
+  </div>
+</div>
+</body>
+</html>

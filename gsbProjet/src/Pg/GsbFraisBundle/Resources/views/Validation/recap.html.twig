@@ -1,0 +1,50 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Récapitulatif des fiches par visiteur</h2>
+
+    {# listeLegere : même habillage que les autres tableaux de l'application.
+       Sans cette classe la table s'affichait sans bordures ni en-têtes. #}
+    <table class="listeLegere">
+        <thead>
+            <tr>
+                <th>Visiteur</th>
+                <th class="nombre">En cours</th>
+                <th class="nombre">À valider</th>
+                <th class="nombre">Validées</th>
+                <th>Ouvrir la fiche</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for id, unRecap in recap %}
+                <tr>
+                    <td>{{ unRecap.nom }} {{ unRecap.prenom }}</td>
+                    <td class="nombre">{{ unRecap.nbEnCours }}</td>
+                    <td class="nombre">{{ unRecap.nbAValider }}</td>
+                    <td class="nombre">{{ unRecap.nbValidees }}</td>
+                    <td>
+                        {# Les mois à valider sont mis en avant : c'est le
+                           travail qui attend le comptable. Faute de fiche
+                           clôturée on propose quand même la plus récente, en
+                           lien discret, pour pouvoir la consulter. #}
+                        {% if unRecap.aValider is not empty %}
+                            {% for unMois, unLibelle in unRecap.aValider %}
+                                <a class="boutonSecondaire lienFiche"
+                                   href="{{ path('pg_gsb_frais_validationfiche', {'idVisiteur': id, 'mois': unMois}) }}"
+                                   title="Ouvrir la fiche de {{ unRecap.prenom }} {{ unRecap.nom }} — {{ unLibelle }}">{{ unLibelle }}</a>
+                            {% endfor %}
+                        {% else %}
+                            <a href="{{ path('pg_gsb_frais_validationfiche', {'idVisiteur': id, 'mois': unRecap.dernierMois}) }}"
+                               title="Consulter la dernière fiche de {{ unRecap.prenom }} {{ unRecap.nom }}">{{ unRecap.dernierLibelle }}</a>
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <p><a href="{{ path('pg_gsb_frais_validation') }}">Retour au choix visiteur/mois</a></p>
+</div>
+{% endblock %}
+{% endblock %}

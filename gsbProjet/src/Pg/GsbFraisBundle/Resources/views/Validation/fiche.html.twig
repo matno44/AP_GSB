@@ -1,0 +1,136 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+
+<div id="contenu">
+    <h2>Fiche de frais de {{ levisiteur.prenom }} {{ levisiteur.nom }} &mdash; {{ moislettres }}</h2>
+
+    {% include 'PgGsbFraisBundle:Validation:_message.html.twig' %}
+
+    <div class="encadre">
+        <p>
+            État :
+            <span class="etat {% if lesinfos.idEtat == 'CL' %}etatCloturee{% else %}etatValidee{% endif %}">{{ lesinfos.libEtat }}</span>
+            depuis le {{ datemodif }} &nbsp;&middot;&nbsp;
+            <strong>{{ lesinfos.nbJustificatifs }}</strong> justificatif(s) pris en compte &nbsp;&middot;&nbsp;
+            Matricule : {{ levisiteur.id }}
+            {% if lesinfos.idEtat != 'CL' %}
+                <br />Montant validé : <strong>{{ lesinfos.montantValide }} €</strong>
+            {% endif %}
+        </p>
+    </div>
+
+    {# ÉTAPE 5 : les quantités sont modifiables tant que la fiche est clôturée.
+       Les montants unitaires, eux, ne le sont jamais : ils ont été figés à la
+       saisie et les modifier réécrirait le passé (phase 1). #}
+    <form method="post" action="{{ path('pg_gsb_frais_validationcorriger', {'idVisiteur': levisiteur.id, 'mois': lemois}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('validation_corriger') }}" />
+        <table class="listeLegere">
+            <caption>Frais forfaitisés</caption>
+            <tr>
+                <th>Libellé</th>
+                <th class="montant">Quantité</th>
+                <th class="montant">Montant unitaire</th>
+                <th class="montant">Total</th>
+            </tr>
+            {% for unFrais in lesfraisforfait %}
+                <tr>
+                    <td>{{ unFrais.libelle }}</td>
+                    <td class="nombre">
+                        {% if modifiable %}
+                            <input type="text" name="lesFrais[{{ unFrais.idfrais }}]" value="{{ unFrais.quantite }}" size="5" maxlength="5" />
+                        {% else %}
+                            {{ unFrais.quantite }}
+                        {% endif %}
+                    </td>
+                    <td class="nombre">{{ unFrais.montantunitaire }} &euro;</td>
+                    <td class="nombre">{{ unFrais.montant|number_format(2, '.', ' ') }} &euro;</td>
+                </tr>
+            {% endfor %}
+            <tfoot>
+                <tr>
+                    <td colspan="3">Total des frais forfaitisés</td>
+                    <td class="nombre">{{ totalforfait|number_format(2, '.', ' ') }} &euro;</td>
+                </tr>
+            </tfoot>
+        </table>
+
+        {% if modifiable %}
+        <div class="piedForm">
+            <p><input type="submit" value="Enregistrer les corrections" /></p>
+        </div>
+        {% endif %}
+    </form>
+</div>
+
+<div id="contenu">
+    <table class="listeLegere">
+        <caption>Frais hors forfait &mdash; {{ lesinfos.nbJustificatifs }} justificatif(s) pris en compte dans le remboursement</caption>
+        <tr>
+            <th class="date">Date</th>
+            <th>Libellé</th>
+            <th class="montant">Montant</th>
+            <th class="justificatif">Justificatif</th>
+            {% if modifiable %}<th>&nbsp;</th>{% endif %}
+        </tr>
+        {% for unFrais in lesfraishorsforfait %}
+            <tr>
+                <td>{{ unFrais.date }}</td>
+                <td>{{ unFrais.libelle }}</td>
+                <td class="nombre">{{ unFrais.montant }} &euro;</td>
+                <td>
+                    {% if unFrais.nomFichier %}
+                        <a href="{{ path('pg_gsb_frais_consulterjustificatif', {'id': unFrais.id}) }}" target="_blank">{{ unFrais.nomOriginal }}</a>
+                    {% else %}
+                        <em>aucun</em>
+                    {% endif %}
+                </td>
+                {% if modifiable %}
+                <td>
+                    {# Le refus est une suppression définitive : il passe donc
+                       par un formulaire POST et non par un lien, qu'un simple
+                       chargement de page pourrait déclencher. #}
+                    <form method="post" action="{{ path('pg_gsb_frais_validationrefuser', {'idVisiteur': levisiteur.id, 'mois': lemois, 'id': unFrais.id}) }}"
+                          onsubmit="return confirm('Refuser ce frais le supprimera définitivement, sans conserver de motif. Continuer ?');">
+                        <input type="hidden" name="_token" value="{{ csrf_token('validation_refuser') }}" />
+                        <input type="submit" class="boutonRefus" value="Refuser" />
+                    </form>
+                </td>
+                {% endif %}
+            </tr>
+        {% else %}
+            <tr><td colspan="{% if modifiable %}5{% else %}4{% endif %}">Aucun frais hors forfait ce mois.</td></tr>
+        {% endfor %}
+        <tfoot>
+            <tr>
+                <td colspan="2">Total des frais hors forfait</td>
+                <td class="nombre">{{ totalhorsforfait|number_format(2, '.', ' ') }} &euro;</td>
+                <td colspan="{% if modifiable %}2{% else %}1{% endif %}">&nbsp;</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <div class="encadre">
+        <p>
+            <strong>Total général de la fiche :
+            {{ totalgeneral|number_format(2, '.', ' ') }} &euro;</strong>
+        </p>
+        <p>
+            {% if modifiable %}
+                {# ÉTAPES 8 et 9 : la validation est une action définitive,
+                   donc un POST, avec confirmation. #}
+                <form method="post" action="{{ path('pg_gsb_frais_validationvalider', {'idVisiteur': levisiteur.id, 'mois': lemois}) }}"
+                      onsubmit="return confirm('Valider cette fiche ? Elle ne sera plus modifiable.');"
+                      style="display:inline">
+                    <input type="hidden" name="_token" value="{{ csrf_token('validation_valider') }}" />
+                    <input type="submit" value="Valider la fiche" />
+                </form>
+            {% endif %}
+            <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_validation') }}">Revenir au choix du visiteur</a>
+            <a class="boutonSecondaire" href="{{ path('pg_gsb_frais_fichepdf', {'idVisiteur': levisiteur.id, 'mois': lemois}) }}" target="_blank">Imprimer cette fiche (PDF)</a>
+        </p>
+    </div>
+</div>
+
+{% endblock %}
+{% endblock %}

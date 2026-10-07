@@ -3,16 +3,18 @@ namespace Pg\GsbFraisBundle\Controller;
 
 require_once __DIR__.'/include/fct.inc.php';
 
-use Symfony\Bundle\FrameworkBundle\Controller\Controller;
 use Symfony\Component\HttpFoundation\Request;
 
-class ListeFraisController extends Controller
+class ListeFraisController extends ControleurGsb
 {
     public function indexAction(Request $request)
     {
         $session = $request->getSession();
         if (!estConnecte($session)) {
             return $this->redirect($this->generateUrl('pg_gsb_frais_home'));
+        }
+        if (!estVisiteur($session)) {
+            return $this->refuserNonVisiteur();
         }
         $idVisiteur = $session->get('id');
         $pdo = $this->get('pg_gsb_frais.pdo');
