@@ -19,7 +19,7 @@ class PdoGsb
          * Le barème, lui, est en base (table typevehicule) : c'est bien la valeur
          * qui n'est pas codée en dur. Reste à savoir QUELLE ligne de frais est la
          * ligne kilométrique ; cette information est structurelle (elle ne change
-         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, à
+         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, �
          * un seul endroit, plutôt que recopiée dans chaque requête.
          */
         const ID_FRAIS_KILOMETRIQUE = 'KM';
@@ -77,6 +77,7 @@ class PdoGsb
                 $stmt->execute();
                 return $this->verifierAuthentification($stmt->fetch(), $mdp);
         }
+
         /**
          * Retourne sous forme d'un tableau associatif toutes les lignes de frais hors forfait
          * concernées par les deux arguments
@@ -715,15 +716,6 @@ class PdoGsb
                 $stmt->execute();
         }
 
-        /**
-         * Recalcule le nombre de justificatifs d'une fiche désignée par visiteur et mois
-         *
-         * Même principe que ci-dessus, mais utilisable quand la ligne de frais
-         * n'existe plus -cas de la suppression d'un frais hors forfait.
-         *
-         * @param $idVisiteur
-         * @param $mois sous la forme aaaamm
-         */
         public function recalculerNbJustificatifs($idVisiteur, $mois)
         {
                 $req  = 'update fichefrais
@@ -739,22 +731,6 @@ class PdoGsb
                 $stmt->execute();
         }
 
-        /*
-         * =========================================================================
-         * Impression des fiches de frais (phase 3)
-         * =========================================================================
-         */
-
-        /**
-         * Retourne l'identité d'un visiteur à partir de son identifiant
-         *
-         * getInfosVisiteur() exige login et mot de passe : elle sert à authentifier.
-         * Ici on a besoin de l'identité d'un visiteur QUELCONQUE, pour imprimer sa
-         * fiche - le comptable imprime celles des autres.
-         *
-         * @param $idVisiteur
-         * @return id, nom, prenom, ou false si l'identifiant est inconnu
-         */
         public function getVisiteur($idVisiteur)
         {
                 $req  = 'select visiteur.id as id, visiteur.nom as nom,
@@ -765,21 +741,6 @@ class PdoGsb
                 return $stmt->fetch();
         }
 
-        /**
-         * Retourne les fiches d'un mois donné se trouvant dans un état donné
-         *
-         * Sert à la génération de masse : le comptable imprime en un clic toutes les
-         * fiches CLÔTURÉES du mois précédent.
-         *
-         * La requête ne renvoie QUE les identifiants et l'identité, pas le détail
-         * des frais. C'est volontaire : le détail de chaque fiche est lu au moment
-         * où on la traite, de sorte que la mémoire ne contienne jamais toutes les
-         * fiches à la fois - voir COMPTE-RENDU.md, volumétrie de la phase 3.
-         *
-         * @param $mois sous la forme aaaamm
-         * @param $etat l'identifiant d'état, par exemple 'CL'
-         * @return un tableau associatif : idVisiteur, nom, prenom
-         */
         public function getLesFichesDuMois($mois, $etat)
         {
                 $req  = 'select fichefrais.idVisiteur as idVisiteur,
@@ -794,41 +755,9 @@ class PdoGsb
                 return $stmt->fetchAll();
         }
 
-        /*
-         * =========================================================================
-         * Génération de données de test (phase 3)
-         * =========================================================================
-         */
-
-        /**
-         * Crée des visiteurs de test et leur fiche de frais pour un mois donné
-         *
-         * Sert uniquement aux essais de volumétrie. Les visiteurs créés portent un
-         * identifiant préfixé, ce qui permet de les retrouver et de les retirer sans
-         * risque de toucher aux données réelles.
-         *
-         * PERFORMANCE : les quatre requêtes sont préparées UNE SEULE FOIS, avant la
-         * boucle, puis exécutées à chaque tour. Préparer une requête coûte une
-         * analyse syntaxique côté serveur ; la préparer dans la boucle multiplierait
-         * ce coût par le nombre de visiteurs.
-         *
-         * Les lignes de frais forfaitisé sont insérées par une requête à quatre
-         * jeux de valeurs, et non par quatre requêtes.
-         *
-         * Le tout est encadré par une transaction : en cas d'échec au milieu, la
-         * base ne conserve pas la moitié d'un jeu de test.
-         *
-         * @param $prefixe préfixe des identifiants créés, par exemple 'z'
-         * @param $nbVisiteurs nombre de visiteurs à créer
-         * @param $mois sous la forme aaaamm
-         * @param $etat état des fiches créées
-         * @param $lesNoms, $lesPrenoms, $lesLibelles vocabulaire de tirage
-         * @return le nombre de visiteurs réellement créés
-         */
         public function genererVisiteursDeTest($prefixe, $nbVisiteurs, $mois, $etat,
                                                $lesNoms, $lesPrenoms, $lesLibelles)
         {
-                // id est un CHAR(4) : préfixe + 3 chiffres, donc 999 au maximum.
                 if ($nbVisiteurs > 999) {
                         $nbVisiteurs = 999;
                 }
@@ -852,8 +781,6 @@ class PdoGsb
                          values(:id,:mois,:libelle,:date,:montant)'
                 );
 
-                // Référentiels lus une fois : les relire à chaque tour serait
-                // le cas d'école du N+1.
                 $lesTypesVehicule   = $this->getLesTypesVehicule();
                 $lesMontantsForfait = array();
                 foreach ($this->getLesTypesFraisForfait() as $unFrais) {
@@ -880,9 +807,7 @@ class PdoGsb
                                 $reqFiche->execute(array(
                                                            ':id' => $id, ':mois' => $mois, ':etat' => $etat
                                                    ));
-                                // Le tarif kilométrique historisé est celui du
-                                // véhicule tiré au sort : les données de test
-                                // exercent donc bien le mécanisme de la phase 1.
+
                                 $reqLignes->execute(array(
                                                             ':id'   => $id,
                                                             ':mois' => $mois,
@@ -916,14 +841,6 @@ class PdoGsb
                 return $nbCrees;
         }
 
-        /**
-         * Retourne le référentiel des frais forfaitisés
-         *
-         * getLesIdFrais() ne renvoie que les identifiants ; ici on a besoin des
-         * montants du référentiel pour alimenter des données de test.
-         *
-         * @return un tableau associatif : id, libelle, montant
-         */
         public function getLesTypesFraisForfait()
         {
                 $req  = 'select fraisforfait.id as id, fraisforfait.libelle as libelle,
@@ -933,25 +850,6 @@ class PdoGsb
                 return $stmt->fetchAll();
         }
 
-        /*
-         * =========================================================================
-         * Partie comptable (phase 5)
-         * =========================================================================
-         */
-
-        /**
-         * Authentifie un comptable
-         *
-         * À la différence de getInfosVisiteur(), le mot de passe n'est PAS comparé
-         * dans la requête SQL : la base ne contient qu'une empreinte produite par
-         * password_hash(), et deux empreintes du même mot de passe sont différentes
-         * -chacune porte son propre grain de sel. On récupère donc la ligne par le
-         * seul login, puis password_verify() fait la comparaison.
-         *
-         * @param $login
-         * @param $mdp le mot de passe en clair saisi dans le formulaire
-         * @return id, nom, prenom, ou false si l'authentification échoue
-         */
         public function getInfosComptable($login, $mdp)
         {
                 // actif et mdpDoitChanger ajoutés en phase 8 : le rejet d'un
@@ -968,21 +866,8 @@ class PdoGsb
                 return $this->verifierAuthentification($stmt->fetch(), $mdp);
         }
 
-        /**
-         * Retourne la liste des visiteurs, classés par nom
-         *
-         * Alimente la liste déroulante de l'écran de validation. Le comptable
-         * connaît les visiteurs par leur nom, pas par leur identifiant.
-         *
-         * @return un tableau associatif : id, nom, prenom
-         */
         public function getLesVisiteurs()
         {
-                // actif = 1 depuis la phase 8 : cette liste sert à CHOISIR une
-                // fiche à traiter, pas à consulter l'historique. Un visiteur
-                // désactivé n'a plus de saisie en cours, le proposer n'aurait
-                // pas de sens. Son historique reste atteignable par le
-                // récapitulatif, qui part de fichefrais et non de visiteur.
                 $req  = 'select visiteur.id as id, visiteur.nom as nom,
                 visiteur.prenom as prenom from visiteur
                 where visiteur.actif = 1
@@ -991,24 +876,7 @@ class PdoGsb
                 $stmt->execute();
                 return $stmt->fetchAll();
         }
-        /**
-         * Fait passer d'un état à un autre toutes les fiches d'un mois
-         *
-         * Sert aux trois traitements par lot du cycle de vie : la clôture -CR vers
-         * CL-, la mise en paiement -VA vers MP- et le remboursement -MP vers RB.
-         *
-         * Le filtre sur l'état de départ est essentiel : sans lui, relancer le script
-         * ferait repartir en arrière des fiches déjà avancées dans le cycle.
-         *
-         * UNE SEULE requête, quel que soit le nombre de fiches : le serveur SQL fait
-         * le travail. Une boucle PHP lisant puis modifiant fiche par fiche serait le
-         * motif N+1.
-         *
-         * @param $mois sous la forme aaaamm
-         * @param $etatDepart l'état que doivent avoir les fiches concernées
-         * @param $etatArrivee le nouvel état
-         * @return le nombre de fiches effectivement modifiées
-         */
+
         public function majEtatFichesDuMois($mois, $etatDepart, $etatArrivee)
         {
                 $req  = 'update fichefrais set idEtat = :etatArrivee, dateModif = now()
@@ -1024,26 +892,6 @@ class PdoGsb
                 return $stmt->rowCount();
         }
 
-        /**
-         * Valide une fiche de frais et enregistre son montant
-         *
-         * Étape 9 du cas d'utilisation : « Le système passe la fiche à l'état
-         * "Validée" et met à jour la date de modification de la fiche. »
-         * On en profite pour renseigner montantValide, colonne qui existait depuis
-         * l'origine mais que rien n'alimentait.
-         *
-         * Le total est calculé PAR LA BASE, dans la requête : le lire d'abord en PHP
-         * pour le réécrire ensuite laisserait un intervalle pendant lequel une autre
-         * opération pourrait modifier la fiche, et l'on enregistrerait un montant
-         * périmé.
-         *
-         * Le filtre sur l'état 'CL' interdit de valider deux fois, ou de valider une
-         * fiche encore en saisie.
-         *
-         * @param $idVisiteur
-         * @param $mois sous la forme aaaamm
-         * @return vrai si la fiche a bien été validée
-         */
         public function validerFicheFrais($idVisiteur, $mois)
         {
                 $req  = "update fichefrais set idEtat = 'VA', dateModif = now(),
@@ -1066,31 +914,11 @@ class PdoGsb
                 return $stmt->rowCount() == 1;
         }
 
-        /**
-         * Clôture la fiche du mois précédent d'un visiteur, si elle ne l'est pas
-         *
-         * Première modalité de clôture du cahier des charges : « À la première saisie
-         * pour le mois N par le visiteur, sa fiche du mois précédent est clôturée si
-         * elle ne l'est pas. » Déjà assurée par creeNouvellesLignesFrais() ; cette
-         * méthode n'est pas utilisée par la saisie, elle sert à la commande de
-         * clôture par lot pour traiter le cas d'un visiteur qui n'a rien saisi.
-         *
-         * @param $mois le mois à clôturer, sous la forme aaaamm
-         * @return le nombre de fiches clôturées
-         */
         public function cloturerFichesDuMois($mois)
         {
                 return $this->majEtatFichesDuMois($mois, 'CR', 'CL');
         }
 
-        /**
-         * Retourne, pour toutes les fiches existantes, le visiteur et l'état
-         *
-         * Sert à construire le récapitulatif comptable : une ligne par fiche,
-         * le comptage par visiteur se fait ensuite côté contrôleur.
-         *
-         * @return tableau : idvisiteur, nom, prenom, mois, idEtat
-         */
         public function getRecapFiches()
         {
                 $req  = 'select visiteur.id as idvisiteur, visiteur.nom as nom,
@@ -1103,48 +931,19 @@ class PdoGsb
                 $stmt->execute();
                 return $stmt->fetchAll();
         }
-        /**
-         * Administration des comptes (phase 8, hors cahier des charges)
-         * =========================================================================
-         */
 
-        /**
-         * Les trois rôles, et la table de comptes qui porte chacun.
-         *
-         * Un nom de table ne peut pas être passé en paramètre lié : il fait
-         * partie de la structure de la requête, pas de ses données. Toute
-         * méthode qui reçoit un rôle de l'extérieur le traduit donc par cette
-         * liste blanche, et lève une exception s'il n'y figure pas. Concaténer
-         * directement le rôle reçu dans le SQL serait une injection.
-         */
         private static $lesTables = array(
                 'visiteur'       => 'visiteur',
                 'comptable'      => 'comptable',
                 'administrateur' => 'administrateur',
         );
 
-        /**
-         * Préfixe et largeur du numéro du matricule, par rôle.
-         *
-         * « ad » sur 2 chiffres pour les administrateurs : le préfixe « a » est
-         * déjà pris par des visiteurs du jeu d'origine (a17, a55), et 99
-         * administrateurs suffisent largement. Les deux autres suivent la
-         * convention déjà en place dans genererVisiteursDeTest() : une lettre
-         * puis 3 chiffres, dans un CHAR(4).
-         */
         private static $lesPrefixes = array(
-                'visiteur'       => array('v',  3),
-                'comptable'      => array('c',  3),
+                'visiteur'       => array('v', 3),
+                'comptable'      => array('c', 3),
                 'administrateur' => array('ad', 2),
         );
 
-        /**
-         * Traduit un rôle en nom de table, ou refuse.
-         *
-         * @param $role
-         * @return string le nom de la table
-         * @throws InvalidArgumentException si le rôle est inconnu
-         */
         private function tableDuRole($role)
         {
                 if (!isset(PdoGsb::$lesTables[$role])) {
@@ -1153,22 +952,14 @@ class PdoGsb
                 return PdoGsb::$lesTables[$role];
         }
 
-        /** @return array les trois rôles gérés */
+        /**
+         * @return array les trois rôles gérés
+         */
         public function getLesRoles()
         {
                 return array_keys(PdoGsb::$lesTables);
         }
 
-        /**
-         * Authentifie un administrateur
-         *
-         * Même mécanisme que getInfosComptable() : la base ne contient qu'une
-         * empreinte, la comparaison se fait donc en PHP.
-         *
-         * @param $login
-         * @param $mdp le mot de passe en clair saisi dans le formulaire
-         * @return id, nom, prenom, mdpDoitChanger, ou false
-         */
         public function getInfosAdministrateur($login, $mdp)
         {
                 $req  = 'select administrateur.id as id, administrateur.nom as nom,
@@ -1182,22 +973,6 @@ class PdoGsb
                 return $this->verifierAuthentification($stmt->fetch(), $mdp);
         }
 
-        /**
-         * Contrôle commun aux trois authentifications
-         *
-         * Écrit une fois plutôt que trois : les règles « le compte existe »,
-         * « le mot de passe correspond » et « le compte est actif » doivent
-         * valoir à l'identique pour un visiteur, un comptable et un
-         * administrateur. Les recopier aurait permis qu'elles divergent.
-         *
-         * Le compte désactivé est rejeté ICI, dans la méthode d'authentification
-         * elle-même, et non dans le contrôleur : aucun point d'entrée ne peut
-         * ainsi l'oublier.
-         *
-         * @param $laLigne la ligne lue en base, ou false
-         * @param $mdp le mot de passe en clair
-         * @return la ligne sans son empreinte, ou false
-         */
         private function verifierAuthentification($laLigne, $mdp)
         {
                 if (!is_array($laLigne) || !password_verify($mdp, $laLigne['mdp'])) {
@@ -1212,19 +987,6 @@ class PdoGsb
                 return $laLigne;
         }
 
-        /**
-         * Indique si un compte est encore actif
-         *
-         * Appelée à CHAQUE requête par GardeCompteListener, et non seulement à
-         * la connexion : sans cela, désactiver un compte ne mettrait pas dehors
-         * l'utilisateur déjà connecté, et « ne peut plus se connecter » serait
-         * faux pour lui.
-         *
-         * @param $role
-         * @param $id
-         * @return array('actif' => 0|1, 'mdpDoitChanger' => 0|1) ou false si le
-         *         compte n'existe plus
-         */
         public function getEtatCompte($role, $id)
         {
                 $table = $this->tableDuRole($role);
@@ -1235,17 +997,6 @@ class PdoGsb
                 return $stmt->fetch();
         }
 
-        /**
-         * Retourne les mots de passe visiteur encore stockés en clair
-         *
-         * Sert uniquement à la commande gsb:hacher-mots-de-passe. Une empreinte
-         * bcrypt commence toujours par $2y$, $2a$ ou $2b$ : tout ce qui ne
-         * commence pas ainsi est un mot de passe en clair hérité de la base
-         * d'origine. Le test est fait en SQL pour ne pas remonter inutilement
-         * les lignes déjà traitées -- la commande est ainsi idempotente.
-         *
-         * @return tableau : id, mdp
-         */
         public function getLesMotsDePasseEnClair()
         {
                 $req  = "select id, mdp from visiteur where mdp not like '\$2%'";
@@ -1254,14 +1005,6 @@ class PdoGsb
                 return $stmt->fetchAll();
         }
 
-        /**
-         * Remplace l'empreinte du mot de passe d'un compte
-         *
-         * @param $role
-         * @param $id
-         * @param $empreinte le résultat de password_hash()
-         * @param $doitChanger 1 pour imposer le changement à la prochaine connexion
-         */
         public function majEmpreinteMotDePasse($role, $id, $empreinte, $doitChanger)
         {
                 $table = $this->tableDuRole($role);
@@ -1274,20 +1017,6 @@ class PdoGsb
                 $stmt->execute();
         }
 
-        /**
-         * Construit la clause WHERE commune à la liste et à son comptage
-         *
-         * La liste paginée a besoin de deux requêtes qui doivent filtrer
-         * EXACTEMENT pareil : les lignes d'une page, et le total pour calculer
-         * le nombre de pages. Deux clauses recopiées auraient fini par diverger,
-         * et la pagination aurait affiché un nombre de pages faux.
-         *
-         * @param $recherche nom, prénom, login ou matricule ; chaîne vide = pas de filtre
-         * @param $role      un des trois rôles, ou chaîne vide
-         * @param $etat      'actif', 'desactive', ou chaîne vide
-         * @param &$params   reçoit les paramètres à lier
-         * @return string la clause WHERE, « where 1=1 » si aucun filtre
-         */
         private function construireFiltreComptes($recherche, $role, $etat, &$params)
         {
                 $where  = ' where 1=1';
@@ -1295,26 +1024,21 @@ class PdoGsb
                 if ($recherche !== '' && $recherche !== null) {
                         // Une seule expression pour les quatre colonnes : l'utilisateur
                         // tape ce qu'il a sous les yeux sans choisir dans quel champ.
-                        $where .= ' and (nom like :recherche or prenom like :recherche
+                        $where               .= ' and (nom like :recherche or prenom like :recherche
                                     or login like :recherche or id like :recherche)';
                         $params[':recherche'] = '%' . $recherche . '%';
                 }
                 if (isset(PdoGsb::$lesTables[$role])) {
-                        $where .= ' and role = :role';
+                        $where          .= ' and role = :role';
                         $params[':role'] = $role;
                 }
                 if ($etat === 'actif' || $etat === 'desactive') {
-                        $where .= ' and actif = :actif';
+                        $where           .= ' and actif = :actif';
                         $params[':actif'] = ($etat === 'actif') ? 1 : 0;
                 }
                 return $where;
         }
 
-        /**
-         * Compte les comptes correspondant aux filtres
-         *
-         * @return int
-         */
         public function compterLesComptes($recherche, $role, $etat)
         {
                 $params = array();
@@ -1326,42 +1050,20 @@ class PdoGsb
                 return (int) $laLigne['nb'];
         }
 
-        /**
-         * Retourne une page de comptes, tous rôles confondus
-         *
-         * Lit la vue v_compte : c'est elle qui réunit les trois tables. Le tri
-         * et la pagination sont faits par le serveur SQL et non en PHP -- il
-         * serait absurde de remonter 211 lignes pour n'en afficher que 25.
-         *
-         * limite et decalage sont convertis en entiers et injectés dans la
-         * requête : MySQL n'accepte pas de paramètre lié derrière LIMIT en
-         * requête préparée. Le cast est donc la protection, et il suffit --
-         * un entier ne peut pas transporter de SQL.
-         *
-         * @return tableau : id, nom, prenom, login, role, actif, mdpDoitChanger, dateEmbauche
-         */
         public function getLesComptes($recherche, $role, $etat, $limite, $decalage)
         {
-                $params  = array();
-                $limite  = max(1, (int) $limite);
+                $params   = array();
+                $limite   = max(1, (int) $limite);
                 $decalage = max(0, (int) $decalage);
-                $req     = 'select id, nom, prenom, login, role, actif, mdpDoitChanger, dateEmbauche
+                $req      = 'select id, nom, prenom, login, role, actif, mdpDoitChanger, dateEmbauche
                 from v_compte'
                         . $this->construireFiltreComptes($recherche, $role, $etat, $params)
                         . ' order by nom, prenom, id limit ' . $limite . ' offset ' . $decalage;
-                $stmt    = PdoGsb::$monPdo->prepare($req);
+                $stmt     = PdoGsb::$monPdo->prepare($req);
                 $stmt->execute($params);
                 return $stmt->fetchAll();
         }
 
-        /**
-         * Retourne un compte et toutes ses informations, selon son rôle
-         *
-         * Les colonnes métier n'existent que pour un visiteur : la requête est
-         * donc différente par rôle, et pas un select * sur une table variable.
-         *
-         * @return tableau, ou false si le compte n'existe pas
-         */
         public function getCompte($role, $id)
         {
                 $this->tableDuRole($role);
@@ -1386,21 +1088,9 @@ class PdoGsb
                 return $stmt->fetch();
         }
 
-        /**
-         * Indique si un login est déjà pris, tous rôles confondus
-         *
-         * C'est la limite connue du modèle à trois tables : aucune contrainte
-         * UNIQUE ne peut couvrir trois tables à la fois, le contrôle est donc
-         * applicatif. Il porte sur la vue, qui les réunit.
-         *
-         * @param $login
-         * @param $roleExclu, $idExclu le compte en cours de modification, qui a
-         *        le droit de garder son propre login
-         * @return bool
-         */
         public function loginExiste($login, $roleExclu = null, $idExclu = null)
         {
-                $req  = 'select count(*) as nb from v_compte where login = :login';
+                $req = 'select count(*) as nb from v_compte where login = :login';
                 if ($roleExclu !== null && $idExclu !== null) {
                         $req .= ' and not (role = :role and id = :id)';
                 }
@@ -1415,31 +1105,16 @@ class PdoGsb
                 return ((int) $laLigne['nb']) > 0;
         }
 
-        /**
-         * Propose le prochain matricule libre pour un rôle
-         *
-         * Lit le plus grand numéro de la série du rôle et ajoute 1. La série est
-         * isolée par le préfixe ET par la longueur : sans le test de longueur,
-         * le « v » de v001 attraperait aussi d'éventuels matricules à deux
-         * chiffres, et substr() renverrait n'importe quoi.
-         *
-         * Cette valeur est une PROPOSITION, pas une garantie : entre le calcul
-         * et l'insertion, un autre administrateur peut avoir pris le même
-         * numéro. C'est la clé primaire qui arbitre en dernier ressort, et
-         * creerCompte() retente.
-         *
-         * @return string un matricule, ou false si la série est épuisée
-         */
         public function genererMatricule($role)
         {
-                $table = $this->tableDuRole($role);
+                $table                   = $this->tableDuRole($role);
                 list($prefixe, $largeur) = PdoGsb::$lesPrefixes[$role];
-                $longueur = strlen($prefixe) + $largeur;
+                $longueur                = strlen($prefixe) + $largeur;
 
-                $req  = 'select max(cast(substring(id, :debut) as unsigned)) as maxi
+                $req   = 'select max(cast(substring(id, :debut) as unsigned)) as maxi
                 from ' . $table . '
                 where id like :motif and char_length(id) = :longueur';
-                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt  = PdoGsb::$monPdo->prepare($req);
                 $debut = strlen($prefixe) + 1;
                 $motif = $prefixe . '%';
                 $stmt->bindParam(':debut', $debut, PDO::PARAM_INT);
@@ -1450,32 +1125,11 @@ class PdoGsb
 
                 $numero = ((int) $laLigne['maxi']) + 1;
                 if ($numero >= pow(10, $largeur)) {
-                        // v999 atteint : mieux vaut refuser franchement que
-                        // produire un matricule trop long, que CHAR(4)
-                        // tronquerait silencieusement.
                         return false;
                 }
                 return $prefixe . str_pad($numero, $largeur, '0', STR_PAD_LEFT);
         }
 
-        /**
-         * Crée un compte et retourne son matricule
-         *
-         * Le matricule est généré, jamais saisi : le laisser à la main exposait
-         * à un choc sur la clé primaire, y compris entre deux administrateurs
-         * travaillant au même instant.
-         *
-         * En cas de choc justement, l'insertion échoue sur la contrainte
-         * (SQLSTATE 23000) et on retente avec le numéro suivant. La boucle est
-         * bornée : si dix tentatives échouent, ce n'est plus une course mais un
-         * vrai problème, et il faut qu'il remonte.
-         *
-         * @param $role
-         * @param $donnees nom, prenom, login, empreinte, doitChanger et, pour un
-         *        visiteur, dateEmbauche, idTypeVehicule, adresse, cp, ville
-         * @return string le matricule attribué
-         * @throws PDOException si l'insertion échoue pour une autre raison
-         */
         public function creerCompte($role, array $donnees)
         {
                 $table = $this->tableDuRole($role);
@@ -1495,7 +1149,8 @@ class PdoGsb
                         $id = $this->genererMatricule($role);
                         if ($id === false) {
                                 throw new \RuntimeException(
-                                        'Plus aucun matricule disponible pour le rôle ' . $role);
+                                        'Plus aucun matricule disponible pour le rôle ' . $role
+                                );
                         }
                         $stmt->bindValue(':id', $id);
                         $stmt->bindValue(':nom', $donnees['nom']);
@@ -1514,31 +1169,17 @@ class PdoGsb
                                 $stmt->execute();
                                 return $id;
                         } catch (\PDOException $e) {
-                                // 23000 couvre aussi le login en doublon. Le login a
-                                // déjà été contrôlé par loginExiste() ; si c'est lui
-                                // qui a cédé, retenter un matricule ne servirait à
-                                // rien, d'où le test sur le message.
-                                if ($e->getCode() !== '23000'
-                                        || stripos($e->getMessage(), 'PRIMARY') === false) {
+                                if ($e->getCode() !== '23000' ||
+                                                stripos($e->getMessage(), 'PRIMARY') === false) {
                                         throw $e;
                                 }
                         }
                 }
                 throw new \RuntimeException(
-                        'Impossible d\'attribuer un matricule après 10 tentatives.');
+                        "Impossible d'attribuer un matricule après 10 tentatives."
+                );
         }
 
-        /**
-         * Met à jour les informations d'un compte
-         *
-         * Le matricule N'EST PAS modifiable : il est la cible de
-         * fk_fichefrais_visiteur, le changer obligerait à propager la nouvelle
-         * valeur dans fichefrais, lignefraisforfait et lignefraishorsforfait.
-         * Il n'apparaît donc que dans le WHERE.
-         *
-         * Le mot de passe n'est pas ici non plus : il ne se modifie pas, il se
-         * remplace, par majEmpreinteMotDePasse().
-         */
         public function majCompte($role, $id, array $donnees)
         {
                 $table = $this->tableDuRole($role);
@@ -1568,16 +1209,6 @@ class PdoGsb
                 return $stmt->rowCount();
         }
 
-        /**
-         * Active ou désactive un compte
-         *
-         * La condition « actif <> :actif » rend l'opération idempotente et
-         * renvoie 0 si le compte était déjà dans l'état demandé : le contrôleur
-         * sait ainsi qu'il n'a rien changé, et n'écrit pas au journal une
-         * désactivation qui n'a pas eu lieu.
-         *
-         * @return int le nombre de lignes réellement modifiées : 0 ou 1
-         */
         public function majActifCompte($role, $id, $actif)
         {
                 $table = $this->tableDuRole($role);
@@ -1591,16 +1222,6 @@ class PdoGsb
                 return $stmt->rowCount();
         }
 
-        /**
-         * Supprime physiquement un compte
-         *
-         * N'est appelée qu'après compterDonneesLiees() : sur un visiteur qui a
-         * des fiches, fk_fichefrais_visiteur (en RESTRICT) ferait de toute façon
-         * échouer la requête. Le contrôle applicatif sert à expliquer le refus
-         * AVANT, plutôt qu'à faire remonter une erreur de base incompréhensible.
-         *
-         * @return int le nombre de lignes supprimées : 0 ou 1
-         */
         public function supprimerCompte($role, $id)
         {
                 $table = $this->tableDuRole($role);
@@ -1611,24 +1232,8 @@ class PdoGsb
                 return $stmt->rowCount();
         }
 
-        /**
-         * Compte ce qui se rattache à un visiteur
-         *
-         * Sert à décider si la suppression physique est permise, et à chiffrer
-         * le refus quand elle ne l'est pas : « 4 fiches dont 3 validées » se
-         * vérifie, « des données existent » ne s'évalue pas.
-         *
-         * Les lignes de frais sont comptées même si ON DELETE CASCADE les
-         * effacerait automatiquement -- c'est précisément ce qu'il faut annoncer.
-         *
-         * @return array nbFiches, nbFichesValidees, nbLignesForfait,
-         *         nbLignesHorsForfait, nbJustificatifs
-         */
         public function compterDonneesLiees($id)
         {
-                // Une seule requête plutôt que cinq : cinq allers-retours pour
-                // afficher un écran de confirmation seraient du gaspillage, et
-                // les sous-requêtes portent toutes sur des index.
                 $req  = "select
                 (select count(*) from fichefrais where idVisiteur = :id) as nbFiches,
                 (select count(*) from fichefrais where idVisiteur = :id
@@ -1643,16 +1248,6 @@ class PdoGsb
                 return $stmt->fetch();
         }
 
-        /**
-         * Compte les administrateurs encore actifs
-         *
-         * Garde-fou : le système doit toujours en conserver au moins un.
-         * Désactiver le dernier rendrait l'interface d'administration
-         * définitivement inaccessible, et il faudrait repasser par du SQL à la
-         * main dans la base -- exactement ce que cette phase supprime.
-         *
-         * @return int
-         */
         public function compterAdministrateursActifs()
         {
                 $req  = 'select count(*) as nb from administrateur where actif = 1';
@@ -1662,17 +1257,6 @@ class PdoGsb
                 return (int) $laLigne['nb'];
         }
 
-        /**
-         * Écrit une entrée au journal d'administration
-         *
-         * Le nom de l'auteur et celui de la cible sont RECOPIÉS, pas
-         * référencés : le journal doit rester lisible après la suppression du
-         * compte concerné. Une trace qu'on efface en supprimant son sujet ne
-         * prouve rien.
-         *
-         * Aucun mot de passe n'est passé à cette méthode, même temporaire :
-         * c'est une table consultable depuis l'interface.
-         */
         public function journaliser($idAdmin, $nomAdmin, $action,
                                     $roleCible, $idCible, $nomCible, $detail = null)
         {
@@ -1691,31 +1275,25 @@ class PdoGsb
                 $stmt->execute();
         }
 
-        /**
-         * Clause WHERE commune à la lecture du journal et à son comptage.
-         * Même raison que construireFiltreComptes() : les deux requêtes doivent
-         * filtrer à l'identique.
-         */
         private function construireFiltreJournal($idAdmin, $action, $cible, &$params)
         {
                 $where  = ' where 1=1';
                 $params = array();
                 if ($idAdmin !== '' && $idAdmin !== null) {
-                        $where .= ' and idAdministrateur = :idAdmin';
+                        $where             .= ' and idAdministrateur = :idAdmin';
                         $params[':idAdmin'] = $idAdmin;
                 }
                 if ($action !== '' && $action !== null) {
-                        $where .= ' and action = :action';
+                        $where            .= ' and action = :action';
                         $params[':action'] = $action;
                 }
                 if ($cible !== '' && $cible !== null) {
-                        $where .= ' and (idCible like :cible or nomCible like :cible)';
+                        $where           .= ' and (idCible like :cible or nomCible like :cible)';
                         $params[':cible'] = '%' . $cible . '%';
                 }
                 return $where;
         }
 
-        /** @return int le nombre d'entrées du journal correspondant aux filtres */
         public function compterLeJournal($idAdmin, $action, $cible)
         {
                 $params = array();
@@ -1727,13 +1305,6 @@ class PdoGsb
                 return (int) $laLigne['nb'];
         }
 
-        /**
-         * Retourne une page du journal, la plus récente d'abord
-         *
-         * Tri sur horodatage DESC puis id DESC : deux actions faites dans la
-         * même seconde -- ce qui arrive, l'horodatage étant un DATETIME sans
-         * fraction -- resteraient sinon dans un ordre arbitraire.
-         */
         public function getLeJournal($idAdmin, $action, $cible, $limite, $decalage)
         {
                 $params   = array();
@@ -1749,7 +1320,6 @@ class PdoGsb
                 return $stmt->fetchAll();
         }
 
-        /** @return array la liste des actions présentes au journal, pour le filtre */
         public function getLesActionsDuJournal()
         {
                 $req  = 'select distinct action from journaladmin order by action';
@@ -1758,7 +1328,6 @@ class PdoGsb
                 return $stmt->fetchAll();
         }
 
-        /** @return array les administrateurs ayant agi, pour le filtre du journal */
         public function getLesAuteursDuJournal()
         {
                 $req  = 'select distinct idAdministrateur, nomAdministrateur
