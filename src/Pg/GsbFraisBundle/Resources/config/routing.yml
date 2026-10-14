@@ -163,3 +163,20 @@ pg_gsb_frais_validerchangementmotdepasse:
     path: /changermotdepasse
     defaults: { _controller: PgGsbFraisBundle:MotDePasse:valider }
     methods: [POST]
+
+# ---------------------------------------------------------------------------
+# Phase 9 : détail des trajets
+#
+# Deux actions d'écriture, donc POST uniquement et jeton anti-CSRF. Elles
+# n'ont pas de vue : elles redirigent vers l'écran de saisie, où les trajets
+# s'affichent.
+# ---------------------------------------------------------------------------
+pg_gsb_frais_ajoutertrajet:
+    path: /ajoutertrajet
+    defaults: { _controller: PgGsbFraisBundle:Trajet:ajouter }
+    methods: [POST]
+pg_gsb_frais_supprimertrajet:
+    path: /supprimertrajet/{id}
+    defaults: { _controller: PgGsbFraisBundle:Trajet:supprimer }
+    requirements: { id: '\d+' }
+    methods: [POST]

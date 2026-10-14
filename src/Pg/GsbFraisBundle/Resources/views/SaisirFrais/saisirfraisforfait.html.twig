@@ -8,15 +8,41 @@
                      {# Le montant unitaire affiché est celui figé sur la ligne
                         à la création de la fiche. Pour la ligne kilométrique,
                         il dépend du véhicule déclaré dans « Mon véhicule ». #}
-                     {% for unfrais in  lesfraisforfait %}
+                     {% for unfrais in lesfraisforfait %}
                          {% set idfrais = unfrais.idfrais %}
                          {% set libelle = unfrais.libelle %}
                          {% set quantite = unfrais.quantite %}
+                         {% set estRetire = (unfrais.actif == 0) %}
+                         {# Un forfait RETIRÉ de l'usage — le forfait étape depuis
+                            la phase 9 — n'est affiché que s'il porte encore une
+                            quantité : il y a alors un montant à justifier, et le
+                            masquer cacherait de l'argent. À zéro il n'a plus rien à
+                            dire, on l'omet. Twig 1.x n'a pas de {% raw %}{% continue %}{% endraw %},
+                            d'où cette condition qui englobe la ligne entière. #}
+                         {% if not (estRetire and quantite == 0) %}
                         <p>
                             <label for="frais_{{idfrais}}">{{libelle}} ({{unfrais.montantunitaire}} €)</label>
+                            {% if estRetire %}
+                            <input type="text" class="lectureSeule" size="10" value="{{quantite}}" readonly />
+                            <span class="aideChamp" style="margin-left:.5em;display:inline">
+                                forfait retiré &mdash; conservé pour justifier l'historique
+                            </span>
+                            {% elseif idfrais == idfraiskm %}
+                            {# La quantité kilométrique n'est plus saisie : elle est la
+                               somme des trajets détaillés plus bas. Le champ reste affiché
+                               pour que le visiteur voie le total retenu, mais en lecture
+                               seule. Le contrôleur écarte de toute façon cette clé avant la
+                               mise à jour : un readonly se retire en trois clics. #}
+                            <input type="text" id="frais_{{idfrais}}" class="lectureSeule" size="10" value="{{quantite}}" readonly />
+                            <span class="aideChamp" style="margin-left:.5em;display:inline">
+                                calculé à partir de vos {{ lestrajets|length }} trajet(s)
+                            </span>
+                            {% else %}
                             <input type="text" id="frais_{{idfrais}}" name="lesFrais[{{idfrais}}]" size="10" maxlength="5" value="{{quantite}}" >
+                            {% endif %}
                         </p>
-                      {%endfor%}
+                         {% endif %}
+                      {% endfor %}
                 <p class="legendeTableau">
                     Le tarif kilométrique dépend de votre véhicule :
                     <a href="{{ path('pg_gsb_frais_monvehicule') }}">le déclarer ou le modifier</a>.
@@ -27,9 +53,7 @@
           <p>
             <input id="ok" type="submit" value="Valider" size="20" />
             <input id="annuler" type="reset" value="Effacer" size="20" />
-          </p> 
+          </p>
           </div>
       </form>
 </div>
- 
-      
