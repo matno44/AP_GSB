@@ -202,6 +202,34 @@ désactivé masqué de la liste du comptable. Une cinquième a été demandée e
 de route : **le matricule est généré par l'application**, plus saisi.
 
 
+### Phase 9 (hors cahier des charges) — Détail des trajets, retrait du forfait étape
+
+**Extension personnelle**, déclenchée par une observation du client : le forfait
+étape (110,00 €) vaut arithmétiquement une nuitée (80,00) plus un repas (25,00),
+à 5 € près. Les quatre postes se recouvraient donc, sans qu'aucune règle écrite
+ne dise si l'on pouvait cumuler une étape et une nuitée pour la même nuit — ce
+qui revenait à payer deux fois le coucher. Second besoin, du même ordre : le
+visiteur devait **additionner lui-même** toutes ses distances du mois pour n'en
+saisir qu'un total, addition faite hors de l'application et que le comptable ne
+pouvait pas contrôler.
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration | `sql/005_trajets_et_retrait_forfait_etape.sql` *(nouveau)* | `fraisforfait.actif`, `ETP` à 0, table `trajet`, reprise des 206 distances existantes |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | 7 méthodes ajoutées ; `actif = 1` filtré dans les 3 lectures du référentiel ; `majFraisForfait()` refuse un forfait retiré |
+| Validation | `Controller/include/fct.inc.php` *(modifié)* | `valideInfosTrajet()` |
+| Saisie | `Controller/TrajetController.php` *(nouveau)* | ajout et suppression d'un trajet |
+| Garde serveur | `Controller/SaisirFraisController.php`, `ValidationController.php` *(modifiés)* | la clé kilométrique est écartée du lot avant mise à jour |
+| Contrôle d'intégrité | `Command/VerifierDistancesCommand.php` *(nouveau)* | `gsb:verifier-distances`, avec `--reparer` |
+| Écrans | `views/SaisirFrais/trajets.html.twig` *(nouveau)*, `saisirfraisforfait.html.twig`, `saisirtouslesfrais.html.twig`, `Validation/fiche.html.twig` *(modifiés)* | saisie des trajets, kilométrique en lecture seule, détail visible par le comptable |
+| Routes | `Resources/config/routing.yml` *(modifié)* | 2 routes, POST uniquement |
+| Script de reconstruction | `sql/bd_gsb.sql` *(modifié)* | tenu en phase avec la migration 005 (décision 1.7) |
+
+**Le gain pour le comptable est le vrai point de cette phase.** Le cahier des
+charges lui demande de contrôler que « la distance kilométrique est plausible ».
+Devant un total de 480 km, il n'avait rien à quoi la confronter. Il voit
+maintenant chaque déplacement, sa date et son motif.
+
 ---
 
 ## 2. Cartographie du projet
@@ -1783,6 +1811,117 @@ Vérifié au test : un administrateur reçoit 403 sur `/listefrais`, `/saisirfra
 `/monvehicule` et `/validation`.
 
 
+### Phase 9
+
+### Décision 9.1 — Le forfait étape est désactivé, pas supprimé
+
+Mesuré avant de décider, et c'est la mesure qui a tranché : **209 lignes de
+frais portent ce forfait, pour 469 étapes et 51 590,00 €. Et 990,00 € de ce
+total reposent sur des fiches déjà VALIDÉES ou REMBOURSÉES.**
+
+Or `fichefrais.montantValide` est un montant **figé** au moment de la validation
+(décision 5.6), et il inclut ces étapes. Vérifié ligne à ligne : `a17 / 202608`,
+à l'état « Remboursée », porte `montantValide = 710,60 €`, soit exactement la
+somme de ses lignes dont 110,00 € d'étape. Supprimer la ligne laisserait une
+fiche **remboursée** affirmant 710,60 € pour 600,60 € justifiés.
+
+C'est le raisonnement de la décision 8.2 appliqué cette fois au **référentiel**
+et non aux comptes : le besoin réel n'est pas « faire disparaître », c'est « ne
+plus proposer ». Une colonne `actif` y répond sans rien détruire.
+
+**Trois conséquences qu'il a fallu traiter, et qui ne sautaient pas aux yeux :**
+
+- **Deux fiches encore en saisie portaient déjà une ligne `ETP`** (créées avant
+  la migration, à quantité 0). L'écran continuait donc de proposer le forfait
+  retiré. Corrigé *côté serveur* : `majFraisForfait()` restreint sa mise à jour
+  aux forfaits actifs, par un `and idFraisForfait in (select id from
+  fraisforfait where actif = 1)`. La règle est dans la requête, donc valable
+  pour tous ses appelants — l'écran du visiteur **et** la correction du
+  comptable — sans qu'aucun contrôleur ait à y penser.
+- **Un forfait retiré doit rester visible s'il porte encore une quantité.**
+  Le masquer cacherait un montant qui figure pourtant dans le total de la fiche.
+  Il est donc affiché en lecture seule avec la mention « forfait retiré », et
+  omis seulement quand sa quantité est nulle — il n'a alors plus rien à dire.
+- **Le libellé doit survivre.** La ligne du référentiel est conservée : sans
+  elle, la jointure de `getLesFraisForfait()` perdrait les 209 lignes
+  historiques, qui n'auraient plus de libellé à afficher.
+
+### Décision 9.2 — La quantité kilométrique devient une valeur dérivée
+
+Plutôt que d'ajouter un poste de frais à côté du kilométrique, les trajets
+**alimentent celui qui existe** : `lignefraisforfait.quantite` de la ligne `KM`
+vaut désormais la somme des distances des trajets de la fiche.
+
+Ce choix préserve tout l'existant. Le `montantUnitaire` figé sur la ligne
+(décision 1.1) continue de s'appliquer, les totaux, le PDF de l'annexe 1, l'écran
+de validation et le cycle d'état n'ont pas bougé d'une ligne. Une table de
+trajets *parallèle* au kilométrique aurait au contraire imposé de reprendre
+chaque calcul de total.
+
+La quantité est **recalculée et jamais incrémentée** : c'est la décision 2.4,
+prise pour `nbJustificatifs` et reprise ici pour la même raison. Un compteur
+qu'on incrémente dérive dès qu'une opération échoue à mi-chemin ; une somme
+recalculée ne peut pas se désynchroniser. `creeTrajet()` et `supprimerTrajet()`
+enferment l'écriture et le recalcul dans une **transaction** : un trajet
+enregistré sans recalcul laisserait le visiteur devant un total qui ne
+correspond pas à ce qu'il vient de saisir.
+
+### Décision 9.3 — `readonly` ne protège rien : la règle est côté serveur
+
+Le champ kilométrique est affiché en lecture seule, mais **un attribut
+`readonly` se retire en trois clics dans un navigateur**. La règle est donc
+appliquée là où elle tient : les deux contrôleurs qui reçoivent `lesFrais`
+écartent la clé kilométrique du lot avant la mise à jour.
+
+Vérifié par le test : un `POST` forgé avec `lesFrais[KM]=9999` laisse la
+quantité à 130 km, et les autres postes du même envoi (`NUI`, `REP`) sont bien
+enregistrés — l'écartement est chirurgical, il ne fait pas échouer la requête
+entière.
+
+Même logique pour le comptable : le champ n'est plus émis pour la ligne
+kilométrique, et `corrigerAction()` écarte la clé de son côté. Le corriger à la
+main l'aurait désynchronisé du détail affiché juste en dessous.
+
+### Décision 9.4 — Un trajet porte une date et un libellé, pas seulement une distance
+
+Le client demandait « distance 1, distance 2, etc. ». J'ai proposé d'y ajouter
+une date et un libellé, et il a retenu cette version — pour une raison précise :
+une suite de nombres anonymes ne rend pas le contrôle du comptable plus possible
+qu'un total unique. Le cahier des charges lui demande de vérifier que la
+distance est plausible et que le nombre de jours est **cohérent avec les
+congés** : il lui faut donc savoir *quand* et *où*.
+
+Le plafond de 2000 km par trajet n'est pas une règle du cahier des charges, qui
+n'en donne aucune. C'est un garde-fou contre la faute de frappe : un zéro de trop
+sur 150 km en fait 1500, soit 930 € au tarif de 0,62 €/km, sans que rien ne le
+signale. Le comptable doit juger une plausibilité, pas rattraper une coquille que
+la saisie pouvait refuser.
+
+### Décision 9.5 — Un trajet ne se modifie que sur une fiche en saisie
+
+`ficheEstEnSaisie()` conditionne l'ajout comme la suppression à l'état `CR`.
+Ajouter un trajet à une fiche clôturée changerait sa quantité kilométrique, donc
+un montant déjà soumis au comptable — voire déjà payé. Le formulaire d'ajout et
+les boutons de suppression disparaissent dans ce cas, et le contrôle est **refait
+côté serveur** : l'absence d'un bouton n'est pas une protection.
+
+### Décision 9.6 — Une commande pour un invariant que la base ne garantit pas
+
+L'égalité « quantité kilométrique = somme des trajets » est maintenue par
+l'**application**, pas par la base : aucun déclencheur ne l'impose. Elle peut
+donc dériver, et **je l'ai constaté en cours de développement** (§ 7.32).
+
+Plutôt que de signaler le risque dans un coin du compte rendu et de laisser
+l'utilisateur sans recours, `gsb:verifier-distances` le détecte et, avec
+`--reparer`, le corrige. Sans option elle ne fait que **constater** : un outil de
+diagnostic n'écrit pas sans qu'on le lui demande. Elle renvoie le code 1 en cas
+d'écart, pour pouvoir être enchaînée dans un script.
+
+Un déclencheur SQL aurait rendu l'invariant inviolable. Je ne l'ai pas retenu :
+le projet n'en contient aucun, en introduire un déplacerait une règle métier dans
+la base où personne ne la cherchera, et la commande couvre le besoin réel —
+détecter et réparer une dérive accidentelle.
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -3219,6 +3358,79 @@ Je préfère l'écrire que de meubler cette section.
   pas la mémoire du § 7.8.
 
 
+### Phase 9
+
+### 7.30 Mon motif de remplacement ne correspondait à rien : `\t` littéral
+
+- **Symptôme :** `str_replace` renvoyait **0 occurrence** sur une requête SQL de
+  `PdoGsb.php` que je lisais pourtant à l'écran. Mon script s'arrêtait sur son
+  propre garde-fou `if ($n !== 1) exit(1)` au lieu d'écrire un fichier à moitié
+  modifié — c'est ce contrôle qui a évité le dégât.
+- **Cause réelle :** `cat -v` m'a montré `\t\t\tand lignefraisforfait...`. Une
+  vraie tabulation s'afficherait `^I`. Le fichier contient donc **les deux
+  caractères `\` et `t`**, à l'intérieur d'une chaîne PHP en guillemets doubles
+  — c'est PHP qui les interprète en tabulation *à l'exécution*. Or mon motif,
+  écrit `"\t\t\tand ..."` en guillemets doubles, produisait de **vraies**
+  tabulations. Je cherchais des octets 0x09 là où le fichier a `5C 74`.
+- **Correction :** `'\t'` en guillemets simples, concaténé dans le motif.
+- **Ce que j'en retiens :** `cat -v` avant d'écrire un motif sur un fichier
+  qu'on n'a pas écrit soi-même. La lecture à l'écran ne distingue pas une
+  tabulation d'un `\t` littéral ; `cat -v`, si.
+
+### 7.31 `{% continue %}` n'existe pas en Twig 1.x
+
+- **Message exact :**
+  `Unexpected "continue" tag (expecting closing tag for the "if" tag defined near line 18)`
+- **Ce que je faisais :** sauter l'affichage d'un forfait retiré à quantité
+  nulle, au début d'une boucle `{% for %}`.
+- **Cause réelle :** `{% continue %}` et `{% break %}` **n'existent pas en
+  Twig**, à aucune version — c'est une absence volontaire du moteur, pas une
+  limite de la 1.x que j'ai d'abord supposée.
+- **Correction :** une condition qui **englobe** le corps de la boucle
+  (`{% if not (...) %}` … `{% endif %}`) au lieu d'un saut en début
+  d'itération. J'ai réécrit le gabarit entier plutôt que d'enchaîner un
+  troisième correctif chirurgical sur un fichier de 58 lignes : à ce stade la
+  réécriture est plus sûre à relire que la succession de rustines.
+
+### 7.32 J'ai désynchronisé la quantité kilométrique avec mon propre nettoyage
+
+- **Symptôme :** après avoir supprimé mes trajets de test **directement en
+  SQL**, la fiche affichait encore `quantite = 260` pour zéro trajet.
+- **Cause réelle :** ce n'est pas un défaut de l'application, c'est la
+  démonstration involontaire de sa limite. L'égalité « quantité = somme des
+  trajets » est tenue par `PdoGsb::recalculerDistance()`, appelée par les deux
+  actions de `TrajetController`. Un `DELETE` en SQL ne passe par aucune des
+  deux. Le même effet se produirait en restaurant une sauvegarde partielle, ou
+  via le `ON DELETE CASCADE` de `fichefrais` qui efface les trajets sans que PHP
+  intervienne.
+- **Ce que j'en ai fait :** plutôt que de corriger la donnée et de passer à
+  autre chose, j'ai écrit `gsb:verifier-distances` (décision 9.6) — et je l'ai
+  éprouvée en provoquant **volontairement** deux dérives : une quantité mise à
+  9999 à la main, et un trajet supprimé en SQL. La commande a détecté les deux,
+  les a chiffrées (`écart -9519` et `-120`), et `--reparer` les a corrigées.
+- **Conséquence que j'ai failli laisser passer :** ma dérive de test avait
+  supprimé un trajet réel du jeu de données (`a55 / 202608`, 120 km), et la
+  réparation avait donc ramené sa quantité à 0 — cohérent, mais faux. Je l'ai
+  recréé et resynchronisé. Un test qui modifie les données doit remettre l'état
+  initial, et c'est le contrôle final de volumétrie qui me l'a signalé.
+
+### 7.33 Un `//` manquant, et mon propre test mesurait la mauvaise chose
+
+Deux petites erreurs de la même séance, qui valent surtout par la façon dont
+elles se sont signalées.
+
+- **`PHP Parse error: syntax error, unexpected '9' (T_LNUMBER)`** dans
+  `ValidationController.php` : une ligne de commentaire de mon bloc inséré avait
+  perdu son `//`, et `(phase 9)` était lu comme du code. Détecté immédiatement
+  par le `php -l` systématique après chaque modification — sans lui, l'erreur
+  n'apparaissait qu'à la première requête sur l'écran de validation.
+- **Un code de retour qui mentait :** j'affichais `$?` après
+  `php app/console … | tail -3`, et je lisais donc le code de `tail`, toujours
+  0. La commande annonçait un écart et mon test concluait « code 0 ». Mesuré
+  sans tube, les codes sont bien 1 / 0 / 0. C'est la troisième fois dans ce
+  projet qu'un tube faussé me donne un faux négatif (§ 7.3, § 7.14) : **ne
+  jamais lire `$?` derrière un tube.**
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -3642,6 +3854,72 @@ hors ligne, mais pas une attaque en ligne sur un login connu. Un verrouillage
 temporaire après N échecs demanderait un compteur par compte et une date de
 déverrouillage.
 
+### ✅ Le recouvrement des postes de frais — TRANCHÉ en phase 9
+
+Observation du client : le forfait étape (110,00 €) vaut une nuitée (80,00) plus
+un repas (25,00) à 5 € près. Les quatre postes se recouvraient donc, et rien
+n'interdisait de cumuler une étape et une nuitée pour la même nuit — soit payer
+deux fois le coucher. **156 fiches sur 209 cumulaient effectivement les deux**
+dans le jeu de données. Le forfait est retiré de l'usage (décision 9.1).
+
+Nuance à garder à l'esprit : ces 156 fiches ne prouvent rien sur l'intention du
+client. Le jeu de données a été écrit pour ce projet — la base livrée n'en
+contenait aucun — et les 200 visiteurs de la série `z` sortent du générateur
+aléatoire. Ils montrent que l'application *autorisait* le cumul, pas qu'elle
+*devait* le faire.
+
+### Limites propres à la phase 9
+
+#### 🟠 L46 — L'égalité « quantité kilométrique = somme des trajets » n'est pas garantie par la base
+Elle est maintenue par l'application, via `PdoGsb::recalculerDistance()` appelée
+aux deux seules actions qui touchent aux trajets. **Aucun déclencheur ne
+l'impose.** Elle dérive donc dès qu'on écrit hors de l'application : un `UPDATE`
+ou un `DELETE` en SQL, la restauration d'une sauvegarde partielle, ou le
+`ON DELETE CASCADE` de `fichefrais` qui efface les trajets sans que PHP
+intervienne. Je l'ai constaté en développement (§ 7.32). `gsb:verifier-distances`
+détecte et répare, mais c'est un contrôle *a posteriori* : entre la dérive et la
+commande, la fiche affiche un montant que ses trajets ne justifient pas. Un
+déclencheur SQL le rendrait inviolable — écarté par la décision 9.6, le projet
+n'en contenant aucun.
+
+#### 🟠 L47 — Les 206 trajets de reprise portent une date et un libellé conventionnels
+La migration devait créer un trajet par fiche ayant déjà une distance, sans quoi
+le premier recalcul aurait remis ces quantités à zéro et détruit du montant sur
+des fiches validées. Mais **la date réelle de ces déplacements n'a jamais été
+saisie : elle n'existe nulle part.** Chaque trajet de reprise porte donc le 1er du
+mois de sa fiche et le libellé « Report de saisie antérieure au détail des
+trajets ». Le libellé le dit explicitement plutôt que d'inventer un trajet
+plausible, mais le comptable ne peut pas davantage contrôler la plausibilité de
+ces 206 lignes qu'avant la phase — le gain ne porte que sur les saisies à venir.
+
+#### 🟡 L48 — Un trajet ne se modifie pas, il se supprime et se ressaisit
+Il n'y a pas d'action de modification : une erreur de saisie se corrige en
+supprimant la ligne puis en la recréant. C'est le même parti que pour les frais
+hors forfait depuis l'origine, et la cohérence a été préférée à l'ajout d'un
+troisième formulaire. Sur une fiche déjà clôturée, en revanche, ni l'un ni
+l'autre n'est possible (décision 9.5) : il faut passer par le comptable.
+
+#### 🟡 L49 — Le plafond de 2000 km par trajet est arbitraire
+Le cahier des charges ne donne aucune règle de plausibilité. 2000 km est un
+garde-fou contre la faute de frappe, pas une règle de gestion. Un visiteur
+effectuant réellement un trajet plus long doit le découper, ce que le message
+d'erreur lui indique. À faire valider par le client si la phase devait être
+retenue.
+
+#### 🟡 L50 — Le PDF de l'annexe 1 n'affiche pas le détail des trajets
+La fiche imprimée continue de présenter la seule ligne kilométrique avec sa
+quantité totale. Le détail est visible à l'écran, par le visiteur comme par le
+comptable, mais pas sur le document remis. L'annexe 1 du cahier des charges ne
+prévoit pas cette rubrique, et l'y ajouter sans accord aurait modifié un
+livrable que le client a spécifié. **Non fait volontairement.**
+
+#### 🟡 L51 — Les 209 lignes du forfait retiré restent dans la base
+C'est le choix de la décision 9.1 et il est assumé : elles justifient 51 590 €
+dont 990 € déjà versés. Mais elles signifient que la table `lignefraisforfait`
+contient durablement des lignes d'un forfait que l'application ne propose plus.
+Toute requête d'analyse écrite plus tard devra en tenir compte — notamment un
+total par poste de frais, qui fera apparaître une étape que personne ne peut
+plus saisir.
 ### 🔴 B2 *(état à l'audit — levé en phase 1)* — `lignefraisforfait` ne stocke que la quantité
 Pas de prix unitaire sur la ligne. Le montant d'une ligne ne peut être obtenu
 qu'en joignant `fraisforfait` **à l'instant de la lecture**. Donc si on change
@@ -4456,6 +4734,118 @@ valide le choix de recopier les noms plutôt que de les référencer (décision 
 CSRF des pages, enchaînent les requêtes avec un porte-cookies par rôle, et
 vérifient l'état en base après chaque action.
 
+### 9.38 Phase 9 — installation de la migration
+
+**Sauvegarder avant, et vérifier que la sauvegarde se restaure** — le § 7.25 a
+montré que l'ordre inverse coûte cher :
+
+```bash
+mysqldump -u root --set-gtid-purged=OFF bd_gsb > /tmp/bd_gsb-avant-005.sql
+mysql -u root -e "create database bd_gsb_test"; mysql -u root bd_gsb_test < /tmp/bd_gsb-avant-005.sql
+mysql -u root bd_gsb_test -e "select count(*) from visiteur"   # la sauvegarde est exploitable
+mysql -u root -e "drop database bd_gsb_test"
+```
+
+Puis :
+
+```bash
+mysql -u root bd_gsb < sql/005_trajets_et_retrait_forfait_etape.sql
+php app/console cache:clear --env=dev
+```
+
+Le script affiche ses propres contrôles :
+
+```
+CONTROLE 1 (doit valoir 0) : Fiches dont la distance ne correspond pas aux trajets : 0
+Forfait étape : actif=0 — lignes historiques conservées : 209
+CONTROLE 2 : Trajets créés par la reprise : 206 pour 100077 km au total
+```
+
+Le contrôle 1 est le plus important : il garantit que la reprise a bien créé,
+pour chaque fiche ayant une quantité kilométrique, un trajet qui la justifie.
+**S'il ne vaut pas 0, ne pas continuer** — le premier recalcul remettrait ces
+quantités à zéro.
+
+### 9.39 Phase 9 — scénarios de test
+
+Joués sur `http://127.0.0.1:8000`, résultat observé indiqué.
+
+| # | Scénario | Attendu | Observé |
+|---|----------|---------|---------|
+| 1 | Écran de saisie après migration | plus de forfait étape | 0 occurrence de « Forfait Etape » ✅ |
+| 2 | Postes encore saisissables | `NUI` et `REP` seulement | `name="lesFrais[...]"` présent pour NUI et REP uniquement ✅ |
+| 3 | Champ kilométrique | lecture seule | `id="frais_KM" class="lectureSeule" … readonly` ✅ |
+| 4 | Ajout de 3 trajets (96 + 248 + 34) | quantité = 378 km | 3 trajets, somme 378, `quantite = 378`, montant 245,70 € ✅ |
+| 5 | Affichage du détail | les 3 trajets + total | les 3 libellés et « Total parcouru 378 km » ✅ |
+| 6 | Suppression du trajet de 248 km | quantité recalculée à 130 | somme 130, `quantite = 130` ✅ |
+| 7 | Écran du comptable | détail visible, kilométrique non modifiable | tableau « Détail des trajets », mention « somme des trajets », aucun champ de saisie ✅ |
+
+**Validations refusées** (le message exact est affiché, et la somme ne bouge pas) :
+
+| Saisie | Message |
+|--------|---------|
+| date vide | « La date du trajet ne doit pas être vide » |
+| `32/13/2026` | « Date de trajet invalide (format attendu jj/mm/aaaa) » |
+| libellé vide | « Le trajet doit être décrit (départ, arrivée, motif) » |
+| distance vide | « La distance ne doit pas être vide » |
+| distance `0` | « La distance doit être un nombre entier de kilomètres supérieur à zéro » |
+| distance `abc` | idem |
+| distance `15000` | « …ne peut pas dépasser 2000 km ; vérifiez la saisie ou découpez le déplacement » |
+
+Après ces 7 refus : somme toujours à 378 km. Aucune écriture partielle.
+
+### 9.40 Phase 9 — contrôles de sécurité
+
+| # | Scénario | Attendu | Observé |
+|---|----------|---------|---------|
+| 1 | `POST /saisirfrais` avec `lesFrais[KM]=9999` | quantité inchangée, autres postes enregistrés | `quantite = 130` (pas 9999) ; `NUI = 2` et `REP = 5` bien pris ✅ |
+| 2 | `POST /saisirfrais` avec `lesFrais[ETP]=7` | refusé par la requête SQL | `quantite ETP = 0` (pas 7) ✅ |
+| 3 | Supprimer le trajet d'un **autre** visiteur, **avec un jeton CSRF valide** | 404, trajet intact | 404 ; trajet toujours présent, propriétaire `a55` ✅ |
+
+Le point 3 est le seul qui prouve quelque chose, et il a demandé deux essais. Au
+premier, le jeton venait du formulaire de saisie (intention `saisie_forfait`) :
+le refus était un **403 du contrôle CSRF**, et le contrôle d'appartenance n'était
+jamais atteint — exactement l'erreur du § 7.28, pour la quatrième fois de ce
+projet. En reprenant un jeton d'intention `trajet_supprimer` sur un trajet
+m'appartenant, puis en le rejouant contre celui de `a55`, le refus devient un 404
+qui ne peut venir **que** de `estValideSuppressionTrajet()`.
+
+### 9.41 Phase 9 — la commande de contrôle d'intégrité
+
+Éprouvée en provoquant **volontairement** deux dérives hors application :
+
+```bash
+mysql -u root bd_gsb -e "update lignefraisforfait set quantite=9999
+    where idVisiteur='a17' and mois='202606' and idFraisForfait='KM';
+    delete from trajet where idVisiteur='a55' limit 1;"
+
+php app/console gsb:verifier-distances
+#  2 fiche(s) en écart :
+#    a17 / 202606 : quantité 9999 km, trajets 480 km (écart -9519)
+#    a55 / 202608 : quantité 120 km, trajets 0 km (écart -120)
+#  Relancez avec --reparer pour recalculer ces quantités.
+
+php app/console gsb:verifier-distances --reparer
+#  2 quantité(s) recalculée(s).
+#  Plus aucun écart.
+```
+
+Codes de retour, **mesurés sans tube** (§ 7.33) : `1` quand un écart existe, `0`
+après réparation, `0` quand tout est cohérent.
+
+### 9.42 Phase 9 — non-régression (vérifiée)
+
+| Contrôle | Résultat |
+|----------|----------|
+| Connexion des trois rôles | ✅ `dandre`, `mvalette`, `hdubois` |
+| Écrans visiteur `/saisirfrais`, `/listefrais`, `/monvehicule` | ✅ 200 |
+| Écrans comptable `/validation`, `/validation/recap` | ✅ 200 |
+| Cohérence sur **toutes** les fiches | ✅ 0 fiche dont la quantité diffère de la somme de ses trajets |
+| Volumétrie des trajets | ✅ 206 trajets, 100 077 km — identique à la sortie de la migration |
+| `php app/console lint:twig` | ✅ « All 28 Twig files contain valid syntax » |
+| `php -l` sur tous les fichiers modifiés ou créés | ✅ aucune erreur |
+| `sql/bd_gsb.sql` reproduit le schéma migré | ✅ **78 colonnes identiques** ; et dans la base reconstruite, la somme des trajets égale la quantité KM pour les 4 fiches du jeu de données |
+| Fins de ligne | ✅ `PdoGsb.php` et `fct.inc.php` restent 100 % CRLF (§ 7.29) |
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)

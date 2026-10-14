@@ -107,6 +107,43 @@ function estVisiteur($session){
 
  * @return vrai ou faux
  */
+/**
+ * Vérifie la validité des trois champs d'un trajet (phase 9)
+
+ * Mêmes règles que valideInfosFrais() pour la date, auxquelles s'ajoute le
+ * contrôle de la distance. Celle-ci doit être un entier strictement positif :
+ * un trajet de 0 km n'est pas un trajet, et la base refuse déjà NULL.
+
+ * Le plafond de 2000 km n'est pas une règle du cahier des charges, qui n'en
+ * donne aucune. C'est un garde-fou contre la faute de frappe -- un 0 de trop
+ * sur 150 km en fait 1500, soit 930 € au tarif de 0,62 €/km, sans que rien ne
+ * le signale. Le comptable doit juger la plausibilité, pas rattraper une
+ * coquille que la saisie pouvait refuser.
+
+ * @return un tableau de messages d'erreur, vide si le trajet est valide
+ */
+function valideInfosTrajet($date, $libelle, $distance){
+    $lesErreurs = array();
+    if ($date == "") {
+        $lesErreurs[] = "La date du trajet ne doit pas être vide";
+    } elseif (!estDateValide($date)) {
+        $lesErreurs[] = "Date de trajet invalide (format attendu jj/mm/aaaa)";
+    } elseif (estDateDepassee($date)) {
+        $lesErreurs[] = "Date de trajet dépassée de plus d'un an";
+    }
+    if (trim($libelle) == "") {
+        $lesErreurs[] = "Le trajet doit être décrit (départ, arrivée, motif)";
+    }
+    if ($distance == "") {
+        $lesErreurs[] = "La distance ne doit pas être vide";
+    } elseif (!estEntierPositif($distance) || (int) $distance <= 0) {
+        $lesErreurs[] = "La distance doit être un nombre entier de kilomètres supérieur à zéro";
+    } elseif ((int) $distance > 2000) {
+        $lesErreurs[] = "La distance d'un seul trajet ne peut pas dépasser 2000 km ; "
+            . "vérifiez la saisie ou découpez le déplacement en plusieurs trajets";
+    }
+    return $lesErreurs;
+}
 function estAdministrateur($session){
     return $session->get('role') === 'administrateur';
 }

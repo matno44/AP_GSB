@@ -34,18 +34,44 @@
                 <th class="montant">Total</th>
             </tr>
             {% for unFrais in lesfraisforfait %}
+                {# Un forfait retiré de l'usage à quantité nulle n'a rien à dire :
+                   on l'omet. S'il porte encore une quantité, il reste affiché —
+                   il y a un montant à justifier et le masquer cacherait de
+                   l'argent — mais jamais modifiable. #}
+                {% if not (unFrais.actif == 0 and unFrais.quantite == 0) %}
                 <tr>
-                    <td>{{ unFrais.libelle }}</td>
+                    <td>
+                        {{ unFrais.libelle }}
+                        {% if unFrais.actif == 0 %}
+                            <span class="badgeEtatCompte compteDesactive">forfait retiré</span>
+                        {% endif %}
+                    </td>
                     <td class="nombre">
-                        {% if modifiable %}
+                        {# Trois cas, et un seul est modifiable.
+                           - le kilométrique est DÉRIVÉ de la somme des trajets
+                             (phase 9) : le corriger à la main le désynchroniserait
+                             du détail affiché juste en dessous ;
+                           - un forfait retiré ne peut plus recevoir de quantité ;
+                           - le reste est corrigeable, c'est l'étape 5 du scénario.
+                           Dans les deux premiers cas le champ n'est pas émis du
+                           tout : majFraisForfait() refuse de toute façon le
+                           forfait retiré, et corrigerAction() écarte la clé
+                           kilométrique. #}
+                        {% if modifiable and unFrais.actif == 1 and unFrais.idfrais != idfraiskm %}
                             <input type="text" name="lesFrais[{{ unFrais.idfrais }}]" value="{{ unFrais.quantite }}" size="5" maxlength="5" />
                         {% else %}
                             {{ unFrais.quantite }}
+                            {% if unFrais.idfrais == idfraiskm %}
+                                <span class="aideChamp" style="display:inline;margin-left:.4em">
+                                    somme des trajets
+                                </span>
+                            {% endif %}
                         {% endif %}
                     </td>
                     <td class="nombre">{{ unFrais.montantunitaire }} &euro;</td>
                     <td class="nombre">{{ unFrais.montant|number_format(2, '.', ' ') }} &euro;</td>
                 </tr>
+                {% endif %}
             {% endfor %}
             <tfoot>
                 <tr>
@@ -53,6 +79,41 @@
                     <td class="nombre">{{ totalforfait|number_format(2, '.', ' ') }} &euro;</td>
                 </tr>
             </tfoot>
+        </table>
+
+        {# Le détail des trajets (phase 9). C'est ce qui rend enfin possible le
+           contrôle que le cahier des charges demande au comptable : « vérifier
+           que la distance kilométrique est plausible ». Devant un total de
+           480 km il n'avait rien à quoi la confronter ; il voit maintenant
+           chaque déplacement, sa date et son motif. #}
+        <table class="listeLegere">
+            <caption>Détail des trajets &mdash; justifie la quantité kilométrique</caption>
+            <tr>
+                <th class="date">Date</th>
+                <th class="libelle">Trajet</th>
+                <th class="montant">Distance</th>
+            </tr>
+            {% for unTrajet in lestrajets %}
+                <tr>
+                    <td>{{ unTrajet.date }}</td>
+                    <td>{{ unTrajet.libelle }}</td>
+                    <td class="nombre">{{ unTrajet.distance }} km</td>
+                </tr>
+            {% else %}
+                <tr>
+                    <td colspan="3">
+                        Aucun trajet détaillé pour cette fiche.
+                    </td>
+                </tr>
+            {% endfor %}
+            {% if lestrajets is not empty %}
+            <tfoot>
+                <tr>
+                    <td colspan="2">Total parcouru</td>
+                    <td class="nombre">{{ totaldistance }} km</td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
 
         {% if modifiable %}

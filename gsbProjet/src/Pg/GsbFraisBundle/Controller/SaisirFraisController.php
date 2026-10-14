@@ -27,6 +27,15 @@ class SaisirFraisController extends ControleurGsb
         if ($request->isMethod('POST')) {
             $this->verifierJeton($request, 'saisie_forfait');
             $lesFrais = $request->request->get('lesFrais');
+            // La quantité kilométrique est DÉRIVÉE de la somme des trajets
+            // depuis la phase 9 : on l'écarte du lot avant la mise à jour.
+            // Le champ est affiché en lecture seule, mais un attribut readonly
+            // se retire en trois clics dans un navigateur — c'est donc ici,
+            // côté serveur, que la règle est réellement appliquée. Sans cela,
+            // un formulaire modifié écraserait le total calculé.
+            if (is_array($lesFrais)) {
+                unset($lesFrais[$pdo->getIdFraisKilometrique()]);
+            }
             if (lesQteFraisValides($lesFrais)) {
                 $pdo->majFraisForfait($idVisiteur, $mois, $lesFrais);
             } else {
@@ -125,9 +134,23 @@ class SaisirFraisController extends ControleurGsb
         $session = $this->get('request_stack')->getCurrentRequest()->getSession();
         $erreursHorsForfait = array_merge($erreursHorsForfait, getLesErreurs($session));
 
+        // Les trajets et leur total : le total est calculé ici et non dans le
+        // gabarit, pour la raison du § 6.x — une variable affectée par
+        // {% set %} dans une boucle Twig n'existe plus après elle, et
+        // additionner dans la vue donnerait silencieusement 0.
+        $lesTrajets = $pdo->getLesTrajets($idVisiteur, $mois);
+        $totalDistance = 0;
+        foreach ($lesTrajets as $unTrajet) {
+            $totalDistance += (int) $unTrajet['distance'];
+        }
+
         return $this->render('PgGsbFraisBundle:SaisirFrais:saisirtouslesfrais.html.twig',
             array('lesfraisforfait' => $lesFraisForfait,
                 'lesfraishorsforfait' => $lesFraisHorsForfait,
+                'lestrajets' => $lesTrajets,
+                'totaldistance' => $totalDistance,
+                'idfraiskm' => $pdo->getIdFraisKilometrique(),
+                'ensaisie' => $pdo->ficheEstEnSaisie($idVisiteur, $mois),
                 'nummois' => substr($mois, 4, 2), 'numannee' => substr($mois, 0, 4),
                 'nbjustificatifs' => $pdo->getNbjustificatifs($idVisiteur, $mois),
                 'extensions' => $this->get('pg_gsb_frais.justificatifs')->getExtensionsAutorisees(),

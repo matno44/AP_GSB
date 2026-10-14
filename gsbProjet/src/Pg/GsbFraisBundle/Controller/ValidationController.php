@@ -100,6 +100,13 @@ class ValidationController extends ControleurGsb
         }
 
         $lesFrais = $request->request->get('lesFrais');
+        // La quantité kilométrique est dérivée de la somme des trajets
+        // (phase 9) : on l'écarte avant la mise à jour. Le champ n'est plus
+        // émis par le gabarit, mais un formulaire forgé pourrait l'ajouter,
+        // et la corriger à la main la désynchroniserait du détail affiché.
+        if (is_array($lesFrais)) {
+            unset($lesFrais[$pdo->getIdFraisKilometrique()]);
+        }
         if (!lesQteFraisValides($lesFrais)) {
             return $this->rendreFiche($idVisiteur, $mois,
                                       array('erreur', 'Les quantités doivent être des nombres entiers positifs.'));
@@ -209,6 +216,8 @@ class ValidationController extends ControleurGsb
         // Les totaux sont calculés ici et non dans le gabarit : en Twig, une
         // variable affectée par {% set %} à l'intérieur d'une boucle n'existe
         // plus après elle. Additionner dans la vue donnerait silencieusement 0.
+        $lesTrajets          = $pdo->getLesTrajets($idVisiteur, $mois);
+        $totalDistance       = totalDesLignes($lesTrajets, 'distance');
         $totalForfait        = totalDesLignes($lesFraisForfait, 'montant');
         $totalHorsForfait    = totalDesLignes($lesFraisHorsForfait, 'montant');
 
@@ -222,6 +231,9 @@ class ValidationController extends ControleurGsb
                                    'lesinfos'            => $lesInfos,
                                    'datemodif'           => dateAnglaisVersFrancais($lesInfos['dateModif']),
                                    'modifiable'          => ($lesInfos['idEtat'] === 'CL'),
+                                   'lestrajets'          => $lesTrajets,
+                                   'totaldistance'       => $totalDistance,
+                                   'idfraiskm'           => $pdo->getIdFraisKilometrique(),
                                    'lesfraisforfait'     => $lesFraisForfait,
                                    'lesfraishorsforfait' => $lesFraisHorsForfait,
                                    'message'             => $message));

@@ -1,0 +1,95 @@
+{# Détail des trajets du mois (phase 9).
+
+   Même structure que saisirfraishorsforfait.html.twig : un tableau des lignes
+   existantes avec un bouton de suppression par ligne, puis un formulaire
+   d'ajout. La cohérence d'écran n'est pas que cosmétique — le visiteur a déjà
+   appris ce geste sur les frais hors forfait. #}
+<div id="contenu">
+    <table class="listeLegere">
+        <caption>Détail de mes trajets &mdash; le total alimente le frais kilométrique</caption>
+        <tr>
+            <th class="date">Date</th>
+            <th class="libelle">Trajet</th>
+            <th class="montant">Distance</th>
+            <th class="action">&nbsp;</th>
+        </tr>
+        {% for unTrajet in lestrajets %}
+            <tr>
+                <td>{{ unTrajet.date }}</td>
+                <td>{{ unTrajet.libelle }}</td>
+                <td class="nombre">{{ unTrajet.distance }} km</td>
+                <td>
+                    {% if ensaisie %}
+                    {# POST et non un lien : une suppression ne doit pas être
+                       déclenchable par un GET, qu'une balise <img> d'un autre
+                       site suffirait à provoquer (décision 6.5). #}
+                    <form method="post" style="display:inline;margin:0"
+                          action="{{ path('pg_gsb_frais_supprimertrajet', {'id': unTrajet.id}) }}">
+                        <input type="hidden" name="_token" value="{{ csrf_token('trajet_supprimer') }}" />
+                        <input type="submit" class="boutonRefus" value="Supprimer"
+                               onclick="return confirm('Supprimer le trajet « {{ unTrajet.libelle }} » de {{ unTrajet.distance }} km ?');" />
+                    </form>
+                    {% endif %}
+                </td>
+            </tr>
+        {% else %}
+            <tr>
+                <td colspan="4">
+                    Aucun trajet saisi pour ce mois. Votre frais kilométrique est
+                    donc à zéro : ajoutez vos déplacements ci-dessous.
+                </td>
+            </tr>
+        {% endfor %}
+        {% if lestrajets is not empty %}
+        <tfoot>
+            <tr>
+                <td colspan="2">Total parcouru</td>
+                <td class="nombre">{{ totaldistance }} km</td>
+                <td>&nbsp;</td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+
+    {% if ensaisie %}
+    <form method="post" action="{{ path('pg_gsb_frais_ajoutertrajet') }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('trajet_ajouter') }}" />
+        <div class="corpsForm">
+            <fieldset>
+                <legend>Nouveau trajet</legend>
+                <p>
+                    <label for="trajetDate">Date (jj/mm/aaaa)</label>
+                    <input type="text" id="trajetDate" name="date" size="10" maxlength="10" value="" />
+                </p>
+                <p>
+                    <label for="trajetLibelle">Trajet</label>
+                    <input type="text" id="trajetLibelle" name="libelle" size="60" maxlength="100" value="" />
+                </p>
+                <span class="aideChamp">
+                    Départ, arrivée et motif &mdash; par exemple
+                    « Besançon &rarr; Dijon, visite Dr Lemoine ». C'est ce qui permet
+                    au comptable de juger la plausibilité de la distance.
+                </span>
+                <p>
+                    <label for="trajetDistance">Distance (km)</label>
+                    <input type="text" id="trajetDistance" name="distance" size="8" maxlength="4" value="" />
+                </p>
+                <span class="aideChamp">
+                    Kilomètres entiers, aller-retour inclus si c'est le cas.
+                </span>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+            <p>
+                <input type="submit" value="Ajouter ce trajet" />
+                <input type="reset" value="Effacer" />
+            </p>
+        </div>
+    </form>
+    {% else %}
+    <p class="legendeTableau">
+        Votre fiche de frais du mois n'est plus en saisie : les trajets ne
+        peuvent plus être ajoutés ni supprimés.
+    </p>
+    {% endif %}
+</div>

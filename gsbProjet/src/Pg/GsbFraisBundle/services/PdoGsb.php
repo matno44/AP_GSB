@@ -19,7 +19,7 @@ class PdoGsb
          * Le barème, lui, est en base (table typevehicule) : c'est bien la valeur
          * qui n'est pas codée en dur. Reste à savoir QUELLE ligne de frais est la
          * ligne kilométrique ; cette information est structurelle (elle ne change
-         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, �
+         * pas quand la direction modifie ses tarifs) et elle est déclarée ici, à
          * un seul endroit, plutôt que recopiée dans chaque requête.
          */
         const ID_FRAIS_KILOMETRIQUE = 'KM';
@@ -140,7 +140,8 @@ class PdoGsb
                 $req  = "select fraisforfait.id as idfrais, fraisforfait.libelle as libelle, 
 \t\tlignefraisforfait.quantite as quantite, 
 \t\tlignefraisforfait.montantUnitaire as montantunitaire, 
-\t\tlignefraisforfait.quantite * lignefraisforfait.montantUnitaire as montant 
+\t\tlignefraisforfait.quantite * lignefraisforfait.montantUnitaire as montant, 
+\t\tfraisforfait.actif as actif 
 \t\tfrom lignefraisforfait inner join fraisforfait 
 \t\ton fraisforfait.id = lignefraisforfait.idfraisforfait
 \t\twhere lignefraisforfait.idvisiteur = :idVisiteur and lignefraisforfait.mois= :mois 
@@ -160,7 +161,8 @@ class PdoGsb
          */
         public function getLesIdFrais()
         {
-                $req  = 'select fraisforfait.id as idfrais from fraisforfait order by fraisforfait.id';
+                $req  = 'select fraisforfait.id as idfrais from fraisforfait
+                where fraisforfait.actif = 1 order by fraisforfait.id';
                 $stmt = PdoGsb::$monPdo->prepare($req);
                 $stmt->execute();
                 $lesLignes = $stmt->fetchAll();
@@ -183,9 +185,16 @@ class PdoGsb
                 $lesCles = array_keys($lesFrais);
                 foreach ($lesCles as $unIdFrais) {
                         $qte  = $lesFrais[$unIdFrais];
+                        // « and ... in (select id from fraisforfait where actif = 1) »
+                        // depuis la phase 9 : un forfait retiré de l'usage ne peut plus
+                        // recevoir de quantité. La règle est ICI et non dans les
+                        // contrôleurs, pour qu'aucun appelant ne puisse l'oublier --
+                        // ni l'écran de saisie, ni la correction par le comptable.
                         $req  = "update lignefraisforfait set lignefraisforfait.quantite = :qte
 \t\t\twhere lignefraisforfait.idvisiteur = :idVisiteur and lignefraisforfait.mois = :mois
-\t\t\tand lignefraisforfait.idfraisforfait = :unIdFrais";
+\t\t\tand lignefraisforfait.idfraisforfait = :unIdFrais
+\t\t\tand lignefraisforfait.idfraisforfait in
+\t\t\t    (select id from fraisforfait where actif = 1)";
                         $stmt = PdoGsb::$monPdo->prepare($req);
                         $stmt->bindParam(':qte', $qte);
                         $stmt->bindParam(':idVisiteur', $idVisiteur);
@@ -531,6 +540,7 @@ class PdoGsb
                 from fraisforfait
                 left join visiteur on visiteur.id = :idVisiteur
                 left join typevehicule on typevehicule.id = visiteur.idTypeVehicule
+                where fraisforfait.actif = 1
                 order by fraisforfait.id';
                 $stmt      = PdoGsb::$monPdo->prepare($req);
                 $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
@@ -844,7 +854,8 @@ class PdoGsb
         public function getLesTypesFraisForfait()
         {
                 $req  = 'select fraisforfait.id as id, fraisforfait.libelle as libelle,
-                fraisforfait.montant as montant from fraisforfait order by fraisforfait.id';
+                fraisforfait.montant as montant from fraisforfait
+                where fraisforfait.actif = 1 order by fraisforfait.id';
                 $stmt = PdoGsb::$monPdo->prepare($req);
                 $stmt->execute();
                 return $stmt->fetchAll();
@@ -1335,5 +1346,219 @@ class PdoGsb
                 $stmt = PdoGsb::$monPdo->prepare($req);
                 $stmt->execute();
                 return $stmt->fetchAll();
+        }
+        /**
+         * Détail des trajets (phase 9)
+         * =========================================================================
+         */
+
+        /**
+         * Expose l'identifiant de la ligne kilométrique
+         *
+         * Les contrôleurs en ont besoin : l'écran de saisie doit traiter cette
+         * ligne à part, sa quantité étant désormais dérivée des trajets. Un
+         * accesseur plutôt que la constante lue directement, pour que les
+         * contrôleurs continuent de ne connaître que le service injecté.
+         *
+         * @return string
+         */
+        public function getIdFraisKilometrique()
+        {
+                return PdoGsb::ID_FRAIS_KILOMETRIQUE;
+        }
+
+        /**
+         * Retourne les trajets d'une fiche, du plus ancien au plus récent
+         *
+         * La date est convertie au format français ici, comme le fait
+         * getLesFraisHorsForfait() : les gabarits n'ont pas à connaître le format
+         * de stockage.
+         *
+         * @param $idVisiteur
+         * @param $mois sous la forme aaaamm
+         * @return tableau : id, date, libelle, distance
+         */
+        public function getLesTrajets($idVisiteur, $mois)
+        {
+                $req  = 'select id, date, libelle, distance from trajet
+                where idVisiteur = :idVisiteur and mois = :mois
+                order by date, id';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->execute();
+                $lesLignes = $stmt->fetchAll();
+                $nbLignes  = count($lesLignes);
+                for ($i = 0; $i < $nbLignes; $i++) {
+                        $lesLignes[$i]['date'] = dateAnglaisVersFrancais($lesLignes[$i]['date']);
+                }
+                return $lesLignes;
+        }
+
+        /**
+         * Enregistre un trajet et met à jour la distance de la fiche
+         *
+         * Les deux opérations sont indissociables : un trajet enregistré sans
+         * recalcul laisserait la ligne kilométrique en retard sur ses trajets, et
+         * le visiteur verrait un total qui ne correspond pas à ce qu'il vient de
+         * saisir. Elles sont donc dans une transaction.
+         *
+         * @param $date au format français jj/mm/aaaa
+         * @return l'identifiant du trajet créé
+         */
+        public function creeTrajet($idVisiteur, $mois, $date, $libelle, $distance)
+        {
+                PdoGsb::$monPdo->beginTransaction();
+                try {
+                        $req  = 'insert into trajet(idVisiteur, mois, date, libelle, distance)
+                        values(:idVisiteur, :mois, :date, :libelle, :distance)';
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':idVisiteur', $idVisiteur);
+                        $stmt->bindParam(':mois', $mois);
+                        $dateAng = dateFrancaisVersAnglais($date);
+                        $stmt->bindParam(':date', $dateAng);
+                        $stmt->bindParam(':libelle', $libelle);
+                        $stmt->bindValue(':distance', (int) $distance, PDO::PARAM_INT);
+                        $stmt->execute();
+                        $id = PdoGsb::$monPdo->lastInsertId();
+                        $this->recalculerDistance($idVisiteur, $mois);
+                        PdoGsb::$monPdo->commit();
+                        return $id;
+                } catch (\Exception $e) {
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
+        }
+
+        /**
+         * Supprime un trajet et met à jour la distance de la fiche
+         *
+         * @return le nombre de lignes supprimées : 0 ou 1
+         */
+        public function supprimerTrajet($idVisiteur, $mois, $id)
+        {
+                PdoGsb::$monPdo->beginTransaction();
+                try {
+                        $req  = 'delete from trajet where id = :id';
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':id', $id);
+                        $stmt->execute();
+                        $nb = $stmt->rowCount();
+                        $this->recalculerDistance($idVisiteur, $mois);
+                        PdoGsb::$monPdo->commit();
+                        return $nb;
+                } catch (\Exception $e) {
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
+        }
+
+        /**
+         * Recalcule la quantité de la ligne kilométrique d'une fiche
+         *
+         * La quantité est DÉRIVÉE de la somme des trajets. Elle est recalculée et
+         * jamais incrémentée : c'est la décision 2.4, prise pour nbJustificatifs
+         * et reprise ici pour la même raison. Un compteur qu'on incrémente dérive
+         * dès qu'une opération échoue à mi-chemin ou qu'une ligne est supprimée
+         * par une cascade ; une somme recalculée ne peut pas se désynchroniser.
+         *
+         * coalesce : une fiche dont on vient de supprimer le dernier trajet n'a
+         * plus aucune ligne à sommer, et sum() renvoie NULL -- ce qui violerait
+         * la contrainte NOT NULL de quantite.
+         *
+         * Le montantUnitaire n'est PAS touché : il reste celui figé à la création
+         * de la ligne (décision 1.1). Seule la quantité bouge.
+         */
+        public function recalculerDistance($idVisiteur, $mois)
+        {
+                $req  = 'update lignefraisforfait
+                set quantite = coalesce((
+                        select sum(distance) from trajet
+                        where trajet.idVisiteur = :idVisiteur and trajet.mois = :mois), 0)
+                where lignefraisforfait.idVisiteur = :idVisiteur
+                and lignefraisforfait.mois = :mois
+                and lignefraisforfait.idFraisForfait = :idFraisKm';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                $stmt->bindParam(':idFraisKm', $idFraisKm);
+                $stmt->execute();
+        }
+
+        /**
+         * Liste les fiches dont la quantité kilométrique ne correspond plus à la
+         * somme de leurs trajets
+         *
+         * Sert à la commande gsb:verifier-distances. L'invariant est maintenu par
+         * l'application et non par la base : aucun déclencheur ne l'impose, donc
+         * il faut pouvoir le contrôler.
+         *
+         * La jointure est un LEFT JOIN et la somme passe par coalesce : une fiche
+         * ayant une quantité mais PLUS AUCUN trajet est précisément le cas qu'on
+         * cherche, et un INNER JOIN l'aurait écartée du résultat.
+         *
+         * @return tableau : idVisiteur, mois, quantite, sommeTrajets
+         */
+        public function getLesDistancesDivergentes()
+        {
+                $req  = 'select l.idVisiteur as idVisiteur, l.mois as mois,
+                l.quantite as quantite, coalesce(t.tot, 0) as sommeTrajets
+                from lignefraisforfait l
+                left join (select idVisiteur, mois, sum(distance) as tot
+                             from trajet group by idVisiteur, mois) t
+                       on t.idVisiteur = l.idVisiteur and t.mois = l.mois
+                where l.idFraisForfait = :idFraisKm
+                and l.quantite <> coalesce(t.tot, 0)
+                order by l.idVisiteur, l.mois';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                $stmt->bindParam(':idFraisKm', $idFraisKm);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+
+        /**
+         * Vérifie qu'un trajet appartient bien à la fiche indiquée
+         *
+         * Même garde que estValideSuppressionFrais() et pour la même raison : sans
+         * ce contrôle, un identifiant modifié dans l'URL supprimerait le trajet
+         * d'un autre visiteur ou d'un autre mois.
+         *
+         * @return vrai ou faux
+         */
+        public function estValideSuppressionTrajet($idVisiteur, $mois, $id)
+        {
+                $req  = 'select count(*) as nb from trajet
+                where id = :id and idVisiteur = :idVisiteur and mois = :mois';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':id', $id);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['nb'] == 1;
+        }
+
+        /**
+         * Indique si la fiche d'un visiteur pour un mois est encore modifiable
+         *
+         * Un trajet ne s'ajoute ni ne se supprime sur une fiche clôturée,
+         * validée, mise en paiement ou remboursée : cela modifierait la quantité
+         * kilométrique, donc un montant déjà soumis au comptable ou déjà payé.
+         * L'état 'CR' est le seul qui autorise la saisie.
+         *
+         * @return vrai ou faux
+         */
+        public function ficheEstEnSaisie($idVisiteur, $mois)
+        {
+                $req  = "select count(*) as nb from fichefrais
+                where idVisiteur = :idVisiteur and mois = :mois and idEtat = 'CR'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':mois', $mois);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['nb'] == 1;
         }
 }
