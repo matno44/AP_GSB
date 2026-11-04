@@ -256,6 +256,12 @@ input[type="reset"]:hover  { color: var(--gsb-principale-hover); border-color: v
 
 .etatCloturee { color: #5c4310; background: #fdf3d8; }
 .etatValidee  { color: #14562c; background: #ddf3e4; }
+/* Statuts d'une demande de carte grise (phase 10). Les mêmes teintes que les
+   états de fiche : l'ambre signale une attente, le vert un accord, le rouge un
+   refus. La couleur n'est jamais seule porteuse de l'information — le libellé
+   du statut est écrit dans la pastille. */
+.etatEnAttente { color: #5c4310; background: #fdf3d8; }
+.etatRefusee   { color: #B3261E; background: #fdecec; }
 
 .confirmation {
     margin: 0 0 1em;
@@ -475,6 +481,23 @@ input[type="submit"].boutonRefus:hover { background: #f8dcdc; }
     color: var(--gsb-principale);
     background: var(--gsb-fond-clair);
     border: 1px dashed var(--gsb-principale);
+    border-radius: 4px;
+}
+
+/* ------------------------------------- aperçu d'une carte grise (phase 10) */
+
+/* Le comptable relève les informations en ayant le document sous les yeux.
+   La hauteur est fixée : sans elle, un <object> PDF se replie à quelques
+   pixels, et une photo de carte grise prise au téléphone occuperait seule
+   plusieurs écrans. width 100% et contain pour que l'image entière reste
+   visible quelle que soit son orientation. */
+.apercuDocument {
+    display: block;
+    width: 100%;
+    height: 32em;
+    object-fit: contain;
+    background: var(--gsb-fond-clair);
+    border: 1px solid var(--gsb-bordure);
     border-radius: 4px;
 }
 

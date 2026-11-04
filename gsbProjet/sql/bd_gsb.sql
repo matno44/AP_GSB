@@ -11,6 +11,13 @@ CREATE TABLE etat (
 ) ENGINE=InnoDB;
 
 
+CREATE TABLE statutcartegrise (
+    id      CHAR(2)     NOT NULL,
+    libelle VARCHAR(30) NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
 CREATE TABLE fraisforfait (
     id      CHAR(3)       NOT NULL,
     libelle VARCHAR(20)   NOT NULL,
@@ -152,12 +159,50 @@ CREATE TABLE trajet (
         REFERENCES fichefrais (idVisiteur, mois) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+
+CREATE TABLE cartegrise (
+    id              INT          NOT NULL AUTO_INCREMENT,
+    idVisiteur      CHAR(4)      NOT NULL,
+
+    nomFichier      VARCHAR(64)  NOT NULL,
+    nomOriginal     VARCHAR(255) NOT NULL,
+    typeMime        VARCHAR(100) NOT NULL,
+    dateEnvoi       DATETIME     NOT NULL,
+
+    idStatut        CHAR(2)      NOT NULL DEFAULT 'EA',
+    dateDecision    DATETIME     DEFAULT NULL,
+    idComptable     CHAR(4)      DEFAULT NULL,
+    motifRefus      VARCHAR(255) DEFAULT NULL,
+
+    idTypeVehicule  CHAR(3)      DEFAULT NULL,
+    immatriculation VARCHAR(15)  DEFAULT NULL,
+    marqueModele    VARCHAR(60)  DEFAULT NULL,
+
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_cartegrise_nomfichier (nomFichier),
+    KEY ix_cartegrise_statut (idStatut, dateEnvoi),
+    KEY ix_cartegrise_visiteur (idVisiteur, dateEnvoi),
+    CONSTRAINT fk_cartegrise_visiteur FOREIGN KEY (idVisiteur)
+        REFERENCES visiteur (id) ON DELETE CASCADE,
+    CONSTRAINT fk_cartegrise_statut FOREIGN KEY (idStatut)
+        REFERENCES statutcartegrise (id),
+    CONSTRAINT fk_cartegrise_typevehicule FOREIGN KEY (idTypeVehicule)
+        REFERENCES typevehicule (id),
+    CONSTRAINT fk_cartegrise_comptable FOREIGN KEY (idComptable)
+        REFERENCES comptable (id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 INSERT INTO etat (id, libelle) VALUES
     ('CR', 'Fiche créée, saisie en cours'),
     ('CL', 'Saisie clôturée'),
     ('VA', 'Validée'),
     ('MP', 'Mise en paiement'),
     ('RB', 'Remboursée');
+
+INSERT INTO statutcartegrise (id, libelle) VALUES
+    ('EA', 'En attente de validation'),
+    ('VA', 'Validée'),
+    ('RE', 'Refusée');
 
 INSERT INTO fraisforfait (id, libelle, montant, actif) VALUES
     ('ETP', 'Forfait Etape',       110.00, 0),

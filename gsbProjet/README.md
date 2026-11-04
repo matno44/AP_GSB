@@ -38,7 +38,7 @@ Installation
 mysql -u root < sql/bd_gsb.sql
 ```
 
-Le script crée la base `bd_gsb`, ses sept tables et un jeu de données de
+Le script crée la base `bd_gsb`, ses treize tables et un jeu de données de
 démonstration. Il est tenu à jour avec les migrations : une base créée de zéro
 a exactement le même schéma qu'une base migrée.
 
@@ -56,6 +56,9 @@ mysql -u root bd_gsb < sql/001_puissance_fiscale_vehicule.sql
 | `001_puissance_fiscale_vehicule.sql` | barème kilométrique par véhicule, rattachement du visiteur, historisation du montant unitaire |
 | `002_justificatifs.sql` | pièces jointes des frais hors forfait, remise à zéro du compteur `nbJustificatifs` |
 | `003_comptable_et_etats.sql` | table `comptable`, 5ᵉ état « Mise en paiement », re-libellé de « Validée » |
+| `004_administration_comptes.sql` | table `administrateur`, journal d'administration, empreintes de mots de passe |
+| `005_trajets_et_retrait_forfait_etape.sql` | table `trajet`, désactivation du forfait étape |
+| `006_carte_grise.sql` | tables `cartegrise` et `statutcartegrise` : validation du véhicule sur pièce |
 
 Les paramètres de connexion sont dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml` :
@@ -95,8 +98,17 @@ php app/console cache:clear --env=dev
 ```bash
 symfony server:start -d        # http://127.0.0.1:8000
 # ou
-php -S 127.0.0.1:8000 -t web web/app_dev.php
+php -d upload_max_filesize=6M -d post_max_size=8M -S 127.0.0.1:8000 -t web web/app_dev.php
 ```
+
+Les deux directives `-d` servent à l'envoi des cartes grises (5 Mo). Sans
+elles, `upload_max_filesize` vaut 2M par défaut et **PHP écarte le fichier
+avant que l'application le voie** : le visiteur reçoit un message technique en
+anglais citant une directive de configuration, au lieu du message de
+l'application. La valeur doit être **strictement supérieure** à la limite
+applicative — à 5M exactement, les deux seuils se confondent et PHP reprend la
+main. Avec `symfony server:start`, régler les mêmes valeurs dans le `php.ini`
+de la version de PHP utilisée.
 
 Comptes de démonstration
 ------------------------
@@ -159,10 +171,12 @@ Fonctionnalités
 ### Remboursement kilométrique
 
 Le tarif dépend du véhicule du visiteur (table `typevehicule`, de 0,52 à
-0,72 €/km). Le visiteur le déclare via « Mon véhicule ». Le tarif appliqué est
-**figé sur chaque ligne de frais** (`lignefraisforfait.montantUnitaire`) : un
-changement de barème ne recalcule jamais une fiche déjà clôturée. Un visiteur
-qui n'a pas déclaré de véhicule est remboursé au tarif historique de 0,62 €/km.
+0,72 €/km). Depuis la phase 10, le visiteur **ne le déclare plus lui-même** :
+il envoie sa carte grise, et c'est le comptable qui y relève la puissance
+fiscale et le carburant (voir *Carte grise*). Le tarif appliqué est **figé sur
+chaque ligne de frais** (`lignefraisforfait.montantUnitaire`) : un changement
+de barème ne recalcule jamais une fiche déjà clôturée. Un visiteur sans
+véhicule enregistré est remboursé au tarif historique de 0,62 €/km.
 
 ### Justificatifs
 
@@ -182,6 +196,52 @@ phase 5). Ce dossier n'est pas versionné et **n'est pas inclus dans un
 Pour accepter des fichiers plus volumineux, modifier `upload_max_filesize` et
 `post_max_size` dans `php.ini`, **puis** `justificatifs.taille_max` dans
 `src/Pg/GsbFraisBundle/Resources/config/services.yml`.
+
+### Carte grise
+
+Les caractéristiques du véhicule déterminent le tarif kilométrique : les
+laisser déclarer par le visiteur lui-même revenait à lui faire fixer son propre
+remboursement, sans pièce justificative. Sur 1 000 km mensuels, l'écart entre
+« 4 CV Diesel » (0,52 €/km) et « 7 CV et + Essence » (0,72) représente 200 €.
+
+**Côté visiteur**, l'écran « Mon véhicule » ne comporte plus de liste
+déroulante. Le visiteur y envoie sa carte grise (**pdf, jpg, jpeg, png**, 5 Mo
+maximum) et y suit l'état de sa demande : *en attente*, *validée*, ou *refusée*
+avec le motif. Après un refus, il peut envoyer un nouveau document ; tant qu'une
+demande est en attente, il ne peut pas en déposer une seconde.
+
+**Côté comptable**, « Cartes grises en attente » liste les demandes de la plus
+ancienne à la plus récente. L'écran d'examen affiche le document dans la page —
+`<object>` pour un PDF, `<img>` pour une image — à côté du formulaire de relevé.
+Le comptable y saisit la **puissance fiscale et le carburant** (champs P.6 et
+P.3 de la carte grise, seule information qui entre dans le calcul),
+l'**immatriculation** (champ A) et la **marque et le modèle** (D.1 et D.3). Les
+trois sont obligatoires : les deux dernières ne servent aucun calcul, mais
+rattachent la décision à un véhicule identifié et attestent que le document a
+été lu. Un refus exige un motif, transmis tel quel au visiteur.
+
+**Les informations ne sont écrites qu'à la validation.** `visiteur.idTypeVehicule`
+reste la seule colonne lue par les calculs de frais ; seul son écrivain a changé.
+Tant qu'une demande est en attente, elle ne bouge pas, et les frais continuent
+donc d'être calculés avec les dernières informations validées — sans qu'aucune
+ligne de calcul ait eu à être modifiée. La validation répercute le nouveau tarif
+sur la fiche **en cours de saisie uniquement** ; les fiches clôturées, validées
+ou remboursées conservent le leur. Un refus ne change rien au tarif appliqué.
+
+Les fichiers sont stockés dans **`app/cartesgrises/`**, donc hors de `web/`,
+sous un nom généré aléatoirement (32 caractères hexadécimaux). Le **vrai type
+du fichier est vérifié côté serveur** par `getMimeType()`, qui analyse le
+contenu, et doit concorder avec l'extension annoncée : un script renommé
+`carte.pdf` est refusé. La consultation passe obligatoirement par
+`/cartegrise/{id}`, qui vérifie que le demandeur est **le visiteur concerné ou
+un comptable** — sinon 404, et non 403, pour ne pas confirmer l'existence du
+document. Comme `app/justificatifs/`, ce dossier n'est pas versionné et **n'est
+pas inclus dans un `mysqldump`**.
+
+Deux conséquences assumées : les documents des demandes refusées sont
+**conservés** (c'est l'historique qui rend le refus vérifiable), et la
+suppression d'un compte visiteur efface ses demandes en base — `ON DELETE
+CASCADE` — mais **pas les fichiers sur le disque**.
 
 ### Impression des fiches
 

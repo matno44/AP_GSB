@@ -230,6 +230,48 @@ charges lui demande de contrôler que « la distance kilométrique est plausible
 Devant un total de 480 km, il n'avait rien à quoi la confronter. Il voit
 maintenant chaque déplacement, sa date et son motif.
 
+### Phase 10 — Carte grise validée par le comptable
+
+**Demande du client.** Le visiteur ne doit plus modifier lui-même les
+caractéristiques de sa voiture : il envoie sa carte grise, et le comptable y
+relève les informations avant de valider ou de refuser.
+
+**Ce que mesurait le défaut.** Le tarif kilométrique dépend de la puissance
+fiscale et du carburant (table `typevehicule`, de 0,52 à 0,72 €/km), et la
+phase 1 laissait le visiteur choisir sa ligne de barème dans une liste
+déroulante, sans pièce à l'appui. Sur 1 000 km mensuels, passer de « 4 CV
+Diesel » à « 7 CV et + Essence » rapportait **200 € de plus**, et rien dans
+l'application ne permettait de s'en apercevoir : le visiteur était à la fois le
+déclarant et le seul contrôleur de sa déclaration.
+
+| Action | Fichier | Rôle |
+|--------|---------|------|
+| Migration | `sql/006_carte_grise.sql` *(nouveau)* | tables `statutcartegrise` (EA/VA/RE) et `cartegrise` ; **aucun DROP, aucune donnée touchée** |
+| Accès aux données | `services/PdoGsb.php` *(modifié)* | 9 méthodes ajoutées ; `validerCarteGrise()` écrit la décision ET le véhicule sous une seule transaction |
+| Stockage | `Resources/config/services.yml` *(modifié)* | 2ᵉ instance de `StockageJustificatifs`, dossier `app/cartesgrises/`, 5 Mo — **aucune classe nouvelle** |
+| Garde serveur | `Controller/ControleurGsb.php` *(modifié)* | `refuserNonComptable()`, pendant de `refuserNonVisiteur()` |
+| Côté visiteur | `Controller/VehiculeController.php` *(modifié)* | `validerAction()` **supprimée** ; `envoyerAction()` ajoutée |
+| Côté comptable | `Controller/CarteGriseController.php` *(nouveau)* | consultation du document, file d'attente, examen, validation, refus |
+| Écrans | `views/Vehicule/monvehicule.html.twig` *(réécrit)*, `views/CarteGrise/attente.html.twig` et `examiner.html.twig` *(nouveaux)*, `accueil.html.twig` et `SaisirFrais/saisirfraisforfait.html.twig` *(modifiés)* | statut et envoi, file du comptable, document affiché à côté du formulaire de relevé |
+| Feuille de style | `Resources/public/styles/styles.css` *(modifié)* | pastilles `.etatEnAttente` / `.etatRefusee`, `.apercuDocument` |
+| Routes | `Resources/config/routing.yml` *(modifié)* | **1 route supprimée**, 5 ajoutées (3 en POST) |
+| Script de reconstruction | `sql/bd_gsb.sql` *(modifié)* | tenu en phase avec la migration 006 (décision 1.7) |
+
+**Le point le plus important de cette phase est ce que je n'ai PAS eu à
+écrire.** La règle « en attendant la validation, les frais continuent d'être
+calculés avec les dernières informations validées » n'a coûté **aucune ligne de
+code**. Tous les calculs passent par `visiteur.idTypeVehicule`
+(`getLesMontantsUnitairesApplicables()`, `getTarifKilometrique()`) ; seul
+l'écrivain de cette colonne a changé, du visiteur vers le comptable. Tant que
+personne n'a validé, elle ne bouge pas. Vérifié : une demande en attente laisse
+la fiche en saisie à son ancien montant unitaire (§ 9.45).
+
+Le stockage n'a rien coûté non plus. `StockageJustificatifs`, écrite en phase 2,
+vérifie déjà le **vrai type MIME** par analyse du contenu, génère un nom par
+`random_bytes()` et range hors de `web/` : ses deux seuls paramètres sont le
+dossier et la taille maximale. Les cartes grises sont donc une **seconde
+instance du même service**, déclarée en six lignes de YAML.
+
 ---
 
 ## 2. Cartographie du projet
@@ -1922,6 +1964,99 @@ le projet n'en contient aucun, en introduire un déplacerait une règle métier 
 la base où personne ne la cherchera, et la commande couvre le besoin réel —
 détecter et réparer une dérive accidentelle.
 
+### Phase 10
+
+### Décision 10.1 — Un historique des demandes, et non des colonnes sur `visiteur`
+
+Le plus simple aurait été d'ajouter `nomFichierCarteGrise`, `statut` et
+`motifRefus` à la table `visiteur`. Le cahier des charges l'interdit en pratique
+par **deux de ses propres exigences** : le refus doit être motivé, et un nouveau
+document doit pouvoir être envoyé ensuite. Il y a donc plusieurs demandes
+successives pour un même visiteur, et le motif du refus précédent doit rester
+lisible pendant qu'une nouvelle demande est en cours.
+
+Une ligne par envoi répond aux deux. Le statut courant est celui de la demande
+**la plus récente** (`order by dateEnvoi desc, id desc` — l'auto-incrément
+départage deux envois faits dans la même seconde, ce qu'un horodatage à la
+seconde ne peut pas faire).
+
+Conséquence voulue : le comptable voit qu'une carte grise a déjà été refusée
+une fois, et pourquoi. Une colonne unique écrasée à chaque envoi l'en aurait
+privé.
+
+### Décision 10.2 — Le référentiel `statutcartegrise` plutôt qu'un `ENUM`
+
+Trois statuts (`EA`, `VA`, `RE`), donc la tentation de l'`ENUM`. Une table de
+référence a été retenue, pour la même raison qu'`etat` depuis l'origine : le
+libellé affiché (« En attente de validation ») est une **donnée**, pas une
+chaîne codée dans un gabarit, et une clé étrangère interdit tout statut
+inventé sans qu'un `ALTER TABLE` soit nécessaire pour en ajouter un quatrième.
+
+Le gabarit ne décide rien : il lit `statutlibelle` et ne choisit que la classe
+CSS de la pastille. La couleur n'est jamais seule porteuse de l'information —
+le libellé est écrit dans la pastille, pas seulement suggéré par sa teinte.
+
+### Décision 10.3 — Le comptable relève trois informations, dont une seule compte
+
+`idTypeVehicule` est la **seule** donnée qui entre dans le calcul des frais :
+elle combine puissance fiscale et carburant, et détermine le tarif. S'en tenir à
+elle aurait suffi au calcul.
+
+L'immatriculation (champ A de la carte grise) et la marque/modèle (D.1 et D.3)
+sont relevées **en plus**, et elles sont obligatoires. Elles ne servent aucun
+calcul : elles rattachent la décision à un véhicule identifié, et elles
+attestent que le document a été ouvert. Les rendre facultatives reviendrait à
+pouvoir valider une carte grise sans l'avoir lue — ce qui vide de son sens le
+contrôle que toute la phase met en place.
+
+Un champ « puissance fiscale » rempli par le visiteur, même « à titre
+indicatif », a été écarté pour la même raison : il finirait recopié par un
+comptable pressé, et le contrôle n'aurait plus lieu.
+
+**L'immatriculation est volontairement peu contrainte** (`[A-Za-z0-9 -]{4,15}`,
+puis passage en majuscules). Les plaques françaises ont changé de format en 2009
+(`AA-123-AA` contre `123 AB 45`), et un véhicule immatriculé à l'étranger reste
+possible : un format strict refuserait un cas légitime. Le contrôle écarte les
+saisies manifestement fausses, pas les formats qu'il ne connaît pas.
+
+### Décision 10.4 — `validerAction()` est supprimée, pas seulement son formulaire
+
+Retirer la liste déroulante du gabarit en laissant l'action en place aurait
+conservé une URL — `POST /validermonvehicule` — par laquelle un visiteur averti
+aurait continué à fixer son propre tarif. **Masquer un formulaire n'est pas
+contrôler un envoi.** L'action et sa route partent donc ensemble, et la
+vérification est faite : `POST /validermonvehicule` renvoie 404 (§ 9.44).
+
+Les deux méthodes de `PdoGsb` qu'elle utilisait, `estTypeVehiculeValide()` et la
+logique de `majTypeVehiculeVisiteur()`, ne sont pas supprimées : elles changent
+d'appelant, du visiteur vers le comptable. `validerCarteGrise()` reprend le
+corps de la seconde plutôt que de l'appeler — MySQL ne sait pas imbriquer deux
+`beginTransaction()`, et la décision et la mise à jour du véhicule doivent tenir
+dans **une seule** transaction.
+
+### Décision 10.5 — Une seule demande en attente à la fois
+
+Sans cette règle, un visiteur pourrait déposer vingt fichiers d'affilée : la
+file du comptable se remplirait et le disque avec, sans qu'aucun apporte
+d'information nouvelle. Le cahier des charges n'autorise un nouvel envoi
+qu'**après un refus**, ce qui est exactement cette règle.
+
+Elle est appliquée **côté serveur** (`aUneDemandeEnAttente()`), et pas seulement
+en masquant le formulaire : vérifié en postant l'envoi alors qu'une demande
+était en attente — refusé, et aucune ligne créée (§ 9.44).
+
+### Décision 10.6 — La clause `and idStatut = 'EA'` dans les deux décisions
+
+Deux comptables peuvent ouvrir la même demande. Si le premier valide et le
+second refuse, le second écraserait une décision déjà prise, et le véhicule du
+visiteur resterait celui qu'une validation annulée avait écrit.
+
+Les deux requêtes de décision portent donc `where id = :id and idStatut = 'EA'`,
+et le contrôleur regarde si la ligne a bien été modifiée (`rowCount()`, ou la
+relecture de la demande dans la transaction). Sinon il affiche « cette demande a
+déjà été traitée entre-temps » **sans rien écrire**. Vérifié : rejouer une
+validation sur une demande déjà validée ne modifie aucune colonne (§ 9.46).
+
 ---
 
 ## 6. Logique des boucles et des algorithmes
@@ -3431,6 +3566,55 @@ elles se sont signalées.
   projet qu'un tube faussé me donne un faux négatif (§ 7.3, § 7.14) : **ne
   jamais lire `$?` derrière un tube.**
 
+### Phase 10
+
+### 7.34 Les 5 Mo demandés : PHP écartait le fichier avant mon propre contrôle
+
+- **Symptôme :** fichier de 5,08 Mio envoyé, message affiché :
+  `Le transfert du fichier a échoué : The file "trop_gros.png" exceeds your
+  upload_max_filesize ini directive (limit is 5120 KiB).` Mon message
+  « Le fichier dépasse la taille maximale autorisée (5 Mo) » ne sortait
+  **jamais**, alors que le contrôle était bien écrit et bien appelé.
+- **Cause réelle :** **deux limites se superposent.** `upload_max_filesize` de
+  `php.ini` vaut `2M` par défaut ; PHP écarte alors le fichier avant que
+  l'application le voie, et `UploadedFile::isValid()` est faux — c'est la
+  première branche de `valider()` qui répond, pas le test de taille. J'avais
+  relevé la directive à `5M`… soit **exactement** ma limite applicative
+  (5 242 880 octets). Les deux seuils étant confondus, PHP continuait de
+  reprendre la main sur tout fichier que mon contrôle aurait refusé.
+- **Correction :** `php.ini` doit être réglé **strictement au-dessus** de la
+  limite applicative. À `6M`, le fichier arrive jusqu'à l'application, et le
+  message affiché devient le mien. Documenté dans le `README.md` et dans le
+  commentaire de `services.yml`, avec la commande de lancement corrigée.
+- **Ce que j'en retiens :** une limite applicative n'a de valeur que si la
+  couche en dessous lui laisse la parole. Deux contrôles au même seuil ne se
+  renforcent pas : le plus bas masque l'autre, et c'est son message — technique
+  et en anglais — que l'utilisateur reçoit.
+
+### 7.35 Mon écran affirmait « Véhicule validé » pour un véhicule que personne n'avait validé
+
+- **Symptôme :** repéré en testant, pas en relisant. `dandre` a `D7` dans
+  `visiteur.idTypeVehicule` depuis la phase 1, et l'écran annonçait
+  « **Véhicule validé** : 7 CV et + Diesel » alors que la table `cartegrise`
+  était **vide** : aucun document, aucune décision, aucun comptable.
+- **Cause réelle :** mon gabarit testait `letypevehicule is null`, c'est-à-dire
+  « y a-t-il un véhicule », et en déduisait « il est validé ». Les deux
+  questions sont distinctes depuis cette phase. J'avais d'ailleurs écrit dans le
+  commentaire de la migration que l'écran afficherait ces véhicules « comme
+  tels, en invitant le visiteur à régulariser » — ce que le code ne faisait pas.
+  **L'écart était entre ma documentation et mon code, pas dans un raisonnement
+  faux.**
+- **Correction :** `PdoGsb::aUneCarteGriseValidee()`, et trois cas dans le
+  gabarit au lieu de deux : aucun véhicule, véhicule validé sur pièce, véhicule
+  enregistré avant la mise en place du contrôle — ce dernier affiché avec la
+  mention « aucune carte grise ne l'atteste » et une invitation à l'envoyer.
+  La méthode cherche **n'importe quelle** demande validée et non la dernière :
+  un visiteur validé puis dont la demande suivante a été refusée garde le
+  véhicule issu de la validation précédente, qui reste bien justifié.
+- **Ce que j'en retiens :** c'est le test sur le jeu de données réel qui l'a
+  montré. Sur une base vide, les trois cas se confondaient en deux et le défaut
+  était invisible.
+
 ---
 
 ## 8. Ce qui ne fonctionne pas / limites / points bloquants
@@ -4027,6 +4211,55 @@ contrôleur ne l'appelle** : la valeur reste figée à celle du jeu de données.
 - `PdoGsb::$monPdo` est `private static` alors qu'une seule instance existe
   (service Symfony), et `__destruct()` la met à `null` : sans conséquence ici,
   mais c'est un vestige du singleton d'origine (B11).
+
+### Limites propres à la phase 10
+
+#### 🟠 L52 — Les 5 Mo dépendent d'une configuration hors de l'application
+`cartesgrises.taille_max` vaut 5 Mo dans `services.yml`, mais c'est
+`upload_max_filesize` de `php.ini` qui tranche en premier : à sa valeur par
+défaut (`2M`), un fichier de 3 Mo est refusé **avant** d'atteindre
+l'application, et le visiteur reçoit un message technique en anglais citant une
+directive de configuration (§ 7.34). La limite annoncée n'est donc tenue que si
+le serveur est configuré pour. C'est documenté dans le `README.md`, la commande
+de lancement est corrigée, et `php.ini` doit être réglé **strictement
+au-dessus** de la valeur applicative — mais **l'application ne peut pas le
+vérifier elle-même** et ne saurait pas prévenir que la configuration la
+contredit.
+
+#### 🟠 L53 — Les fichiers des demandes refusées ne sont jamais supprimés
+Choix assumé : l'historique est ce qui rend un refus vérifiable, et un document
+effacé empêcherait de relire ce qui avait été envoyé. Mais rien ne purge le
+dossier `app/cartesgrises/` : il croît indéfiniment, à raison de 5 Mo possibles
+par envoi refusé. Contrairement aux justificatifs — où `JustificatifController`
+supprime l'ancien fichier après l'enregistrement du nouveau — **aucune commande
+de nettoyage n'existe ici.** Une commande `gsb:purger-cartesgrises` prenant une
+ancienneté en argument serait le prolongement naturel ; elle n'est pas écrite.
+
+#### 🟠 L54 — La suppression d'un compte visiteur laisse ses fichiers sur le disque
+`ON DELETE CASCADE` sur `cartegrise.idVisiteur` efface les demandes en base
+quand un administrateur supprime un compte (phase 8). Les **fichiers**, eux,
+restent : la base ne sait pas les supprimer, et aucun code PHP ne passe par là.
+Ils deviennent alors inaccessibles — plus aucune ligne ne porte leur nom — mais
+occupent toujours le disque, et ce sont des données personnelles (une carte
+grise porte une identité et une adresse). Même cause et même remède que L53.
+
+#### 🟡 L55 — Un document validé ne peut pas être corrigé, seulement remplacé
+Si le comptable se trompe en relevant la puissance fiscale, il n'existe aucune
+action pour rectifier sa décision : l'écran d'examen d'une demande déjà tranchée
+est en lecture seule (décision 10.6, qui protège contre l'écrasement d'une
+décision par un second comptable). La correction passe donc par un nouvel envoi
+du visiteur, qu'il faut lui demander — alors que le document, lui, était bon.
+Une action de rectification réservée au comptable, journalisée comme les actions
+d'administration de la phase 8, serait la bonne réponse ; elle n'est pas écrite.
+
+#### 🟡 L56 — Rien ne prévient le visiteur ni le comptable
+Le visiteur découvre la décision en revenant sur « Mon véhicule », et le
+comptable découvre une demande en consultant sa file. Il n'y a **ni courriel ni
+notification** : une carte grise peut attendre plusieurs jours sans que personne
+le sache, pendant lesquels les frais du visiteur sont calculés à l'ancien tarif.
+La file est triée du plus ancien au plus récent pour limiter l'effet, et le
+menu du comptable porte le nombre de demandes en attente — mais il faut encore
+qu'il ouvre l'application pour le voir.
 
 ---
 
@@ -4846,6 +5079,155 @@ après réparation, `0` quand tout est cohérent.
 | `php -l` sur tous les fichiers modifiés ou créés | ✅ aucune erreur |
 | `sql/bd_gsb.sql` reproduit le schéma migré | ✅ **78 colonnes identiques** ; et dans la base reconstruite, la somme des trajets égale la quantité KM pour les 4 fiches du jeu de données |
 | Fins de ligne | ✅ `PdoGsb.php` et `fct.inc.php` restent 100 % CRLF (§ 7.29) |
+### 9.43 Phase 10 — installation de la migration
+
+```bash
+mysqldump -u root --databases bd_gsb --add-drop-database=FALSE > sauvegardes/bd_gsb_avant_006.sql
+mysql -u root bd_gsb < sql/006_carte_grise.sql
+
+mysql -u root -e "use bd_gsb; show tables like 'cartegrise'; select * from statutcartegrise;"
+# cartegrise
+# EA  En attente de validation
+# RE  Refusée
+# VA  Validée
+```
+
+**Le serveur doit être lancé avec la limite d'envoi relevée**, sans quoi tout
+fichier de plus de 2 Mo est écarté par PHP avant l'application (§ 7.34) :
+
+```bash
+php -d upload_max_filesize=6M -d post_max_size=8M -S 127.0.0.1:8000 -t web web/app_dev.php
+```
+
+**Aucune donnée n'est touchée par la migration.** Contrôlé après exécution :
+`visiteur.idTypeVehicule` conserve ses valeurs, et les visiteurs qui avaient
+déclaré un véhicule avant la phase le gardent — `a17` reste en `D7`, sa fiche en
+saisie à `0.65`.
+
+### 9.44 Phase 10 — ce que le visiteur ne peut plus faire
+
+| Contrôle | Commande | Résultat |
+|----------|----------|----------|
+| L'auto-déclaration a disparu | `POST /validermonvehicule` | ✅ **HTTP 404** |
+| Plus aucune liste déroulante | `grep 'name="idTypeVehicule"' ` sur `/monvehicule` | ✅ 0 occurrence |
+| Envoi sans jeton anti-CSRF | `POST /envoyercartegrise` sans `_token` | ✅ **HTTP 403** |
+| Second envoi pendant une attente | `POST /envoyercartegrise` avec une demande `EA` | ✅ refusé, « une demande est déjà en attente » ; **0 ligne créée** |
+| Écrans du comptable | `dandre` sur `/cartesgrises` et `/cartesgrises/1` | ✅ **HTTP 403** sur les deux |
+
+**Contrôles du fichier reçu** — les quatre tentatives ont été faites, et
+**aucune n'a créé de ligne en base** :
+
+| Fichier envoyé | Message obtenu |
+|----------------|----------------|
+| `piege.pdf` — extension `.pdf`, contenu `<?php …` | ✅ « Le contenu du fichier ne correspond pas à son extension .pdf » |
+| `note.txt` | ✅ « Extension non autorisée : seuls les fichiers pdf, jpg, jpeg, png sont acceptés » |
+| `trop_gros.png` — PNG valide de 5,08 Mio | ✅ « Le fichier dépasse la taille maximale autorisée (5 Mo) » |
+| `carte.png` — PNG valide de 1,3 Ko | ✅ accepté, demande créée au statut `EA` |
+
+> Le faux PDF est le contrôle qui compte : l'extension et le nom annoncés par le
+> navigateur étaient ceux d'un PDF, c'est l'analyse du **contenu** par
+> `getMimeType()` qui l'a démasqué.
+
+**Le fichier n'est pas accessible par le serveur web** :
+
+```bash
+ls app/cartesgrises/          # 71d7a1ec8386d357a9662b61e9a05e45.png — nom généré
+curl -o /dev/null -w '%{http_code}' …/71d7a1ec8386d357a9662b61e9a05e45.png
+# 404
+curl --path-as-is -o /dev/null -w '%{http_code}' …/../app/cartesgrises/71d7a…png
+# 404
+```
+
+**Accès au document, via `/cartegrise/1`** :
+
+| Demandeur | Résultat |
+|-----------|----------|
+| `dandre`, propriétaire | ✅ **200**, `Content-Type: image/png` |
+| non connecté | ✅ **302** vers l'accueil |
+| `cbedos`, autre visiteur | ✅ **404** — et non 403, pour ne pas confirmer l'existence du document |
+| `mvalette`, comptable | ✅ **200** |
+
+### 9.45 Phase 10 — le scénario complet, et la règle de calcul
+
+État des fiches de `a17` **avant** toute décision, relevé en base :
+
+```
+mois     idEtat  montantUnitaire
+202606   RB      0.62
+202607   VA      0.62
+202608   RB      0.62
+202609   CL      0.67
+202610   CR      0.65     ← la seule encore modifiable
+```
+
+| Étape | Résultat vérifié |
+|-------|------------------|
+| `dandre` envoie `carte.png` | ✅ demande 1 au statut `EA`, `idTypeVehicule` **NULL** |
+| **Son tarif ne change pas** | ✅ `visiteur.idTypeVehicule` = `D7`, fiche `CR` toujours à `0.65`, écran de saisie « Frais Kilométrique (0.65 €) » |
+| `mvalette` voit la file | ✅ « 1 demande(s) à traiter », avec le véhicule actuellement retenu rappelé |
+| Refus **sans** motif | ✅ refusé : « le motif du refus est obligatoire » ; statut resté `EA` |
+| Validation avec `idTypeVehicule=ZZ9` (inexistant) | ✅ refusée côté serveur, bien que la liste déroulante ne l'ait jamais proposé |
+| Validation sans immatriculation ni marque | ✅ les deux messages, **véhicule du visiteur inchangé** (`D7`) |
+| Refus motivé | ✅ statut `RE`, `idComptable = c01`, motif enregistré, `idTypeVehicule` remis à **NULL**, véhicule du visiteur **toujours `D7`** |
+| Le visiteur voit le refus | ✅ pastille « Refusée » + « Motif du refus : Document illisible… » + formulaire de réenvoi réapparu |
+| Nouvel envoi, en PDF | ✅ demande 2 `EA` ; **la demande 1 reste en base avec son motif** — l'historique est conservé |
+| L'écran d'examen affiche le PDF | ✅ balise `<object type="application/pdf">`, et les repères P.6 / A / D.1 affichés à côté des champs |
+| Validation en `D56` (0,58 €/km) | ✅ statut `VA`, `immatriculation = AA-123-AA` (passée en majuscules), `marqueModele = Renault Clio IV` |
+
+**Et le point central de la phase** — après validation :
+
+```
+visiteur.idTypeVehicule = D56   (était D7)
+
+mois     idEtat  montantUnitaire
+202606   RB      0.62     ← inchangé
+202607   VA      0.62     ← inchangé
+202608   RB      0.62     ← inchangé
+202609   CL      0.67     ← inchangé
+202610   CR      0.58     ← SEULE fiche recalculée
+```
+
+✅ **Seule la fiche encore en saisie a été recalculée.** Les quatre autres
+conservent le tarif qui leur avait été appliqué, dont une fiche remboursée et
+une fiche validée.
+
+Enfin, une **nouvelle demande déposée après cette validation** laisse le tarif
+de `0.58` en place tant qu'elle n'est pas tranchée : ✅ `visiteur.idTypeVehicule`
+= `D56`, fiche `CR` = `0.58`, écran de saisie « Frais Kilométrique (0.58 €) ».
+C'est la règle « les frais continuent d'être calculés avec les dernières
+informations validées », vérifiée sur les données.
+
+> **Base remise à son état initial après ces essais :** `cartegrise` vidée,
+> `a17` rétabli en `D7`, fiche `202610` rétablie à `0.65`, fichiers de test
+> retirés de `app/cartesgrises/`.
+
+### 9.46 Phase 10 — contrôles de sécurité et de concurrence
+
+| Contrôle | Résultat |
+|----------|----------|
+| Décision rejouée sur une demande déjà validée | ✅ « cette demande a déjà été traitée entre-temps » ; **aucune colonne modifiée** (`D56` / `Renault Clio IV` conservés) |
+| Demande déjà tranchée réouverte | ✅ écran en lecture seule, **0 formulaire de décision** affiché |
+| Jeton anti-CSRF sur les 3 écritures | ✅ `carte_grise` (envoi), `carte_grise_decision` (validation et refus) |
+| Méthodes HTTP | ✅ les 3 écritures en `POST` uniquement ; `/cartesgrises/{id}` en `GET` |
+| Nom de stockage | ✅ 32 caractères hexadécimaux, sans rapport avec le nom d'origine |
+| Nom d'origine réaffiché | ✅ passé par `assainirNom()` avant enregistrement |
+
+### 9.47 Phase 10 — non-régression (vérifiée)
+
+| Contrôle | Résultat |
+|----------|----------|
+| Connexion des trois rôles | ✅ `dandre`, `mvalette` |
+| Écrans visiteur `/saisirfrais`, `/listefrais`, `/monvehicule` | ✅ 200 |
+| Écrans comptable `/validation`, `/cartesgrises` | ✅ 200 |
+| `php app/console lint:twig` | ✅ « All 30 Twig files contain valid syntax » |
+| `php -l` sur tous les fichiers modifiés ou créés | ✅ aucune erreur |
+| `php app/console router:debug` | ✅ `pg_gsb_frais_validermonvehicule` absente, 5 routes ajoutées |
+| `php app/console container:debug pg_gsb_frais.cartesgrises` | ✅ service déclaré sur `StockageJustificatifs` |
+| `sql/bd_gsb.sql` reproduit le schéma migré | ✅ script rejoué sous le nom `bd_gsb_verif` (le script commence par `DROP DATABASE`, le rejouer tel quel détruirait la base de travail) : **93 colonnes identiques** sur les 13 tables, comparées dans `information_schema` type par type |
+| Clés étrangères de `cartegrise` | ✅ les 4 contraintes en place, avec les règles voulues : `visiteur` en **CASCADE**, `comptable` en **SET NULL** (une décision doit survivre à la suppression de son auteur), `statutcartegrise` et `typevehicule` en `NO ACTION` |
+| Justificatifs de frais hors forfait | ✅ inchangés : leur dossier et leur limite de 2 Mo sont des paramètres distincts ; `/justificatif/302` sert toujours 200 au comptable et 404 à un visiteur non propriétaire |
+| Fins de ligne | ✅ **rétablies** : mes scripts d'édition avaient converti `PdoGsb.php` (1 564 CRLF) et `saisirfraisforfait.html.twig` en LF. Repéré par le contrôle du § 7.29, qui compare chaque fichier modifié à sa version commitée — les deux sont repassés en 100 % CRLF, les onze autres étaient bien en LF à l'origine |
+
 ---
 
 ## 10. Proposition pour la suite (en attente de ton accord)

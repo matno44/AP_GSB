@@ -6,52 +6,168 @@
     <h2>Mon véhicule</h2>
 
     {% if lemessage is not empty %}
-        <div class="encadre"><p>{{ lemessage }}</p></div>
+        <div class="confirmation">{{ lemessage }}</div>
     {% endif %}
 
+    {# ------------------------------------------------------------------
+       Ce qui est APPLIQUÉ aujourd'hui. Affiché en premier et séparément du
+       statut de la demande : c'est la seule information qui a un effet sur
+       l'argent remboursé, et le visiteur doit pouvoir la lire sans avoir à
+       déduire quoi que ce soit de l'état de son dossier.
+       ------------------------------------------------------------------ #}
     <div class="encadre">
+    <h3>Tarif appliqué à vos frais kilométriques</h3>
     <p>
         {% if letypevehicule is null %}
-            Vous n'avez pas encore déclaré votre véhicule. En attendant, vos frais
-            kilométriques sont remboursés au tarif historique de
+            Aucun véhicule n'est encore validé pour votre compte. En attendant,
+            vos frais kilométriques sont remboursés au tarif historique de
             <strong>{{ letarif }} € / km</strong>.
-        {% else %}
-            Véhicule déclaré : <strong>{{ letypevehicule.libelle }}</strong> —
+        {% elseif estvalidesurpiece %}
+            Véhicule validé : <strong>{{ letypevehicule.libelle }}</strong> —
             remboursement à <strong>{{ letypevehicule.montant }} € / km</strong>.
+        {% else %}
+            {# Véhicule déclaré par le visiteur lui-même avant la mise en place
+               du contrôle : le dire, plutôt que d'écrire « validé » alors que
+               personne ne l'a validé. #}
+            Véhicule enregistré : <strong>{{ letypevehicule.libelle }}</strong> —
+            remboursement à <strong>{{ letypevehicule.montant }} € / km</strong>.
+            Il a été déclaré avant la mise en place de la validation sur pièce :
+            <strong>aucune carte grise ne l'atteste</strong>. Envoyez-la pour
+            régulariser votre dossier.
         {% endif %}
     </p>
-    <p>
-        Le changement s'applique à votre fiche de frais en cours de saisie.
-        Vos fiches déjà clôturées, validées ou remboursées conservent le tarif
-        qui leur a été appliqué : elles ne sont pas recalculées.
+    <p class="legendeTableau">
+        Ce tarif s'applique à votre fiche de frais en cours de saisie. Vos fiches
+        déjà clôturées, validées ou remboursées conservent le tarif qui leur a
+        été appliqué : elles ne sont pas recalculées.
     </p>
     </div>
+</div>
 
-    <form method="post" action="{{ path('pg_gsb_frais_validermonvehicule') }}">
-        <input type="hidden" name="_token" value="{{ csrf_token('vehicule') }}" />
-        <div class="corpsForm">
-            <fieldset>
-                <legend>Barème de remboursement kilométrique</legend>
-                <p>
-                    <label for="idTypeVehicule">Mon véhicule : </label>
-                    <select id="idTypeVehicule" name="idTypeVehicule">
-                        {% for unTypeVehicule in lestypesvehicule %}
-                            {% if letypevehicule is not null and unTypeVehicule.id == letypevehicule.id %}
-                                <option selected value="{{ unTypeVehicule.id }}">{{ unTypeVehicule.libelle }} — {{ unTypeVehicule.montant }} €/km</option>
-                            {% else %}
-                                <option value="{{ unTypeVehicule.id }}">{{ unTypeVehicule.libelle }} — {{ unTypeVehicule.montant }} €/km</option>
-                            {% endif %}
-                        {% endfor %}
-                    </select>
-                </p>
-            </fieldset>
-        </div>
-        <div class="piedForm">
+<div id="contenu">
+    {# ------------------------------------------------------------------
+       Statut de la demande en cours. Le gabarit ne décide rien : il affiche
+       le statut porté par la dernière demande, calculé en base.
+       ------------------------------------------------------------------ #}
+    <h3>Ma carte grise</h3>
+
+    {% if lademande is null %}
         <p>
-            <input id="ok" type="submit" value="Valider" size="20" />
+            Vous n'avez pas encore envoyé votre carte grise. Les
+            caractéristiques de votre véhicule — puissance fiscale et carburant
+            — déterminent votre tarif kilométrique : elles sont relevées par le
+            service comptable sur votre carte grise, et non saisies par
+            vous-même.
         </p>
-        </div>
-    </form>
+    {% else %}
+        <table class="listeLegere">
+            <caption>Dernière demande</caption>
+            <tr>
+                <th>Document envoyé</th>
+                <td>
+                    <a href="{{ path('pg_gsb_frais_consultercartegrise', {'id': lademande.id}) }}"
+                       target="_blank">{{ lademande.nomOriginal }}</a>
+                </td>
+            </tr>
+            <tr>
+                <th>Envoyé le</th>
+                <td>{{ lademande.dateEnvoi|date('d/m/Y à H:i') }}</td>
+            </tr>
+            <tr>
+                <th>Statut</th>
+                <td>
+                    {# Les trois statuts sont repris du référentiel
+                       statutcartegrise : le libellé vient de la base, seule la
+                       classe CSS est choisie ici. #}
+                    {% if lademande.idStatut == 'EA' %}
+                        <span class="etat etatEnAttente">{{ lademande.statutlibelle }}</span>
+                    {% elseif lademande.idStatut == 'VA' %}
+                        <span class="etat etatValidee">{{ lademande.statutlibelle }}</span>
+                    {% else %}
+                        <span class="etat etatRefusee">{{ lademande.statutlibelle }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% if lademande.dateDecision is not empty %}
+            <tr>
+                <th>Décision du</th>
+                <td>{{ lademande.dateDecision|date('d/m/Y à H:i') }}</td>
+            </tr>
+            {% endif %}
+            {% if lademande.idStatut == 'VA' %}
+            <tr>
+                <th>Relevé sur le document</th>
+                <td>
+                    {{ lademande.typevehiculelibelle }}
+                    ({{ lademande.typevehiculemontant }} € / km)
+                    {% if lademande.immatriculation is not empty %}
+                        — {{ lademande.immatriculation }}
+                    {% endif %}
+                    {% if lademande.marqueModele is not empty %}
+                        — {{ lademande.marqueModele }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endif %}
+        </table>
+
+        {% if lademande.idStatut == 'EA' %}
+            <p class="legendeTableau">
+                Votre demande est en attente d'examen par le service comptable.
+                Tant qu'elle n'est pas validée, vos frais continuent d'être
+                calculés avec les informations validées précédemment — le tarif
+                rappelé plus haut. Vous ne pouvez pas envoyer un second document
+                pendant ce temps.
+            </p>
+        {% elseif lademande.idStatut == 'RE' %}
+            {# Le motif est la seule indication dont dispose le visiteur pour
+               savoir quoi corriger : il est mis en évidence, pas noyé dans une
+               ligne de tableau. #}
+            <div class="blocRefus">
+                <strong>Motif du refus :</strong> {{ lademande.motifRefus }}
+            </div>
+            <p>
+                Corrigez ce qui est signalé ci-dessus, puis envoyez un nouveau
+                document.
+            </p>
+        {% endif %}
+    {% endif %}
+
+    {# Le formulaire n'apparaît que si aucune demande n'est en attente. Le
+       contrôleur refait ce contrôle : masquer un formulaire n'empêche pas
+       d'envoyer la requête. #}
+    {% if lademande is null or lademande.idStatut != 'EA' %}
+        <form method="post" enctype="multipart/form-data"
+              action="{{ path('pg_gsb_frais_envoyercartegrise') }}">
+            {# enctype indispensable : sans lui le navigateur n'envoie que le
+               NOM du fichier, pas son contenu, et $request->files reste vide. #}
+            <input type="hidden" name="_token" value="{{ csrf_token('carte_grise') }}" />
+            <div class="corpsForm">
+                <fieldset>
+                    <legend>
+                        {% if lademande is null %}Envoyer ma carte grise
+                        {%- else %}Envoyer un nouveau document{% endif %}
+                    </legend>
+                    <p>
+                        <label for="cartegrise">Carte grise : </label>
+                        <input type="file" id="cartegrise" name="cartegrise"
+                               accept=".pdf,.jpg,.jpeg,.png" required />
+                        <span class="aideChamp">
+                            Formats acceptés : {{ lesextensions }} —
+                            {{ lataillemax }} Mo maximum. Le document doit être
+                            lisible : la puissance fiscale et le carburant y
+                            seront relevés.
+                        </span>
+                    </p>
+                </fieldset>
+            </div>
+            <div class="piedForm">
+            <p>
+                <input id="ok" type="submit" value="Envoyer" size="20" />
+            </p>
+            </div>
+        </form>
+    {% endif %}
 </div>
 {% endblock %}
 {% endblock %}

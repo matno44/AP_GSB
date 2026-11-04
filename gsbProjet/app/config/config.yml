@@ -45,6 +45,21 @@ framework:
 twig:
     debug: '%kernel.debug%'
     strict_variables: '%kernel.debug%'
+    globals:
+        # Exposé pour le SEUL compteur de cartes grises en attente du menu
+        # (phase 10). Le menu est rendu par accueil.html.twig, hérité par tous
+        # les écrans : aucun contrôleur ne peut lui fournir la valeur sans que
+        # les quinze autres aient à y penser, et un oubli ferait disparaître le
+        # compteur d'un écran sur deux.
+        #
+        # Le coût est d'un COUNT(*) par page affichée À UN COMPTABLE : le
+        # gabarit n'appelle la méthode que dans la branche comptable du menu.
+        # Les visiteurs et les administrateurs ne la déclenchent jamais.
+        #
+        # Ce n'est PAS une porte ouverte sur les données depuis les gabarits :
+        # aucune autre vue n'utilise cette globale, et les écrans continuent de
+        # recevoir leurs données de leur contrôleur.
+        pdogsb: '@pg_gsb_frais.pdo'
 
 # Doctrine Configuration
 doctrine:

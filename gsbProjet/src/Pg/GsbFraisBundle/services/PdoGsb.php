@@ -1561,4 +1561,335 @@ class PdoGsb
                 $laLigne = $stmt->fetch();
                 return $laLigne['nb'] == 1;
         }
+
+        /*
+         * =========================================================================
+         * Cartes grises soumises à validation (phase 10)
+         * =========================================================================
+         */
+
+        /**
+         * Retourne la demande la plus récente d'un visiteur
+         *
+         * C'est elle, et elle seule, qui définit le statut courant affiché au
+         * visiteur : « en attente », « validée » ou « refusée ». Les demandes
+         * antérieures sont conservées en base pour la trace, mais n'ont plus
+         * d'effet — un refus suivi d'un nouvel envoi doit afficher « en attente »,
+         * pas le refus précédent.
+         *
+         * order by dateEnvoi desc, id desc : deux envois dans la même seconde
+         * restent départagés par l'auto-incrément, qui ne peut pas être ex æquo.
+         *
+         * @param $idVisiteur
+         * @return un tableau associatif, ou false si le visiteur n'a jamais envoyé
+         */
+        public function getLaDerniereCarteGrise($idVisiteur)
+        {
+                $req  = 'select cartegrise.*, statutcartegrise.libelle as statutlibelle,
+                typevehicule.libelle as typevehiculelibelle,
+                typevehicule.montant as typevehiculemontant,
+                comptable.nom as comptablenom, comptable.prenom as comptableprenom
+                from cartegrise
+                inner join statutcartegrise on statutcartegrise.id = cartegrise.idStatut
+                left join typevehicule on typevehicule.id = cartegrise.idTypeVehicule
+                left join comptable on comptable.id = cartegrise.idComptable
+                where cartegrise.idVisiteur = :idVisiteur
+                order by cartegrise.dateEnvoi desc, cartegrise.id desc
+                limit 1';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                return $stmt->fetch();
+        }
+
+        /**
+         * Retourne une demande précise, avec l'identité de son visiteur
+         *
+         * Renvoie aussi idVisiteur, le nom et le prénom : c'est ce qui permet au
+         * contrôleur de vérifier À QUI appartient le document avant de le servir,
+         * exactement comme getLigneFraisHorsForfait() le fait pour un justificatif.
+         *
+         * @param $id
+         * @return un tableau associatif, ou false si la demande n'existe pas
+         */
+        public function getCarteGrise($id)
+        {
+                $req  = 'select cartegrise.*, statutcartegrise.libelle as statutlibelle,
+                visiteur.nom as visiteurnom, visiteur.prenom as visiteurprenom,
+                visiteur.idTypeVehicule as typevehiculeactuel,
+                typevehicule.libelle as typevehiculelibelle
+                from cartegrise
+                inner join statutcartegrise on statutcartegrise.id = cartegrise.idStatut
+                inner join visiteur on visiteur.id = cartegrise.idVisiteur
+                left join typevehicule on typevehicule.id = cartegrise.idTypeVehicule
+                where cartegrise.id = :id';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindValue(':id', (int) $id, PDO::PARAM_INT);
+                $stmt->execute();
+                return $stmt->fetch();
+        }
+
+        /**
+         * Retourne les demandes en attente, de la plus ancienne à la plus récente
+         *
+         * Ordre chronologique et non l'inverse : une demande en attente fait
+         * patienter un visiteur dont les frais sont peut-être calculés au mauvais
+         * tarif. La plus ancienne est donc la plus urgente, et elle doit se
+         * présenter en tête de liste au comptable.
+         *
+         * @return un tableau de demandes, vide s'il n'y a rien à traiter
+         */
+        public function getLesCartesGrisesEnAttente()
+        {
+                $req  = "select cartegrise.id as id, cartegrise.idVisiteur as idVisiteur,
+                cartegrise.nomOriginal as nomOriginal, cartegrise.typeMime as typeMime,
+                cartegrise.dateEnvoi as dateEnvoi,
+                visiteur.nom as nom, visiteur.prenom as prenom,
+                typevehicule.libelle as typevehiculeactuel
+                from cartegrise
+                inner join visiteur on visiteur.id = cartegrise.idVisiteur
+                left join typevehicule on typevehicule.id = visiteur.idTypeVehicule
+                where cartegrise.idStatut = 'EA'
+                order by cartegrise.dateEnvoi, cartegrise.id";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->execute();
+                return $stmt->fetchAll();
+        }
+
+        /**
+         * Compte les demandes en attente
+         *
+         * Sert au seul affichage du compteur dans le menu du comptable. Une
+         * requête de comptage et non un count() sur getLesCartesGrisesEnAttente() :
+         * le menu est rendu à CHAQUE page, il n'a pas à rapatrier les lignes ni à
+         * exécuter les trois jointures pour afficher un nombre.
+         *
+         * @return un entier
+         */
+        public function compterLesCartesGrisesEnAttente()
+        {
+                $req  = "select count(*) as nb from cartegrise where idStatut = 'EA'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return (int) $laLigne['nb'];
+        }
+
+        /**
+         * Indique si un visiteur a déjà une demande en attente
+         *
+         * Garde-fou contre l'envoi en rafale : sans elle, un visiteur pourrait
+         * déposer vingt fichiers d'affilée, qui rempliraient la file du comptable
+         * et le disque sans qu'aucun n'apporte d'information nouvelle. Le cahier
+         * des charges n'autorise un nouvel envoi qu'après un REFUS.
+         *
+         * @param $idVisiteur
+         * @return vrai ou faux
+         */
+        public function aUneDemandeEnAttente($idVisiteur)
+        {
+                $req  = "select count(*) as nb from cartegrise
+                where idVisiteur = :idVisiteur and idStatut = 'EA'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['nb'] > 0;
+        }
+
+        /**
+         * Indique si le véhicule retenu pour un visiteur a été validé sur pièce
+         *
+         * Les visiteurs qui avaient déclaré leur véhicule AVANT cette phase ont
+         * toujours une ligne de barème dans visiteur.idTypeVehicule, mais aucune
+         * carte grise ne l'atteste. L'écran doit le dire plutôt que d'afficher
+         * « validé », qui serait faux : personne n'a rien validé.
+         *
+         * On cherche n'importe quelle demande validée, et non la dernière : un
+         * visiteur validé puis dont la demande suivante a été refusée garde le
+         * véhicule issu de la validation précédente, qui reste bien justifié.
+         *
+         * @param $idVisiteur
+         * @return vrai ou faux
+         */
+        public function aUneCarteGriseValidee($idVisiteur)
+        {
+                $req  = "select count(*) as nb from cartegrise
+                where idVisiteur = :idVisiteur and idStatut = 'VA'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->execute();
+                $laLigne = $stmt->fetch();
+                return $laLigne['nb'] > 0;
+        }
+
+        /**
+         * Enregistre une nouvelle demande, au statut « en attente »
+         *
+         * Le statut n'est pas passé en argument : une demande qui naîtrait
+         * « validée » contournerait tout le contrôle du comptable. La valeur par
+         * défaut de la colonne ('EA') est la seule possible à la création, et
+         * l'insertion ne mentionne donc pas idStatut.
+         *
+         * NOW() et non une date calculée en PHP : l'horodatage de référence est
+         * celui du serveur de base de données, le même pour toutes les lignes.
+         *
+         * @param $idVisiteur
+         * @param $nomFichier le nom généré par StockageJustificatifs
+         * @param $nomOriginal le nom d'origine, déjà assaini
+         * @param $typeMime le type constaté dans le contenu du fichier
+         * @return l'identifiant de la demande créée
+         */
+        public function creerDemandeCarteGrise($idVisiteur, $nomFichier, $nomOriginal, $typeMime)
+        {
+                $req  = 'insert into cartegrise(idVisiteur, nomFichier, nomOriginal,
+                typeMime, dateEnvoi)
+                values(:idVisiteur, :nomFichier, :nomOriginal, :typeMime, now())';
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idVisiteur', $idVisiteur);
+                $stmt->bindParam(':nomFichier', $nomFichier);
+                $stmt->bindParam(':nomOriginal', $nomOriginal);
+                $stmt->bindParam(':typeMime', $typeMime);
+                $stmt->execute();
+                return PdoGsb::$monPdo->lastInsertId();
+        }
+
+        /**
+         * Valide une demande et met à jour le véhicule du visiteur
+         *
+         * C'EST ICI, ET NULLE PART AILLEURS, que les caractéristiques du véhicule
+         * entrent dans les données qui servent au calcul des frais. Avant cet
+         * appel, la demande peut bien contenir n'importe quoi : aucun montant n'en
+         * dépend.
+         *
+         * Les deux écritures sont indissociables et donc dans UNE SEULE
+         * transaction : une demande marquée validée sans mise à jour du véhicule
+         * ferait croire au visiteur que son tarif a changé alors qu'il n'a pas
+         * bougé, et l'inverse appliquerait un tarif qu'aucune décision tracée ne
+         * justifie. majTypeVehiculeVisiteur() ouvre déjà sa propre transaction :
+         * on en reprend le corps plutôt que de l'appeler, MySQL ne sachant pas
+         * imbriquer deux beginTransaction().
+         *
+         * La répercussion sur les fiches suit la règle posée en phase 1 : seules
+         * les fiches encore à l'état 'CR' sont recalculées. Une fiche clôturée,
+         * validée ou remboursée garde pour toujours le tarif qui lui a été
+         * appliqué.
+         *
+         * @param $id l'identifiant de la demande
+         * @param $idTypeVehicule la ligne du barème relevée sur le document
+         * @param $immatriculation
+         * @param $marqueModele
+         * @param $idComptable l'auteur de la décision
+         */
+        public function validerCarteGrise($id, $idTypeVehicule, $immatriculation,
+                                          $marqueModele, $idComptable)
+        {
+                PdoGsb::$monPdo->beginTransaction();
+                try {
+                        // Le visiteur est relu DANS la transaction, à partir de la
+                        // seule demande : on ne se fie pas à un identifiant de
+                        // visiteur qui serait passé par le formulaire, où il serait
+                        // modifiable. La demande désigne son propriétaire.
+                        $req  = "select idVisiteur from cartegrise
+                        where id = :id and idStatut = 'EA'";
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindValue(':id', (int) $id, PDO::PARAM_INT);
+                        $stmt->execute();
+                        $laDemande = $stmt->fetch();
+                        if (!is_array($laDemande)) {
+                                // Demande inexistante ou déjà tranchée : deux
+                                // comptables ont pu ouvrir le même document. On
+                                // annule sans rien écrire plutôt que d'écraser la
+                                // décision du premier.
+                                PdoGsb::$monPdo->rollBack();
+                                return false;
+                        }
+                        $idVisiteur = $laDemande['idVisiteur'];
+
+                        $req  = "update cartegrise
+                        set idStatut = 'VA', dateDecision = now(),
+                            idComptable = :idComptable,
+                            idTypeVehicule = :idTypeVehicule,
+                            immatriculation = :immatriculation,
+                            marqueModele = :marqueModele,
+                            motifRefus = null
+                        where id = :id and idStatut = 'EA'";
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':idComptable', $idComptable);
+                        $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                        $stmt->bindParam(':immatriculation', $immatriculation);
+                        $stmt->bindParam(':marqueModele', $marqueModele);
+                        $stmt->bindValue(':id', (int) $id, PDO::PARAM_INT);
+                        $stmt->execute();
+
+                        $req  = 'update visiteur set idTypeVehicule = :idTypeVehicule
+                        where visiteur.id = :idVisiteur';
+                        $stmt = PdoGsb::$monPdo->prepare($req);
+                        $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                        $stmt->bindParam(':idVisiteur', $idVisiteur);
+                        $stmt->execute();
+
+                        // coalesce : si le barème ne connaissait pas ce type, on
+                        // retombe sur le montant historique de fraisforfait.KM.
+                        $req       = "update lignefraisforfait
+                        inner join fichefrais on fichefrais.idVisiteur = lignefraisforfait.idVisiteur
+                                              and fichefrais.mois = lignefraisforfait.mois
+                        set lignefraisforfait.montantUnitaire = coalesce(
+                                (select typevehicule.montant from typevehicule
+                                 where typevehicule.id = :idTypeVehicule),
+                                (select fraisforfait.montant from fraisforfait
+                                 where fraisforfait.id = :idFraisKm))
+                        where lignefraisforfait.idVisiteur = :idVisiteur
+                        and lignefraisforfait.idFraisForfait = :idFraisKm
+                        and fichefrais.idEtat = 'CR'";
+                        $stmt      = PdoGsb::$monPdo->prepare($req);
+                        $idFraisKm = PdoGsb::ID_FRAIS_KILOMETRIQUE;
+                        $stmt->bindParam(':idTypeVehicule', $idTypeVehicule);
+                        $stmt->bindParam(':idFraisKm', $idFraisKm);
+                        $stmt->bindParam(':idVisiteur', $idVisiteur);
+                        $stmt->execute();
+
+                        PdoGsb::$monPdo->commit();
+                        return true;
+                } catch (\Exception $e) {
+                        PdoGsb::$monPdo->rollBack();
+                        throw $e;
+                }
+        }
+
+        /**
+         * Refuse une demande en consignant le motif
+         *
+         * Le véhicule du visiteur n'est PAS touché : il conserve le tarif issu de
+         * sa dernière validation — ou le tarif historique s'il n'en a jamais eu.
+         * C'est la contrepartie de la règle de calcul : un refus ne doit pas
+         * dégrader les remboursements en cours.
+         *
+         * idTypeVehicule, immatriculation et marqueModele sont remis à null : les
+         * informations relevées sur un document refusé ne doivent pas rester en
+         * base, où elles laisseraient croire à un relevé validé.
+         *
+         * La clause « and idStatut = 'EA' » est la même garde que dans
+         * validerCarteGrise() : on ne retouche pas une demande déjà tranchée.
+         *
+         * @param $id
+         * @param $motif obligatoire, déjà contrôlé non vide par le contrôleur
+         * @param $idComptable
+         * @return vrai si la demande a bien été refusée, faux si elle ne l'était
+         *         plus en attente
+         */
+        public function refuserCarteGrise($id, $motif, $idComptable)
+        {
+                $req  = "update cartegrise
+                set idStatut = 'RE', dateDecision = now(),
+                    idComptable = :idComptable, motifRefus = :motif,
+                    idTypeVehicule = null, immatriculation = null, marqueModele = null
+                where id = :id and idStatut = 'EA'";
+                $stmt = PdoGsb::$monPdo->prepare($req);
+                $stmt->bindParam(':idComptable', $idComptable);
+                $stmt->bindParam(':motif', $motif);
+                $stmt->bindValue(':id', (int) $id, PDO::PARAM_INT);
+                $stmt->execute();
+                return $stmt->rowCount() == 1;
+        }
 }

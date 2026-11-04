@@ -1,0 +1,69 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+<div id="contenu">
+    <h2>Cartes grises en attente de validation</h2>
+
+    {# Message déposé par le contrôleur après une validation ou un refus : il
+       doit survivre à la redirection, d'où le flash bag. #}
+    {% for unMessage in app.session.flashbag.get('confirmation') %}
+        <div class="confirmation">{{ unMessage }}</div>
+    {% endfor %}
+
+    {% if lesdemandes is empty %}
+        <div class="encadre">
+            <p>Aucune carte grise n'est en attente de validation.</p>
+        </div>
+    {% else %}
+        <table class="listeLegere">
+            <caption>
+                {{ lesdemandes|length }} demande(s) à traiter, de la plus
+                ancienne à la plus récente
+            </caption>
+            <thead>
+                <tr>
+                    <th class="date">Envoyée le</th>
+                    <th>Visiteur</th>
+                    <th>Véhicule actuellement retenu</th>
+                    <th>Document</th>
+                    <th class="action">&nbsp;</th>
+                </tr>
+            </thead>
+            <tbody>
+            {% for uneDemande in lesdemandes %}
+                <tr>
+                    <td>{{ uneDemande.dateEnvoi|date('d/m/Y à H:i') }}</td>
+                    <td>{{ uneDemande.prenom }} {{ uneDemande.nom }}
+                        ({{ uneDemande.idVisiteur }})</td>
+                    <td>
+                        {# Rappelé ici pour que le comptable voie tout de suite
+                           si la demande change quelque chose : une carte grise
+                           confirmant le véhicule déjà retenu ne modifie aucun
+                           remboursement. #}
+                        {% if uneDemande.typevehiculeactuel is empty %}
+                            <em>aucun — tarif historique appliqué</em>
+                        {% else %}
+                            {{ uneDemande.typevehiculeactuel }}
+                        {% endif %}
+                    </td>
+                    <td>
+                        <a href="{{ path('pg_gsb_frais_consultercartegrise', {'id': uneDemande.id}) }}"
+                           target="_blank">{{ uneDemande.nomOriginal }}</a>
+                    </td>
+                    <td>
+                        <a class="boutonSecondaire lienFiche"
+                           href="{{ path('pg_gsb_frais_examinercartegrise', {'id': uneDemande.id}) }}">Examiner</a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p class="legendeTableau">
+            Tant qu'une demande n'est pas validée, les frais du visiteur
+            continuent d'être calculés avec les informations validées
+            précédemment.
+        </p>
+    {% endif %}
+</div>
+{% endblock %}
+{% endblock %}
