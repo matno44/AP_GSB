@@ -10,6 +10,26 @@ parameters:
     # 2 Mo. Ne pas dépasser upload_max_filesize de php.ini (2M par défaut),
     # sinon PHP écarte le fichier avant que l'application le voie.
     justificatifs.taille_max: 2097152
+    # Dossier de stockage des cartes grises. Séparé de celui des
+    # justificatifs : ce ne sont pas les mêmes documents, ils n'ont pas la même
+    # durée de vie, et un dossier par usage évite qu'une erreur de nettoyage sur
+    # l'un emporte l'autre. Hors de web/, pour la même raison.
+    cartesgrises.dossier: "%kernel.root_dir%/cartesgrises"
+    # 5 Mo, comme demandé — en mébioctets, soit 5 * 1024 * 1024.
+    #
+    # ATTENTION, DEUX LIMITES SE SUPERPOSENT. upload_max_filesize de php.ini
+    # vaut 2M par défaut : PHP écarte alors le fichier AVANT que l'application
+    # le voie, et le visiteur reçoit un message technique en anglais citant une
+    # directive de configuration, au lieu du « dépasse la taille maximale
+    # autorisée (5 Mo) » de StockageJustificatifs::valider().
+    #
+    # php.ini doit donc être réglé STRICTEMENT AU-DESSUS de cette valeur, pour
+    # que le contrôle qui parle au visiteur soit celui de l'application. 6M est
+    # le choix retenu ; régler php.ini à 5M exactement ne suffit pas, les deux
+    # seuils seraient confondus et PHP reprendrait la main.
+    #   php -d upload_max_filesize=6M -d post_max_size=8M -S ...
+    # post_max_size doit rester supérieur à upload_max_filesize.
+    cartesgrises.taille_max: 5242880
     # Logo imprimé en tête des fiches PDF. Chemin sur le disque et non URL :
     # dompdf tourne côté serveur, sans accès réseau (isRemoteEnabled à false).
     fiche_pdf.logo: "%kernel.root_dir%/../src/Pg/GsbFraisBundle/Resources/public/images/logo.svg"
@@ -20,6 +40,16 @@ services:
     pg_gsb_frais.justificatifs:
         class: Pg\GsbFraisBundle\services\StockageJustificatifs
         arguments: [%justificatifs.dossier%,%justificatifs.taille_max%]
+    # Seconde instance de la MÊME classe : le dossier et la taille maximale
+    # sont ses deux arguments de construction, et les types acceptés (pdf, jpg,
+    # jpeg, png) sont exactement ceux voulus ici. Il n'y avait donc rien à
+    # écrire pour stocker les cartes grises — ni classe, ni héritage, ni copie
+    # d'une règle de validation. Le nom de la classe dit « justificatifs »
+    # parce qu'elle a été écrite pour eux en phase 2 ; elle ne contient en fait
+    # aucune logique propre aux frais.
+    pg_gsb_frais.cartesgrises:
+        class: Pg\GsbFraisBundle\services\StockageJustificatifs
+        arguments: [%cartesgrises.dossier%,%cartesgrises.taille_max%]
     pg_gsb_frais.fiche_pdf:
         class: Pg\GsbFraisBundle\services\GenerateurFichePdf
         arguments: ['@pg_gsb_frais.pdo', '@templating', %fiche_pdf.logo%]

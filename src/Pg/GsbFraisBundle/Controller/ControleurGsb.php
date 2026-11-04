@@ -76,6 +76,23 @@ abstract class ControleurGsb extends Controller
     }
 
     /**
+     * Refuse l'accès à un écran réservé au service comptable (phase 10).
+     *
+     * Pendant de refuserNonVisiteur(). ValidationController, écrit en phase 5,
+     * porte le même contrôle dans une méthode privée : il a été laissé tel
+     * quel, ce n'est pas le sujet de cette phase. La règle est identique, et
+     * c'est elle qui compte — pas l'endroit où elle est écrite.
+     *
+     * @return Response
+     */
+    protected function refuserNonComptable()
+    {
+        return new Response(
+            'Cette page est réservée au service comptable.',
+            Response::HTTP_FORBIDDEN);
+    }
+
+    /**
      * Refuse l'accès à un écran réservé aux administrateurs (phase 8).
      *
      * Le message ne dit pas ce que contient l'écran refusé : inutile de

@@ -1,0 +1,5 @@
+# Les cartes grises téléversées ne sont pas versionnées : ce sont des données
+# d'utilisateurs, pas du code. Seul ce fichier est suivi, pour que le dossier
+# existe après un clone.
+*
+!.gitignore

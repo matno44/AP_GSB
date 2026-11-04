@@ -1,0 +1,206 @@
+{% extends "PgGsbFraisBundle::accueil.html.twig" %}
+{% block body %}
+{% block bloc1 %}
+{% include 'PgGsbFraisBundle:SaisirFrais:erreurs.html.twig' with {'leserreurs':leserreurs} %}
+<div id="contenu">
+    <h2>
+        Carte grise de {{ lademande.visiteurprenom }} {{ lademande.visiteurnom }}
+        ({{ lademande.idVisiteur }})
+    </h2>
+
+    <div class="encadre">
+    <p>
+        Envoyée le <strong>{{ lademande.dateEnvoi|date('d/m/Y à H:i') }}</strong> —
+        statut :
+        {% if lademande.idStatut == 'EA' %}
+            <span class="etat etatEnAttente">{{ lademande.statutlibelle }}</span>
+        {% elseif lademande.idStatut == 'VA' %}
+            <span class="etat etatValidee">{{ lademande.statutlibelle }}</span>
+        {% else %}
+            <span class="etat etatRefusee">{{ lademande.statutlibelle }}</span>
+        {% endif %}
+    </p>
+    <p>
+        Véhicule actuellement retenu pour le calcul de ses frais :
+        {% if lademande.typevehiculeactuel is empty %}
+            <strong>aucun</strong> — le tarif historique lui est appliqué.
+        {% else %}
+            <strong>{{ lademande.typevehiculeactuel }}</strong>. Il reste
+            appliqué tant que cette demande n'est pas validée.
+        {% endif %}
+    </p>
+    </div>
+</div>
+
+{# ----------------------------------------------------------------------
+   Le document. Affiché dans la page pour que le comptable relève les
+   informations en les ayant sous les yeux : un aller-retour entre un onglet
+   et un formulaire est précisément ce qui produit les erreurs de recopie.
+   L'URL passe par /cartegrise/{id}, qui recontrôle le droit d'accès — le
+   fichier n'est pas servi depuis web/.
+   ---------------------------------------------------------------------- #}
+<div id="contenu">
+    <h3>Le document</h3>
+    {% if lademande.typeMime == 'application/pdf' %}
+        {# <object> et non <embed> : il permet un contenu de repli si le
+           navigateur ne sait pas afficher les PDF en ligne. #}
+        <object class="apercuDocument" type="application/pdf"
+                data="{{ path('pg_gsb_frais_consultercartegrise', {'id': lademande.id}) }}">
+            <p>
+                Votre navigateur n'affiche pas les PDF dans la page.
+                <a href="{{ path('pg_gsb_frais_consultercartegrise', {'id': lademande.id}) }}"
+                   target="_blank">Ouvrir {{ lademande.nomOriginal }}</a>
+            </p>
+        </object>
+    {% else %}
+        <img class="apercuDocument"
+             src="{{ path('pg_gsb_frais_consultercartegrise', {'id': lademande.id}) }}"
+             alt="Carte grise de {{ lademande.visiteurprenom }} {{ lademande.visiteurnom }}" />
+    {% endif %}
+    <p class="legendeTableau">
+        <a href="{{ path('pg_gsb_frais_consultercartegrise', {'id': lademande.id}) }}"
+           target="_blank">Ouvrir {{ lademande.nomOriginal }} dans un onglet</a>
+        — utile pour agrandir un document peu lisible.
+    </p>
+</div>
+
+{% if lademande.idStatut != 'EA' %}
+    {# Demande déjà tranchée : on affiche la décision, sans formulaire. Le
+       contrôleur refuserait de toute façon de la retoucher. #}
+    <div id="contenu">
+        <h3>Décision déjà prise</h3>
+        <p>
+            Cette demande a été traitée le
+            <strong>{{ lademande.dateDecision|date('d/m/Y à H:i') }}</strong>.
+            {% if lademande.idStatut == 'VA' %}
+                Véhicule retenu : <strong>{{ lademande.typevehiculelibelle }}</strong>,
+                immatriculation {{ lademande.immatriculation }},
+                {{ lademande.marqueModele }}.
+            {% else %}
+                Motif du refus : {{ lademande.motifRefus }}
+            {% endif %}
+        </p>
+        <p>
+            <a class="boutonSecondaire"
+               href="{{ path('pg_gsb_frais_cartesgrises') }}">Retour à la liste</a>
+        </p>
+    </div>
+{% else %}
+
+{# ----------------------------------------------------------------------
+   Validation. Les trois champs sont relevés sur le document ci-dessus. Seule
+   la ligne de barème entre dans le calcul des frais ; l'immatriculation et la
+   marque rattachent la décision à un véhicule identifié.
+   ---------------------------------------------------------------------- #}
+<div id="contenu">
+    <h3>Valider : informations relevées sur le document</h3>
+    <form method="post"
+          action="{{ path('pg_gsb_frais_validercartegrise', {'id': lademande.id}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('carte_grise_decision') }}" />
+        <div class="corpsForm">
+            <fieldset>
+                <legend>Caractéristiques du véhicule</legend>
+                <p>
+                    <label for="idTypeVehicule">
+                        Puissance fiscale et carburant
+                        <span class="champObligatoire">*</span> :
+                    </label>
+                    <select id="idTypeVehicule" name="idTypeVehicule" required>
+                        <option value="">— à relever sur la carte grise —</option>
+                        {% for unTypeVehicule in lestypesvehicule %}
+                            <option value="{{ unTypeVehicule.id }}"
+                                {%- if lesvaleurs.idTypeVehicule is defined
+                                       and lesvaleurs.idTypeVehicule == unTypeVehicule.id %} selected{% endif %}>
+                                {{ unTypeVehicule.libelle }} — {{ unTypeVehicule.montant }} €/km
+                            </option>
+                        {% endfor %}
+                    </select>
+                    <span class="aideChamp">
+                        Repères sur la carte grise : puissance administrative
+                        au champ <strong>P.6</strong>, carburant au champ
+                        <strong>P.3</strong>. C'est la seule information qui
+                        détermine le tarif kilométrique.
+                    </span>
+                </p>
+                <p>
+                    <label for="immatriculation">
+                        Immatriculation <span class="champObligatoire">*</span> :
+                    </label>
+                    <input type="text" id="immatriculation" name="immatriculation"
+                           size="15" maxlength="15" required
+                           value="{{ lesvaleurs.immatriculation|default('') }}" />
+                    <span class="aideChamp">Champ <strong>A</strong> de la carte grise.</span>
+                </p>
+                <p>
+                    <label for="marqueModele">
+                        Marque et modèle <span class="champObligatoire">*</span> :
+                    </label>
+                    <input type="text" id="marqueModele" name="marqueModele"
+                           size="40" maxlength="60" required
+                           value="{{ lesvaleurs.marqueModele|default('') }}" />
+                    <span class="aideChamp">
+                        Champs <strong>D.1</strong> et <strong>D.3</strong>.
+                    </span>
+                </p>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+        <p>
+            <input id="ok" type="submit" value="Valider la carte grise" size="20" />
+            <a class="boutonSecondaire"
+               href="{{ path('pg_gsb_frais_cartesgrises') }}">Revenir sans décider</a>
+        </p>
+        </div>
+    </form>
+    <p class="legendeTableau">
+        La validation met à jour le véhicule du visiteur et répercute le nouveau
+        tarif sur sa fiche en cours de saisie uniquement. Ses fiches clôturées,
+        validées ou remboursées conservent le tarif qui leur a été appliqué.
+    </p>
+</div>
+
+{# ----------------------------------------------------------------------
+   Refus. Formulaire distinct et non un second bouton dans le précédent : le
+   refus n'a pas besoin des caractéristiques du véhicule, et un seul
+   formulaire aurait exigé de les saisir pour pouvoir refuser.
+   ---------------------------------------------------------------------- #}
+<div id="contenu">
+    <h3>Refuser</h3>
+    <form method="post"
+          action="{{ path('pg_gsb_frais_refusercartegrise', {'id': lademande.id}) }}">
+        <input type="hidden" name="_token" value="{{ csrf_token('carte_grise_decision') }}" />
+        <div class="corpsForm">
+            <fieldset class="dialogueRefus">
+                <legend>Motif du refus</legend>
+                <p>
+                    <label for="motifRefus">
+                        Motif <span class="champObligatoire">*</span> :
+                    </label>
+                    <input type="text" id="motifRefus" name="motifRefus"
+                           size="70" maxlength="255" required />
+                    <span class="aideChamp">
+                        Obligatoire, et transmis tel quel au visiteur : c'est la
+                        seule indication dont il disposera pour savoir quoi
+                        corriger. Par exemple « document illisible, la puissance
+                        fiscale n'est pas déchiffrable » ou « seul le recto a été
+                        envoyé ».
+                    </span>
+                </p>
+            </fieldset>
+        </div>
+        <div class="piedForm">
+        <p>
+            <input type="submit" class="boutonDanger" value="Refuser la demande"
+                   size="20" />
+        </p>
+        </div>
+    </form>
+    <p class="legendeTableau">
+        Un refus ne change pas le véhicule retenu pour le visiteur : ses frais
+        continuent d'être calculés comme avant. Il pourra envoyer un nouveau
+        document.
+    </p>
+</div>
+{% endif %}
+{% endblock %}
+{% endblock %}

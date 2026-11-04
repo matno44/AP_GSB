@@ -38,10 +38,6 @@ pg_gsb_frais_supprimerfraishorsforfait:
 pg_gsb_frais_monvehicule:
     path: /monvehicule
     defaults: { _controller: PgGsbFraisBundle:Vehicule:index }
-pg_gsb_frais_validermonvehicule:
-    path: /validermonvehicule
-    defaults: { _controller: PgGsbFraisBundle:Vehicule:valider }
-    methods: [POST]
 pg_gsb_frais_joindrejustificatif:
     path: /joindrejustificatif/{id}
     defaults: { _controller: PgGsbFraisBundle:Justificatif:joindre }
@@ -178,5 +174,46 @@ pg_gsb_frais_ajoutertrajet:
 pg_gsb_frais_supprimertrajet:
     path: /supprimertrajet/{id}
     defaults: { _controller: PgGsbFraisBundle:Trajet:supprimer }
+    requirements: { id: '\d+' }
+    methods: [POST]
+
+# ---------------------------------------------------------------------------
+# Phase 10 : carte grise validée par le comptable
+#
+# pg_gsb_frais_validermonvehicule a été SUPPRIMÉE : elle écrivait
+# visiteur.idTypeVehicule depuis une valeur venue du navigateur. Retirer le
+# formulaire sans retirer la route aurait laissé l'URL utilisable.
+#
+# Les écritures sont en POST avec jeton anti-CSRF. La consultation du document
+# est en GET -- c'est une lecture -- mais son contrôleur vérifie que le
+# demandeur est le visiteur concerné ou un comptable.
+# ---------------------------------------------------------------------------
+pg_gsb_frais_envoyercartegrise:
+    path: /envoyercartegrise
+    defaults: { _controller: PgGsbFraisBundle:Vehicule:envoyer }
+    methods: [POST]
+pg_gsb_frais_consultercartegrise:
+    path: /cartegrise/{id}
+    defaults: { _controller: PgGsbFraisBundle:CarteGrise:consulter }
+    requirements: { id: '\d+' }
+pg_gsb_frais_cartesgrises:
+    path: /cartesgrises
+    defaults: { _controller: PgGsbFraisBundle:CarteGrise:attente }
+# La route paramétrée vient APRÈS /cartesgrises : l'inverse ne poserait pas de
+# problème ici -- {id} n'accepte que des chiffres -- mais l'ordre suit la
+# convention adoptée pour les routes /admin/, où il était indispensable.
+pg_gsb_frais_examinercartegrise:
+    path: /cartesgrises/{id}
+    defaults: { _controller: PgGsbFraisBundle:CarteGrise:examiner }
+    requirements: { id: '\d+' }
+    methods: [GET]
+pg_gsb_frais_validercartegrise:
+    path: /cartesgrises/{id}/valider
+    defaults: { _controller: PgGsbFraisBundle:CarteGrise:valider }
+    requirements: { id: '\d+' }
+    methods: [POST]
+pg_gsb_frais_refusercartegrise:
+    path: /cartesgrises/{id}/refuser
+    defaults: { _controller: PgGsbFraisBundle:CarteGrise:refuser }
     requirements: { id: '\d+' }
     methods: [POST]
